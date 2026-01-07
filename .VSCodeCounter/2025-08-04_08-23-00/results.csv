@@ -1,0 +1,129 @@
+"filename", "language", "JSON with Comments", "JSON", "TypeScript", "Markdown", "TypeScript JSX", "PostCSS", "XML", "JavaScript", "YAML", "comment", "blank", "total"
+"c:\Users\BERG\bot-whatsapp-atendimento\.github\workflows\ci.yml", "YAML", 0, 0, 0, 0, 0, 0, 0, 0, 62, 0, 18, 80
+"c:\Users\BERG\bot-whatsapp-atendimento\.vs\VSWorkspaceState.json", "JSON", 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6
+"c:\Users\BERG\bot-whatsapp-atendimento\.vs\bot-whatsapp-atendimento\v17\DocumentLayout.json", "JSON", 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0, 23
+"c:\Users\BERG\bot-whatsapp-atendimento\CONTRIBUTING.md", "Markdown", 0, 0, 0, 215, 0, 0, 0, 0, 0, 0, 61, 276
+"c:\Users\BERG\bot-whatsapp-atendimento\DOWNLOAD.md", "Markdown", 0, 0, 0, 94, 0, 0, 0, 0, 0, 0, 30, 124
+"c:\Users\BERG\bot-whatsapp-atendimento\GITHUB_SETUP.md", "Markdown", 0, 0, 0, 93, 0, 0, 0, 0, 0, 0, 34, 127
+"c:\Users\BERG\bot-whatsapp-atendimento\README.md", "Markdown", 0, 0, 0, 301, 0, 0, 0, 0, 0, 0, 84, 385
+"c:\Users\BERG\bot-whatsapp-atendimento\README_OLLAMA_INTEGRATION.md", "Markdown", 0, 0, 0, 186, 0, 0, 0, 0, 0, 0, 53, 239
+"c:\Users\BERG\bot-whatsapp-atendimento\README_PARTS_SYSTEM.md", "Markdown", 0, 0, 0, 154, 0, 0, 0, 0, 0, 0, 49, 203
+"c:\Users\BERG\bot-whatsapp-atendimento\TESTE_COMPLETO_RELATORIO.md", "Markdown", 0, 0, 0, 162, 0, 0, 0, 0, 0, 0, 40, 202
+"c:\Users\BERG\bot-whatsapp-atendimento\UBUNTU_SERVER_SETUP.md", "Markdown", 0, 0, 0, 346, 0, 0, 0, 0, 0, 0, 103, 449
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\EMAIL_SETUP.md", "Markdown", 0, 0, 0, 101, 0, 0, 0, 0, 0, 0, 38, 139
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\FIX_OLLAMA_ISSUE.md", "Markdown", 0, 0, 0, 125, 0, 0, 0, 0, 0, 0, 55, 180
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\NOVAS_FUNCIONALIDADES.md", "Markdown", 0, 0, 0, 134, 0, 0, 0, 0, 0, 0, 42, 176
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\README_FIX.md", "Markdown", 0, 0, 0, 73, 0, 0, 0, 0, 0, 0, 26, 99
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\activate-ai.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 57, 0, 7, 10, 74
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\bot.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 410, 0, 48, 84, 542
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\check-db.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 36, 0, 3, 7, 46
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\config\config.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 106, 0, 12, 14, 132
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\config\email.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 152, 0, 18, 20, 190
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\db\database.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 736, 0, 34, 88, 858
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\docs\README.md", "Markdown", 0, 0, 0, 307, 0, 0, 0, 0, 0, 0, 77, 384
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\ensure-root-access.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 110, 0, 5, 21, 136
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\final-test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 82, 0, 9, 27, 118
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\fix-root-user.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 48, 0, 4, 13, 65
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\handlers\commands.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 1258, 0, 108, 320, 1686
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\init-db.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 359, 0, 17, 31, 407
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\nodemon.json", "JSON", 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 5
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\package-lock.json", "JSON", 0, 4144, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4145
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\package.json", "JSON", 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 1, 33
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\scripts\install-ollama.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 151, 0, 14, 34, 199
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\scripts\test-ollama.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 48, 0, 8, 13, 69
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\setup-complete.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 79, 0, 7, 17, 103
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\simple-test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 32, 0, 4, 9, 45
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\start.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 49, 0, 3, 9, 61
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\test-ai.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 34, 0, 3, 8, 45
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\test-command-handler.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 109, 0, 12, 28, 149
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\test-new-features.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 114, 0, 13, 29, 156
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\test-root-recognition.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 43, 0, 8, 15, 66
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\utils\ai.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 5, 33
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\utils\backup.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 194, 0, 22, 48, 264
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\utils\logger.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 154, 0, 26, 33, 213
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\utils\ollama-fix.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 238, 0, 14, 49, 301
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\utils\ollama.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 202, 0, 5, 34, 241
+"c:\Users\BERG\bot-whatsapp-atendimento\bot-whatsapp\verify-ai.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 47, 0, 5, 10, 62
+"c:\Users\BERG\bot-whatsapp-atendimento\components.json", "JSON", 0, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21
+"c:\Users\BERG\bot-whatsapp-atendimento\eslint.config.mjs", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 5, 17
+"c:\Users\BERG\bot-whatsapp-atendimento\next-env.d.ts", "TypeScript", 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 2, 6
+"c:\Users\BERG\bot-whatsapp-atendimento\next.config.ts", "TypeScript", 0, 0, 13, 0, 0, 0, 0, 0, 0, 0, 3, 16
+"c:\Users\BERG\bot-whatsapp-atendimento\package-lock.json", "JSON", 0, 9498, 0, 0, 0, 0, 0, 0, 0, 0, 1, 9499
+"c:\Users\BERG\bot-whatsapp-atendimento\package.json", "JSON", 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 1, 77
+"c:\Users\BERG\bot-whatsapp-atendimento\postcss.config.mjs", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 2, 6
+"c:\Users\BERG\bot-whatsapp-atendimento\public\file.svg", "XML", 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+"c:\Users\BERG\bot-whatsapp-atendimento\public\globe.svg", "XML", 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+"c:\Users\BERG\bot-whatsapp-atendimento\public\next.svg", "XML", 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+"c:\Users\BERG\bot-whatsapp-atendimento\public\vercel.svg", "XML", 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+"c:\Users\BERG\bot-whatsapp-atendimento\public\window.svg", "XML", 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\api\config\messages\route.ts", "TypeScript", 0, 0, 267, 0, 0, 0, 0, 0, 0, 8, 39, 314
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\api\config\route.ts", "TypeScript", 0, 0, 274, 0, 0, 0, 0, 0, 0, 10, 48, 332
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\api\orders\route.ts", "TypeScript", 0, 0, 162, 0, 0, 0, 0, 0, 0, 4, 31, 197
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\api\parts\route.ts", "TypeScript", 0, 0, 194, 0, 0, 0, 0, 0, 0, 5, 36, 235
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\config\messages\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 536, 0, 0, 0, 0, 13, 36, 585
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\config\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 849, 0, 0, 0, 0, 10, 59, 918
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\globals.css", "PostCSS", 0, 0, 0, 0, 0, 117, 0, 0, 0, 0, 6, 123
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\layout.tsx", "TypeScript JSX", 0, 0, 0, 0, 34, 0, 0, 0, 0, 0, 4, 38
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\os\abertas\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 242, 0, 0, 0, 0, 5, 20, 267
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\os\em-andamento\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 276, 0, 0, 0, 0, 5, 20, 301
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\os\finalizadas\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 332, 0, 0, 0, 0, 5, 23, 360
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\os\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 254, 0, 0, 0, 0, 4, 17, 275
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 197, 0, 0, 0, 0, 4, 9, 210
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\parts\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 297, 0, 0, 0, 0, 1, 28, 326
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\pecas\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 353, 0, 0, 0, 0, 4, 20, 377
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\tempo-medio\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 361, 0, 0, 0, 0, 6, 23, 390
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\test\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 6, 70
+"c:\Users\BERG\bot-whatsapp-atendimento\src\app\usuarios\page.tsx", "TypeScript JSX", 0, 0, 0, 0, 352, 0, 0, 0, 0, 4, 19, 375
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\accordion.tsx", "TypeScript JSX", 0, 0, 0, 0, 59, 0, 0, 0, 0, 0, 8, 67
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\alert-dialog.tsx", "TypeScript JSX", 0, 0, 0, 0, 143, 0, 0, 0, 0, 0, 15, 158
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\alert.tsx", "TypeScript JSX", 0, 0, 0, 0, 60, 0, 0, 0, 0, 0, 7, 67
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\aspect-ratio.tsx", "TypeScript JSX", 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 4, 12
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\avatar.tsx", "TypeScript JSX", 0, 0, 0, 0, 47, 0, 0, 0, 0, 0, 7, 54
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\badge.tsx", "TypeScript JSX", 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 6, 47
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\breadcrumb.tsx", "TypeScript JSX", 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 11, 110
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\button.tsx", "TypeScript JSX", 0, 0, 0, 0, 54, 0, 0, 0, 0, 0, 6, 60
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\calendar.tsx", "TypeScript JSX", 0, 0, 0, 0, 88, 0, 0, 0, 0, 0, 6, 94
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\card.tsx", "TypeScript JSX", 0, 0, 0, 0, 83, 0, 0, 0, 0, 0, 10, 93
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\carousel.tsx", "TypeScript JSX", 0, 0, 0, 0, 214, 0, 0, 0, 0, 0, 28, 242
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\chart.tsx", "TypeScript JSX", 0, 0, 0, 0, 315, 0, 0, 0, 0, 2, 37, 354
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\charts.tsx", "TypeScript JSX", 0, 0, 0, 0, 278, 0, 0, 0, 0, 9, 26, 313
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\checkbox.tsx", "TypeScript JSX", 0, 0, 0, 0, 28, 0, 0, 0, 0, 0, 5, 33
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\collapsible.tsx", "TypeScript JSX", 0, 0, 0, 0, 28, 0, 0, 0, 0, 0, 6, 34
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\command.tsx", "TypeScript JSX", 0, 0, 0, 0, 165, 0, 0, 0, 0, 0, 13, 178
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\context-menu.tsx", "TypeScript JSX", 0, 0, 0, 0, 234, 0, 0, 0, 0, 0, 19, 253
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\dashboard.tsx", "TypeScript JSX", 0, 0, 0, 0, 264, 0, 0, 0, 0, 11, 23, 298
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\dialog.tsx", "TypeScript JSX", 0, 0, 0, 0, 122, 0, 0, 0, 0, 0, 14, 136
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\drawer.tsx", "TypeScript JSX", 0, 0, 0, 0, 119, 0, 0, 0, 0, 0, 14, 133
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\dropdown-menu.tsx", "TypeScript JSX", 0, 0, 0, 0, 239, 0, 0, 0, 0, 0, 19, 258
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\form.tsx", "TypeScript JSX", 0, 0, 0, 0, 143, 0, 0, 0, 0, 0, 25, 168
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\hover-card.tsx", "TypeScript JSX", 0, 0, 0, 0, 38, 0, 0, 0, 0, 0, 7, 45
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\input-otp.tsx", "TypeScript JSX", 0, 0, 0, 0, 69, 0, 0, 0, 0, 0, 9, 78
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\input.tsx", "TypeScript JSX", 0, 0, 0, 0, 18, 0, 0, 0, 0, 0, 4, 22
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\label.tsx", "TypeScript JSX", 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 5, 25
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\menubar.tsx", "TypeScript JSX", 0, 0, 0, 0, 257, 0, 0, 0, 0, 0, 20, 277
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\navigation-menu.tsx", "TypeScript JSX", 0, 0, 0, 0, 157, 0, 0, 0, 0, 0, 12, 169
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\pagination.tsx", "TypeScript JSX", 0, 0, 0, 0, 117, 0, 0, 0, 0, 0, 11, 128
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\popover.tsx", "TypeScript JSX", 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 8, 49
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\progress.tsx", "TypeScript JSX", 0, 0, 0, 0, 27, 0, 0, 0, 0, 0, 5, 32
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\radio-group.tsx", "TypeScript JSX", 0, 0, 0, 0, 40, 0, 0, 0, 0, 0, 6, 46
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\resizable.tsx", "TypeScript JSX", 0, 0, 0, 0, 50, 0, 0, 0, 0, 0, 7, 57
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\scroll-area.tsx", "TypeScript JSX", 0, 0, 0, 0, 53, 0, 0, 0, 0, 0, 6, 59
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\select.tsx", "TypeScript JSX", 0, 0, 0, 0, 172, 0, 0, 0, 0, 0, 14, 186
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\separator.tsx", "TypeScript JSX", 0, 0, 0, 0, 24, 0, 0, 0, 0, 0, 5, 29
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\sheet.tsx", "TypeScript JSX", 0, 0, 0, 0, 126, 0, 0, 0, 0, 0, 14, 140
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\sidebar.tsx", "TypeScript JSX", 0, 0, 0, 0, 660, 0, 0, 0, 0, 12, 55, 727
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\skeleton.tsx", "TypeScript JSX", 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 3, 14
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\slider.tsx", "TypeScript JSX", 0, 0, 0, 0, 58, 0, 0, 0, 0, 0, 6, 64
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\sonner.tsx", "TypeScript JSX", 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 5, 26
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\switch.tsx", "TypeScript JSX", 0, 0, 0, 0, 27, 0, 0, 0, 0, 0, 5, 32
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\table.tsx", "TypeScript JSX", 0, 0, 0, 0, 105, 0, 0, 0, 0, 0, 12, 117
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\tabs.tsx", "TypeScript JSX", 0, 0, 0, 0, 59, 0, 0, 0, 0, 0, 8, 67
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\textarea.tsx", "TypeScript JSX", 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 4, 19
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\toggle-group.tsx", "TypeScript JSX", 0, 0, 0, 0, 66, 0, 0, 0, 0, 0, 8, 74
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\toggle.tsx", "TypeScript JSX", 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 6, 48
+"c:\Users\BERG\bot-whatsapp-atendimento\src\components\ui\tooltip.tsx", "TypeScript JSX", 0, 0, 0, 0, 54, 0, 0, 0, 0, 0, 8, 62
+"c:\Users\BERG\bot-whatsapp-atendimento\src\hooks\use-mobile.ts", "TypeScript", 0, 0, 15, 0, 0, 0, 0, 0, 0, 0, 5, 20
+"c:\Users\BERG\bot-whatsapp-atendimento\src\lib\utils.ts", "TypeScript", 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 2, 7
+"c:\Users\BERG\bot-whatsapp-atendimento\tsconfig.json", "JSON with Comments", 27, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 28
+"c:\Users\BERG\bot-whatsapp-atendimento\tsconfig.tsbuildinfo", "JSON", 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+"Total", "-", 27, 13805, 930, 2291, 9305, 117, 5, 4892, 62, 535, 2717, 34686
