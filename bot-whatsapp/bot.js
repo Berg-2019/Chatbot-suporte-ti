@@ -1,5 +1,20 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
+/**
+ * Bot de Atendimento WhatsApp
+ * Baseado na estrutura do Takeshi Bot
+ * 
+ * Conexão via Código de Pareamento
+ */
+const makeWASocket = require('baileys').default;
+const {
+  DisconnectReason,
+  isJidBroadcast,
+  isJidStatusBroadcast,
+  isJidNewsletter,
+  useMultiFileAuthState,
+} = require('baileys');
+const NodeCache = require('node-cache');
+const pino = require('pino');
+const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,7 +25,67 @@ const commandHandler = require('./handlers/commands');
 const { botLogger } = require('./utils/logger');
 const backupManager = require('./utils/backup');
 const { ensureOllamaRunning } = require('./utils/ollama-fix');
-const { sendAdminNotification, emailTemplates } = require('./config/email');
+const { sendAdminNotification } = require('./config/email');
+
+// Versão do WhatsApp Web (mesma do takeshi-bot)
+const WAWEB_VERSION = [2, 3000, 1030831524];
+
+// Diretório de autenticação
+const AUTH_DIR = path.resolve(__dirname, 'auth_info_baileys');
+
+// Diretório temporário para logs
+const TEMP_DIR = path.resolve(__dirname, 'temp');
+
+// Criar diretórios necessários
+if (!fs.existsSync(TEMP_DIR)) {
+  fs.mkdirSync(TEMP_DIR, { recursive: true });
+}
+
+if (!fs.existsSync(AUTH_DIR)) {
+  fs.mkdirSync(AUTH_DIR, { recursive: true });
+}
+
+// Configuração do logger pino
+const logger = pino(
+  { timestamp: () => `,"time":"${new Date().toJSON()}"` },
+  pino.destination(path.join(TEMP_DIR, 'wa-logs.txt'))
+);
+logger.level = 'error';
+
+// Cache para retry de mensagens
+const msgRetryCounterCache = new NodeCache();
+
+// Interface readline para entrada do usuário
+function question(message) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => rl.question(message, (answer) => {
+    rl.close();
+    resolve(answer);
+  }));
+}
+
+// Função para extrair apenas números
+function onlyNumbers(text) {
+  return text.replace(/[^0-9]/g, '');
+}
+
+// Logs coloridos (estilo takeshi-bot)
+const sayLog = (message) => console.log('\x1b[36m[BOT | TALK]\x1b[0m', message);
+const infoLog = (message) => console.log('\x1b[34m[BOT | INFO]\x1b[0m', message);
+const successLog = (message) => console.log('\x1b[32m[BOT | SUCCESS]\x1b[0m', message);
+const errorLog = (message) => console.log('\x1b[31m[BOT | ERROR]\x1b[0m', message);
+const warningLog = (message) => console.log('\x1b[33m[BOT | WARNING]\x1b[0m', message);
+
+function bannerLog() {
+  console.log('\x1b[36m═══════════════════════════════════════════════════════\x1b[0m');
+  console.log('\x1b[36m   🤖 BOT DE ATENDIMENTO WHATSAPP v2.0.0\x1b[0m');
+  console.log('\x1b[36m   📱 Conexão via Código de Pareamento\x1b[0m');
+  console.log('\x1b[36m═══════════════════════════════════════════════════════\x1b[0m\n');
+}
 
 class WhatsAppBot {
   constructor() {
@@ -18,10 +93,6 @@ class WhatsAppBot {
     this.isConnected = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 5000; // 5 segundos
-    
-    // Criar diretórios necessários
-    this.ensureDirectories();
     
     // Inicializar limpeza automática
     this.setupCleanupSchedule();
@@ -30,149 +101,165 @@ class WhatsAppBot {
     this.initializeBackupSystem();
   }
 
-  ensureDirectories() {
-    const dirs = [
-      './logs',
-      './db',
-      config.whatsapp.sessionPath
-    ];
+  async connect() {
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
-    dirs.forEach(dir => {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
+    this.sock = makeWASocket({
+      version: WAWEB_VERSION,
+      logger,
+      defaultQueryTimeoutMs: undefined,
+      retryRequestDelayMs: 5000,
+      auth: state,
+      shouldIgnoreJid: (jid) =>
+        isJidBroadcast(jid) || isJidStatusBroadcast(jid) || isJidNewsletter(jid),
+      connectTimeoutMs: 20000,
+      keepAliveIntervalMs: 30000,
+      maxMsgRetryCount: 5,
+      markOnlineOnConnect: true,
+      syncFullHistory: false,
+      emitOwnEvents: false,
+      msgRetryCounterCache,
+      shouldSyncHistoryMessage: () => false,
     });
-  }
 
-  async start() {
-    try {
-      botLogger.connection('STARTING', 'Iniciando bot WhatsApp...');
-      console.log('🤖 Iniciando Bot de Atendimento WhatsApp...');
+    // Se não registrado, solicitar código de pareamento
+    if (!this.sock.authState.creds.registered) {
+      warningLog('Credenciais não configuradas!');
       
-      await this.connectToWhatsApp();
-    } catch (error) {
-      botLogger.botError(error, 'START');
-      console.error('❌ Erro ao iniciar bot:', error);
-      process.exit(1);
+      console.log('\n' + '═'.repeat(55));
+      infoLog('Informe o número de telefone do bot (exemplo: "5569981020588"):');
+      console.log('═'.repeat(55));
+
+      const phoneNumber = await question('\n📞 Digite o número: ');
+
+      if (!phoneNumber) {
+        errorLog('Número de telefone inválido! Tente novamente com "npm start".');
+        process.exit(1);
+      }
+
+      const code = await this.sock.requestPairingCode(onlyNumbers(phoneNumber));
+
+      console.log('\n' + '═'.repeat(55));
+      console.log('\x1b[32m');
+      console.log('   🔑 CÓDIGO DE PAREAMENTO:');
+      console.log('');
+      console.log(`      📱  ${code.match(/.{1,4}/g)?.join('-') || code}  📱`);
+      console.log('\x1b[0m');
+      console.log('═'.repeat(55));
+      console.log('\n📝 INSTRUÇÕES:');
+      console.log('   1. Abra o WhatsApp no seu celular');
+      console.log('   2. Vá em: Configurações → Aparelhos Conectados');
+      console.log('   3. Toque em "Conectar um aparelho"');
+      console.log('   4. Selecione "Conectar com número de telefone"');
+      console.log('   5. Digite o código acima');
+      console.log('\n⏰ O código expira em 60 segundos!\n');
     }
-  }
 
-  async connectToWhatsApp() {
-    try {
-      // Obter versão mais recente do Baileys
-      const { version, isLatest } = await fetchLatestBaileysVersion();
-      console.log(`📱 Usando WhatsApp v${version.join('.')}, é a mais recente: ${isLatest}`);
+    // Event handlers
+    this.sock.ev.on('connection.update', async (update) => {
+      await this.handleConnectionUpdate(update);
+    });
 
-      // Configurar autenticação
-      const { state, saveCreds } = await useMultiFileAuthState(config.whatsapp.sessionPath);
-
-      // Criar socket WhatsApp
-      this.sock = makeWASocket({
-        version,
-        auth: state,
-        printQRInTerminal: false, // Vamos usar nossa própria implementação
-        defaultQueryTimeoutMs: 60000,
-        keepAliveIntervalMs: 30000,
-        markOnlineOnConnect: true,
-        syncFullHistory: false,
-        generateHighQualityLinkPreview: true,
-        getMessage: async (key) => {
-          return { conversation: 'Mensagem não encontrada' };
-        }
-      });
-
-      // Event listeners
-      this.setupEventListeners(saveCreds);
-
-    } catch (error) {
-      botLogger.botError(error, 'CONNECT');
-      throw error;
-    }
-  }
-
-  setupEventListeners(saveCreds) {
-    // Salvar credenciais quando atualizadas
     this.sock.ev.on('creds.update', saveCreds);
 
-    // Monitorar conexão
-    this.sock.ev.on('connection.update', (update) => {
-      this.handleConnectionUpdate(update);
-    });
-
-    // Processar mensagens recebidas
     this.sock.ev.on('messages.upsert', async (messageUpdate) => {
       await this.handleIncomingMessages(messageUpdate);
     });
 
-    // Monitorar presença
-    this.sock.ev.on('presence.update', (presence) => {
-      botLogger.userAction(presence.id, 'PRESENCE_UPDATE', presence.presences ? Object.keys(presence.presences).join(',') : '');
-    });
-
-    // Monitorar grupos
-    this.sock.ev.on('groups.upsert', (groups) => {
-      groups.forEach(group => {
-        botLogger.userAction(group.id, 'GROUP_JOINED', group.subject);
-      });
-    });
+    return this.sock;
   }
 
-  handleConnectionUpdate(update) {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      console.log('📱 QR Code gerado! Escaneie com seu WhatsApp:');
-      qrcode.generate(qr, { small: true });
-      botLogger.qrCode();
-    }
+  async handleConnectionUpdate(update) {
+    const { connection, lastDisconnect } = update;
 
     if (connection === 'close') {
       this.isConnected = false;
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      
-      botLogger.connection('CLOSED', `Reason: ${lastDisconnect?.error?.output?.statusCode}`);
-      console.log('❌ Conexão fechada:', lastDisconnect?.error);
+      const error = lastDisconnect?.error;
+      const statusCode = error?.output?.statusCode;
 
-      if (shouldReconnect) {
-        this.handleReconnection();
-      } else {
-        console.log('🚪 Deslogado do WhatsApp. Execute novamente para reconectar.');
+      botLogger.connection('CLOSED', `Reason: ${statusCode}`);
+
+      if (statusCode === DisconnectReason.loggedOut) {
+        errorLog('Bot desconectado!');
+        
+        // Limpar sessão
+        if (fs.existsSync(AUTH_DIR)) {
+          fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        }
+        
+        infoLog('Sessão limpa. Execute novamente com "npm start".');
         process.exit(0);
+      } else {
+        switch (statusCode) {
+          case DisconnectReason.badSession:
+            warningLog('Sessão inválida!');
+            break;
+          case DisconnectReason.connectionClosed:
+            warningLog('Conexão fechada!');
+            break;
+          case DisconnectReason.connectionLost:
+            warningLog('Conexão perdida!');
+            break;
+          case DisconnectReason.connectionReplaced:
+            warningLog('Conexão substituída!');
+            break;
+          case DisconnectReason.multideviceMismatch:
+            warningLog('Dispositivo incompatível!');
+            break;
+          case DisconnectReason.forbidden:
+            warningLog('Conexão proibida!');
+            break;
+          case DisconnectReason.restartRequired:
+            infoLog('Reinicie por favor! Digite "npm start".');
+            break;
+          case DisconnectReason.unavailableService:
+            warningLog('Serviço indisponível!');
+            break;
+          case 401:
+            warningLog('Erro de autenticação (401)!');
+            if (fs.existsSync(AUTH_DIR)) {
+              fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+            }
+            infoLog('Sessão limpa. Execute novamente.');
+            process.exit(0);
+            break;
+          default:
+            warningLog(`Erro desconhecido: ${statusCode}`);
+        }
+
+        // Reconectar
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          warningLog(`Reconectando... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+          
+          setTimeout(async () => {
+            await this.connect();
+          }, 5000);
+        } else {
+          errorLog('Máximo de tentativas de reconexão atingido.');
+          process.exit(1);
+        }
       }
     } else if (connection === 'open') {
       this.isConnected = true;
       this.reconnectAttempts = 0;
-      
+
       botLogger.connection('OPEN', 'Bot conectado com sucesso');
-      console.log('✅ Bot conectado ao WhatsApp com sucesso!');
-      console.log(`📞 Número do bot: ${config.whatsapp.botNumber}`);
-      console.log(`👑 Números root: ${config.whatsapp.rootNumbers.join(', ')}`);
-      console.log('🎯 Bot pronto para receber mensagens!');
       
-      // Enviar mensagem de inicialização para números root
+      console.log('\n' + '═'.repeat(55));
+      successLog('✅ BOT CONECTADO COM SUCESSO!');
+      console.log('═'.repeat(55));
+      infoLog(`Versão do WhatsApp Web: ${WAWEB_VERSION.join('.')}`);
+      infoLog(`Número do bot: ${config.whatsapp.botNumber}`);
+      infoLog(`Números root: ${config.whatsapp.rootNumbers.join(', ')}`);
+      successLog('🎯 Bot pronto para receber mensagens!');
+      console.log('═'.repeat(55) + '\n');
+
+      // Notificar roots
       this.notifyRootUsers('🤖 Bot de Atendimento iniciado com sucesso!');
-    } else if (connection === 'connecting') {
-      botLogger.connection('CONNECTING', 'Conectando ao WhatsApp...');
-      console.log('🔄 Conectando ao WhatsApp...');
+    } else {
+      infoLog('Atualizando conexão...');
     }
-  }
-
-  async handleReconnection() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      botLogger.connection('MAX_RECONNECT_REACHED', `Tentativas: ${this.reconnectAttempts}`);
-      console.log('❌ Máximo de tentativas de reconexão atingido. Encerrando...');
-      process.exit(1);
-    }
-
-    this.reconnectAttempts++;
-    const delay = this.reconnectDelay * this.reconnectAttempts;
-    
-    botLogger.connection('RECONNECTING', `Tentativa ${this.reconnectAttempts}/${this.maxReconnectAttempts} em ${delay}ms`);
-    console.log(`🔄 Tentando reconectar (${this.reconnectAttempts}/${this.maxReconnectAttempts}) em ${delay/1000}s...`);
-    
-    setTimeout(() => {
-      this.connectToWhatsApp();
-    }, delay);
   }
 
   async handleIncomingMessages(messageUpdate) {
@@ -182,6 +269,13 @@ class WhatsAppBot {
       for (const message of messages) {
         // Ignorar mensagens próprias e de status
         if (message.key.fromMe || message.key.remoteJid === 'status@broadcast') {
+          continue;
+        }
+
+        // Ignorar broadcasts e newsletters
+        if (isJidBroadcast(message.key.remoteJid) || 
+            isJidStatusBroadcast(message.key.remoteJid) || 
+            isJidNewsletter(message.key.remoteJid)) {
           continue;
         }
 
@@ -197,31 +291,26 @@ class WhatsAppBot {
         // Marcar como lida
         await this.sock.readMessages([message.key]);
 
-        // Verificar se é o grupo técnico (buscar do banco de dados)
+        // Verificar se é o grupo técnico
         const grupoTecnicoId = await database.obterGrupoTecnico();
         const isGrupoTecnico = from === grupoTecnicoId;
         
-        // Verificar se é um grupo regular (não o grupo técnico)
+        // Verificar se é um grupo regular
         const isGrupoRegular = isGroup && !isGrupoTecnico;
         
         // Processar respostas automáticas para grupos regulares
         if (isGrupoRegular) {
-          // Verificar palavras-chave para resposta automática
           if (text.toLowerCase().includes('oi bot')) {
-            // Extrair nome do remetente se disponível
-            let senderName = senderPhone;
-            if (message.pushName) {
-              senderName = message.pushName;
-            }
-            
+            let senderName = message.pushName || senderPhone;
             const responseText = `Olá ${senderName}, sou o bot do grupo!`;
+            
             try {
               await this.sock.sendMessage(from, { text: responseText });
               botLogger.messageSent(from, responseText);
             } catch (error) {
               botLogger.botError(error, 'SEND_MESSAGE');
             }
-            continue; // Não processar outros handlers para esta mensagem
+            continue;
           }
           
           if (text.trim() === '!ajuda') {
@@ -232,13 +321,12 @@ class WhatsAppBot {
             } catch (error) {
               botLogger.botError(error, 'SEND_MESSAGE');
             }
-            continue; // Não processar outros handlers para esta mensagem
+            continue;
           }
         }
         
         // Processar mensagens do grupo técnico ou mensagens privadas
         if (!isGroup || isGrupoTecnico || text.includes(`@${config.whatsapp.botNumber}`) || text.startsWith('!') || text.toLowerCase().startsWith('chamado')) {
-          // Função para enviar resposta
           const sendMessage = async (responseText) => {
             try {
               await this.sock.sendMessage(from, { text: responseText });
@@ -248,7 +336,6 @@ class WhatsAppBot {
             }
           };
 
-          // Processar comando/mensagem
           await commandHandler.handleMessage(
             { body: text },
             sendMessage,
@@ -267,15 +354,13 @@ class WhatsAppBot {
       const from = message.key.remoteJid;
       const isGroup = from.endsWith('@g.us');
       
-      // Extrair número do remetente
       let senderPhone;
       if (isGroup) {
-        senderPhone = message.key.participant?.replace('@s.whatsapp.net', '') || '';
+        senderPhone = message.key.participant?.replace('@s.whatsapp.net', '').replace(/@lid$/, '') || '';
       } else {
-        senderPhone = from.replace('@s.whatsapp.net', '');
+        senderPhone = from.replace('@s.whatsapp.net', '').replace(/@lid$/, '');
       }
 
-      // Extrair texto da mensagem
       let text = '';
       if (message.message?.conversation) {
         text = message.message.conversation;
@@ -304,7 +389,6 @@ class WhatsAppBot {
   }
 
   async notifyRootUsers(message) {
-    // Enviar mensagem primeiro para o root principal (primeiro da lista)
     const rootNumbers = config.whatsapp.rootNumbers;
     
     if (rootNumbers.length === 0) {
@@ -312,93 +396,50 @@ class WhatsAppBot {
       return;
     }
     
-    // Tentar enviar para o root principal primeiro
     const primaryRoot = rootNumbers[0];
     const primaryJid = `${primaryRoot}@s.whatsapp.net`;
     
     try {
       await this.sock.sendMessage(primaryJid, { text: message });
       botLogger.messageSent(primaryJid, message);
-      console.log(`✅ Mensagem de inicialização enviada para root principal: ${primaryRoot}`);
+      successLog(`Mensagem enviada para root principal: ${primaryRoot}`);
     } catch (error) {
       botLogger.botError(error, `NOTIFY_ROOT_PRIMARY_${primaryRoot}`);
-      console.log(`❌ Falha ao enviar mensagem para root principal: ${primaryRoot}`);
+      warningLog(`Falha ao enviar para root principal: ${primaryRoot}`);
       
-      // Enviar notificação por e-mail sobre falha no envio WhatsApp
-      if (config.email.adminEmails.length > 0) {
-        const emailSubject = 'Falha na Notificação do Bot WhatsApp';
-        const emailText = `Falha ao enviar mensagem de inicialização para o root principal (${primaryRoot}). 
-Tentando enviar para roots secundários.
+      // Tentar roots secundários
+      for (let i = 1; i < rootNumbers.length; i++) {
+        const secondaryRoot = rootNumbers[i];
+        const secondaryJid = `${secondaryRoot}@s.whatsapp.net`;
         
-Mensagem: ${message}
-        
-Data: ${new Date().toLocaleString('pt-BR')}`;
-        
-        await sendAdminNotification(emailSubject, emailText);
-      }
-      
-      // Se falhar, tentar enviar para os roots secundários
-      if (rootNumbers.length > 1) {
-        console.log('🔄 Tentando enviar mensagem para roots secundários...');
-        
-        for (let i = 1; i < rootNumbers.length; i++) {
-          const secondaryRoot = rootNumbers[i];
-          const secondaryJid = `${secondaryRoot}@s.whatsapp.net`;
-          
-          try {
-            await this.sock.sendMessage(secondaryJid, { text: message });
-            botLogger.messageSent(secondaryJid, message);
-            console.log(`✅ Mensagem de inicialização enviada para root secundário: ${secondaryRoot}`);
-            break; // Parar após o primeiro envio bem-sucedido
-          } catch (secondaryError) {
-            botLogger.botError(secondaryError, `NOTIFY_ROOT_SECONDARY_${secondaryRoot}`);
-            console.log(`❌ Falha ao enviar mensagem para root secundário: ${secondaryRoot}`);
-            
-            // Se for o último root e todas as tentativas falharam
-            if (i === rootNumbers.length - 1) {
-              console.log('❌ Falha ao enviar mensagem para todos os roots configurados');
-              
-              // Enviar notificação por e-mail sobre falha total
-              if (config.email.adminEmails.length > 0) {
-                const emailSubject = 'Falha Total na Notificação do Bot WhatsApp';
-                const emailText = `Falha ao enviar mensagem de inicialização para todos os roots configurados.
-                
-Mensagem: ${message}
-Roots: ${rootNumbers.join(', ')}
-                
-Data: ${new Date().toLocaleString('pt-BR')}`;
-                
-                await sendAdminNotification(emailSubject, emailText);
-              }
-            }
-          }
+        try {
+          await this.sock.sendMessage(secondaryJid, { text: message });
+          successLog(`Mensagem enviada para root secundário: ${secondaryRoot}`);
+          break;
+        } catch (secondaryError) {
+          warningLog(`Falha ao enviar para root secundário: ${secondaryRoot}`);
         }
-      } else {
-        console.log('❌ Não há roots secundários configurados para fallback');
       }
     }
   }
 
   setupCleanupSchedule() {
-    // Executar limpeza automática a cada 24 horas
     setInterval(async () => {
       try {
         const deletedCount = await database.limparHistoricoAntigo();
         if (deletedCount > 0) {
           botLogger.cleanup(deletedCount);
-          console.log(`🧹 Limpeza automática: ${deletedCount} registros antigos removidos`);
+          infoLog(`Limpeza automática: ${deletedCount} registros removidos`);
         }
       } catch (error) {
         botLogger.botError(error, 'AUTO_CLEANUP');
       }
-    }, 24 * 60 * 60 * 1000); // 24 horas
+    }, 24 * 60 * 60 * 1000);
   }
 
   initializeBackupSystem() {
-    console.log('🔧 Inicializando sistema de backup...');
+    infoLog('Inicializando sistema de backup...');
     
-    // O BackupManager já se inicializa automaticamente
-    // Apenas registrar que foi inicializado
     botLogger.systemInfo({
       memory: Math.round(process.memoryUsage().rss / 1024 / 1024),
       uptime: Math.floor(process.uptime() / 3600),
@@ -409,7 +450,7 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
   async stop() {
     try {
       botLogger.connection('STOPPING', 'Parando bot...');
-      console.log('🛑 Parando bot...');
+      infoLog('Parando bot...');
       
       if (this.sock) {
         await this.sock.logout();
@@ -417,7 +458,7 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
       
       await database.close();
       
-      console.log('✅ Bot parado com sucesso');
+      successLog('Bot parado com sucesso!');
       process.exit(0);
     } catch (error) {
       botLogger.botError(error, 'STOP');
@@ -425,7 +466,7 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
     }
   }
 
-  // Método para enviar mensagem programaticamente
+  // Métodos públicos
   async sendMessage(to, message) {
     try {
       if (!this.isConnected) {
@@ -442,22 +483,18 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
     }
   }
 
-  // Método para obter informações do grupo
   async getGroupInfo(groupId) {
     try {
       if (!this.isConnected) {
         throw new Error('Bot não está conectado');
       }
-
-      const groupMetadata = await this.sock.groupMetadata(groupId);
-      return groupMetadata;
+      return await this.sock.groupMetadata(groupId);
     } catch (error) {
       botLogger.botError(error, 'GET_GROUP_INFO');
       return null;
     }
   }
 
-  // Método para obter status da conexão
   getConnectionStatus() {
     return {
       connected: this.isConnected,
@@ -467,20 +504,17 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
     };
   }
 
-  // Método para notificar grupo técnico
   async notifyTechnicalGroup(message) {
     try {
       if (!this.isConnected) {
-        console.log('⚠️ Bot não conectado - mensagem não enviada para grupo técnico');
+        warningLog('Bot não conectado');
         return false;
       }
 
-      // Buscar grupo técnico do banco de dados
-      const database = require('./db/database');
       const groupId = await database.obterGrupoTecnico();
       
       if (!groupId) {
-        console.log('⚠️ ID do grupo técnico não configurado');
+        warningLog('ID do grupo técnico não configurado');
         return false;
       }
 
@@ -489,27 +523,22 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
       return true;
     } catch (error) {
       botLogger.botError(error, 'NOTIFY_TECHNICAL_GROUP');
-      console.error('Erro ao notificar grupo técnico:', error);
       return false;
     }
   }
 
-  // Método para criar backup manual
   async createManualBackup() {
     try {
-      const result = await backupManager.createBackup('manual');
-      return result;
+      return await backupManager.createBackup('manual');
     } catch (error) {
       botLogger.botError(error, 'MANUAL_BACKUP');
       return { success: false, error: error.message };
     }
   }
 
-  // Método para exportar OS
   async exportOS(osId) {
     try {
-      const result = await backupManager.exportOSToFile(osId);
-      return result;
+      return await backupManager.exportOSToFile(osId);
     } catch (error) {
       botLogger.botError(error, 'EXPORT_OS');
       return { success: false, error: error.message };
@@ -517,25 +546,57 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
   }
 }
 
-// Instanciar e iniciar o bot
-const bot = new WhatsAppBot();
+// ====== INICIALIZAÇÃO ======
 
-// Handlers para encerramento gracioso
-process.on('SIGINT', () => {
-  console.log('\n🛑 Recebido SIGINT, encerrando bot...');
-  bot.stop();
+async function startBot() {
+  try {
+    process.setMaxListeners(1500);
+
+    bannerLog();
+    infoLog('Iniciando componentes internos...');
+
+    const bot = new WhatsAppBot();
+    
+    await bot.connect();
+
+    successLog('Bot iniciado com sucesso!');
+
+    // Handlers para encerramento gracioso
+    process.on('SIGINT', () => {
+      console.log('\n');
+      warningLog('Recebido SIGINT, encerrando...');
+      bot.stop();
+    });
+
+    process.on('SIGTERM', () => {
+      console.log('\n');
+      warningLog('Recebido SIGTERM, encerrando...');
+      bot.stop();
+    });
+
+    // Exportar para uso em outros módulos
+    module.exports = bot;
+
+  } catch (error) {
+    errorLog(`Erro ao iniciar o bot: ${error.message}`);
+    console.error(error.stack);
+    process.exit(1);
+  }
+}
+
+// Tratamento de erros não capturados
+process.on('uncaughtException', (error) => {
+  errorLog(`Erro crítico não capturado: ${error.message}`);
+  console.error(error.stack);
+  
+  if (!error.message.includes('ENOTFOUND') && !error.message.includes('timeout')) {
+    process.exit(1);
+  }
 });
 
-process.on('SIGTERM', () => {
-  console.log('\n🛑 Recebido SIGTERM, encerrando bot...');
-  bot.stop();
+process.on('unhandledRejection', (reason) => {
+  errorLog(`Promessa rejeitada não tratada: ${reason}`);
 });
 
-// Iniciar o bot
-bot.start().catch(error => {
-  console.error('❌ Erro fatal ao iniciar bot:', error);
-  process.exit(1);
-});
-
-// Exportar para uso em outros módulos
-module.exports = bot;
+// Iniciar
+startBot();

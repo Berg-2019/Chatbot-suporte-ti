@@ -1,6 +1,6 @@
 {
   "name": "bot-whatsapp-atendimento",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Bot de Atendimento Técnico para WhatsApp",
   "main": "bot.js",
   "scripts": {
@@ -10,11 +10,13 @@
     "test-ollama": "node scripts/test-ollama.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.15",
+    "@cacheable/node-cache": "^1.7.4",
     "axios": "^1.7.9",
+    "baileys": "^7.0.0-rc.9",
     "dotenv": "^16.5.0",
+    "node-cache": "^5.1.2",
     "nodemailer": "^6.9.16",
-    "qrcode-terminal": "^0.12.0",
+    "pino": "^10.1.0",
     "sqlite3": "^5.1.7",
     "winston": "^3.17.0"
   },
