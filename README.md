@@ -37,8 +37,9 @@ cd bot-whatsapp-atendimento
 # Copiar arquivo de configuração
 cp .env.example .env
 
-# Editar configurações (opcional)
+# IMPORTANTE: Editar .env e configurar BOT_PHONE_NUMBER
 nano .env
+# Exemplo: BOT_PHONE_NUMBER=5569981170027
 
 # Iniciar em modo desenvolvimento
 ./scripts/setup.sh dev
@@ -53,26 +54,31 @@ cd bot-whatsapp/
 # Instalar dependências
 npm install
 
+# Configurar variável de ambiente
+export BOT_PHONE_NUMBER=5569981170027
+
 # Iniciar o bot
 npm run dev
 ```
 
 ### Conectando ao WhatsApp
 
-Na primeira execução, o bot solicitará um número de telefone:
+1. Configure `BOT_PHONE_NUMBER` no arquivo `.env` com o número do WhatsApp do bot
+2. Inicie o bot com `./scripts/setup.sh dev`
+3. Aguarde o código de pareamento aparecer nos logs:
 
 ```
 ⚠️ Credenciais ainda não configuradas!
-ℹ️ Informe o número de telefone do bot (exemplo: "5569981170027"):
-Número de telefone: 5569XXXXXXXXX
-
+ℹ️ Aguardando socket ficar pronto (5 segundos)...
+ℹ️ Solicitando código de pareamento para: 5569XXXXXXXXX
 💬 Código de pareamento: XXXX-XXXX
 ```
 
-1. Abra o WhatsApp no celular
-2. Vá em **Configurações > Dispositivos Conectados > Conectar Dispositivo**
-3. Escolha **Conectar com número de telefone**
-4. Digite o código de pareamento exibido no terminal
+4. No celular, abra **WhatsApp > Configurações > Dispositivos Conectados > Conectar Dispositivo**
+5. Escolha **Conectar com número de telefone**
+6. Digite o código de pareamento exibido nos logs
+
+> **Nota:** O código expira em alguns minutos. Se expirar, reinicie o bot para gerar um novo.
 
 ---
 
@@ -120,7 +126,11 @@ BOT_NAME="Bot de Atendimento Técnico"
 # Prefixo dos comandos
 PREFIX="!"
 
-# ID do grupo de técnicos (obtenha via !grupoid)
+# OBRIGATÓRIO: Número do WhatsApp do bot (primeira conexão)
+# Formato: código do país + DDD + número
+BOT_PHONE_NUMBER=5569981170027
+
+# ID do grupo de técnicos (obtenha via !grupoid após conectar)
 GRUPO_TECNICO_ID=
 
 # Números root (administradores supremos)
@@ -129,10 +139,11 @@ ROOT_NUMBERS=556981170027,556884268042
 
 ### Configurando o Grupo Técnico
 
-1. Adicione o bot ao grupo de técnicos
-2. No grupo, digite `!grupoid`
-3. Copie o ID exibido e cole em `GRUPO_TECNICO_ID` no `.env`
-4. Reinicie o bot
+1. Conecte o bot ao WhatsApp primeiro
+2. Adicione o bot ao grupo de técnicos
+3. No grupo, digite `!grupoid`
+4. Copie o ID exibido e cole em `GRUPO_TECNICO_ID` no `.env`
+5. Reinicie o bot
 
 ---
 

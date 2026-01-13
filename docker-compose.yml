@@ -21,6 +21,7 @@ services:
       - PORT=3003
       - BOT_NAME=${BOT_NAME:-Bot de Atendimento Técnico}
       - PREFIX=${PREFIX:-!}
+      - BOT_PHONE_NUMBER=${BOT_PHONE_NUMBER:-}
       - GRUPO_TECNICO_ID=${GRUPO_TECNICO_ID:-}
       - ROOT_NUMBERS=${ROOT_NUMBERS:-556981170027,556884268042}
       # Configurações de Email (opcional)

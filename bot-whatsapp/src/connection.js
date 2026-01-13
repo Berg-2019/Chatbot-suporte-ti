@@ -1,7 +1,7 @@
 /**
  * Conexão com WhatsApp via Baileys
- * Baseado no takeshi-bot com pairing code
- * 
+ * Baseado no Portal-Comunidade-Vista-Alegre e takeshi-bot
+ *
  * @author Sistema de Atendimento Técnico
  */
 
@@ -21,10 +21,11 @@ import {
   TEMP_DIR,
   WAWEB_VERSION,
   PREFIX,
+  BOT_NAME,
 } from "./config.js";
 import { load } from "./loader.js";
 import { badMacHandler } from "./utils/badMacHandler.js";
-import { onlyNumbers, question } from "./utils/index.js";
+import { onlyNumbers } from "./utils/index.js";
 import {
   errorLog,
   infoLog,
@@ -52,10 +53,34 @@ logger.level = "error";
 // Cache para retry de mensagens
 const msgRetryCounterCache = new NodeCache();
 
+// Estado global de conexão
+let isConnected = false;
+let isConnecting = false;
+let currentPairingCode = null;
+let phoneNumber = null;
+
+/**
+ * Obtém status da conexão
+ */
+export function getConnectionStatus() {
+  return {
+    connected: isConnected,
+    connecting: isConnecting,
+    pairingCode: currentPairingCode,
+    phoneNumber,
+  };
+}
+
 /**
  * Conecta ao WhatsApp
  */
 export async function connect() {
+  if (isConnecting) {
+    warningLog("Já conectando, aguarde...");
+    return null;
+  }
+
+  isConnecting = true;
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
   const socket = makeWASocket({
@@ -64,8 +89,7 @@ export async function connect() {
     defaultQueryTimeoutMs: undefined,
     retryRequestDelayMs: 5000,
     auth: state,
-    shouldIgnoreJid: (jid) =>
-      isJidBroadcast(jid) || isJidStatusBroadcast(jid),
+    shouldIgnoreJid: (jid) => isJidBroadcast(jid) || isJidStatusBroadcast(jid),
     connectTimeoutMs: 20_000,
     keepAliveIntervalMs: 30_000,
     maxMsgRetryCount: 5,
@@ -76,25 +100,58 @@ export async function connect() {
     shouldSyncHistoryMessage: () => false,
   });
 
+  // Flag para controlar pairing em progresso
+  let pairingInProgress = false;
+
+  // Salvar credenciais
+  socket.ev.on("creds.update", saveCreds);
+
   // Se não está registrado, solicitar código de pareamento
   if (!socket.authState.creds.registered) {
-    warningLog("Credenciais ainda não configuradas!");
-    infoLog('Informe o número de telefone do bot (exemplo: "5569981170027"):');
+    // Tentar obter número do telefone via variável de ambiente
+    const botPhoneNumber = process.env.BOT_PHONE_NUMBER;
 
-    const phoneNumber = await question("Número de telefone: ");
+    if (botPhoneNumber) {
+      warningLog("Credenciais ainda não configuradas!");
+      pairingInProgress = true;
 
-    if (!phoneNumber) {
-      errorLog('Número de telefone inválido! Reinicie com "npm start".');
-      process.exit(1);
-    }
+      // Aguardar socket WebSocket estar pronto
+      infoLog("Aguardando socket ficar pronto (5 segundos)...");
+      await new Promise((r) => setTimeout(r, 5000));
 
-    try {
-      const code = await socket.requestPairingCode(onlyNumbers(phoneNumber));
-      sayLog(`🔑 Código de pareamento: ${code}`);
-      infoLog("Digite este código no WhatsApp > Dispositivos Conectados > Conectar Dispositivo");
-    } catch (error) {
-      errorLog("Erro ao solicitar código de pareamento", error);
-      process.exit(1);
+      infoLog(`Solicitando código de pareamento para: ${botPhoneNumber}`);
+
+      try {
+        const code = await socket.requestPairingCode(
+          onlyNumbers(botPhoneNumber)
+        );
+        currentPairingCode = code;
+        sayLog(`🔑 Código de pareamento: ${code}`);
+        infoLog(
+          "Digite este código no WhatsApp > Dispositivos Conectados > Conectar Dispositivo"
+        );
+        infoLog("Aguardando confirmação no WhatsApp...");
+      } catch (error) {
+        errorLog("Erro ao solicitar código de pareamento", error);
+        pairingInProgress = false;
+        isConnecting = false;
+        throw new Error(
+          "Falha ao gerar código de pareamento. Verifique o número."
+        );
+      }
+    } else {
+      errorLog("BOT_PHONE_NUMBER não configurado!");
+      errorLog("Configure a variável de ambiente BOT_PHONE_NUMBER no .env");
+      errorLog("Exemplo: BOT_PHONE_NUMBER=5569981170027");
+      isConnecting = false;
+
+      // Aguardar 10 segundos e tentar novamente (para dar tempo de configurar)
+      infoLog("Tentando novamente em 10 segundos...");
+      await new Promise((r) => setTimeout(r, 10000));
+
+      const newSocket = await connect();
+      load(newSocket);
+      return newSocket;
     }
   }
 
@@ -105,6 +162,27 @@ export async function connect() {
     if (connection === "close") {
       const error = lastDisconnect?.error;
       const statusCode = error?.output?.statusCode;
+
+      // SE PAIRING EM PROGRESSO, IGNORAR EVENTOS DE CLOSE NORMAIS DO HANDSHAKE
+      if (pairingInProgress) {
+        // 428 = Precondition Required (normal durante pairing)
+        // 401 = Unauthorized (normal durante handshake)
+        // undefined = Sem código (normal durante pairing)
+        if (
+          statusCode === 428 ||
+          statusCode === 401 ||
+          statusCode === undefined
+        ) {
+          infoLog(
+            "Pareamento em progresso, aguardando confirmação no WhatsApp..."
+          );
+          return; // NÃO RECONECTAR - aguardar usuário digitar código
+        }
+      }
+
+      isConnected = false;
+      isConnecting = false;
+      pairingInProgress = false;
 
       // Verificar se é erro de Bad MAC
       if (
@@ -130,7 +208,8 @@ export async function connect() {
       if (statusCode === DisconnectReason.loggedOut) {
         errorLog("Bot foi deslogado do WhatsApp!");
         warningLog("Delete a pasta auth_info_baileys e reinicie o bot.");
-        process.exit(1);
+        currentPairingCode = null;
+        badMacHandler.clearProblematicSessionFiles();
       } else {
         // Mapear razões de desconexão
         const reasons = {
@@ -165,16 +244,22 @@ export async function connect() {
     } else if (connection === "open") {
       successLog("✅ Conectado ao WhatsApp com sucesso!");
       infoLog(`Versão do WhatsApp Web: ${WAWEB_VERSION.join(".")}`);
+      successLog(`✅ ${BOT_NAME} está pronto para uso!`);
+
+      isConnected = true;
+      isConnecting = false;
+      pairingInProgress = false;
+      currentPairingCode = null;
+      phoneNumber = socket.user?.id?.split(":")[0] || null;
+
       successLog(`Prefixo de comandos: ${PREFIX}`);
-      successLog("Bot pronto para uso!");
+      infoLog(`Número conectado: ${phoneNumber}`);
+
       badMacHandler.resetErrorCount();
     } else {
       infoLog("Atualizando conexão...");
     }
   });
-
-  // Salvar credenciais quando atualizadas
-  socket.ev.on("creds.update", saveCreds);
 
   return socket;
 }
