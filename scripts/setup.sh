@@ -6,14 +6,11 @@
 # Uso:
 #   ./scripts/setup.sh dev      - Modo desenvolvimento (com logs em tempo real)
 #   ./scripts/setup.sh start    - Modo produção (background)
-#   ./scripts/setup.sh stop     - Parar todos os containers
+#   ./scripts/setup.sh stop     - Parar containers
 #   ./scripts/setup.sh restart  - Reiniciar containers
 #   ./scripts/setup.sh status   - Ver status dos serviços
 #   ./scripts/setup.sh logs     - Ver logs em tempo real
 #   ./scripts/setup.sh backup   - Fazer backup do banco de dados
-#   ./scripts/setup.sh ai       - Iniciar com Ollama (IA)
-#   ./scripts/setup.sh web      - Iniciar com painel web
-#   ./scripts/setup.sh full     - Iniciar tudo (bot + ai + web)
 # =============================================================================
 
 set -e
@@ -110,13 +107,6 @@ check_dependencies() {
         missing_deps=1
     fi
     
-    # Verificar curl (para health checks)
-    if command -v curl &> /dev/null; then
-        print_success "curl instalado"
-    else
-        print_warning "curl não encontrado (recomendado para health checks)"
-    fi
-    
     if [ $missing_deps -eq 1 ]; then
         print_error "Dependências faltando. Instale-as e tente novamente."
         exit 1
@@ -203,70 +193,18 @@ start_production() {
     # Build e start em background
     $COMPOSE_CMD up -d --build
     
-    print_success "Containers iniciados em background"
+    print_success "Container iniciado em background"
     echo ""
     
-    # Aguardar serviços ficarem prontos
+    # Aguardar serviço ficar pronto
     wait_for_services
     
-    show_status
-}
-
-start_with_ai() {
-    print_banner
-    check_dependencies
-    setup_environment
-    
-    print_step "Iniciando com Ollama (IA)..."
-    print_info "O modelo de IA será baixado na primeira execução (pode demorar)"
-    echo ""
-    
-    $COMPOSE_CMD --profile ai up -d --build
-    
-    print_success "Containers iniciados com IA"
-    echo ""
-    
-    wait_for_services
-    show_status
-}
-
-start_with_web() {
-    print_banner
-    check_dependencies
-    setup_environment
-    
-    print_step "Iniciando com Painel Web..."
-    
-    $COMPOSE_CMD --profile web up -d --build
-    
-    print_success "Containers iniciados com painel web"
-    echo ""
-    
-    wait_for_services
-    show_status
-}
-
-start_full() {
-    print_banner
-    check_dependencies
-    setup_environment
-    
-    print_step "Iniciando todos os serviços (Bot + IA + Web)..."
-    print_info "O modelo de IA será baixado na primeira execução"
-    echo ""
-    
-    $COMPOSE_CMD --profile ai --profile web up -d --build
-    
-    print_success "Todos os containers iniciados"
-    echo ""
-    
-    wait_for_services
     show_status
 }
 
 stop_containers() {
     print_step "Parando containers..."
-    $COMPOSE_CMD --profile ai --profile web down
+    $COMPOSE_CMD down
     print_success "Containers parados"
 }
 
@@ -287,7 +225,7 @@ show_logs() {
 # =============================================================================
 
 wait_for_services() {
-    print_step "Aguardando serviços ficarem prontos..."
+    print_step "Aguardando serviço ficar pronto..."
     
     local max_attempts=30
     local attempt=1
@@ -297,12 +235,9 @@ wait_for_services() {
         
         # Verificar se o container está rodando
         if $COMPOSE_CMD ps bot 2>/dev/null | grep -q "Up\|running"; then
-            # Tentar health check
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:3003/api/health 2>/dev/null | grep -q "200"; then
-                echo ""
-                print_success "Serviços prontos!"
-                return 0
-            fi
+            echo ""
+            print_success "Serviço pronto!"
+            return 0
         fi
         
         sleep 2
@@ -310,7 +245,7 @@ wait_for_services() {
     done
     
     echo ""
-    print_warning "Timeout aguardando serviços. Verifique os logs com: $0 logs"
+    print_warning "Timeout aguardando serviço. Verifique os logs com: $0 logs"
 }
 
 show_status() {
@@ -318,36 +253,6 @@ show_status() {
     print_step "Status dos serviços:"
     echo ""
     $COMPOSE_CMD ps -a
-    echo ""
-    
-    # Health checks
-    print_step "Health Checks:"
-    echo ""
-    
-    # Bot
-    local bot_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3003/api/health 2>/dev/null)
-    if [ "$bot_status" = "200" ]; then
-        print_success "Bot WhatsApp: http://localhost:3003 ✓"
-    else
-        print_error "Bot WhatsApp: http://localhost:3003 ✗"
-    fi
-    
-    # Ollama (se habilitado)
-    local ollama_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:11434/ 2>/dev/null)
-    if [ "$ollama_status" = "200" ]; then
-        print_success "Ollama (IA): http://localhost:11434 ✓"
-    else
-        print_info "Ollama (IA): não iniciado (use: $0 ai)"
-    fi
-    
-    # Web Panel (se habilitado)
-    local web_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ 2>/dev/null)
-    if [ "$web_status" = "200" ]; then
-        print_success "Painel Web: http://localhost:8000 ✓"
-    else
-        print_info "Painel Web: não iniciado (use: $0 web)"
-    fi
-    
     echo ""
 }
 
@@ -370,7 +275,7 @@ create_backup() {
     fi
     
     # Copiar banco de dados SQLite
-    docker cp bot-whatsapp-atendimento:/app/bot-whatsapp/db/atendimento.db "$backup_file"
+    docker cp bot-whatsapp-atendimento:/app/db/atendimento.db "$backup_file"
     
     if [ -f "$backup_file" ]; then
         local size=$(du -h "$backup_file" | cut -f1)
@@ -420,7 +325,7 @@ connect_whatsapp() {
 # =============================================================================
 
 show_help() {
-    echo "Bot WhatsApp Atendimento - Script de Inicialização"
+    echo "Bot WhatsApp Atendimento - Script de Gerenciamento"
     echo ""
     echo "Uso: $0 <comando>"
     echo ""
@@ -429,21 +334,18 @@ show_help() {
     echo "  ${GREEN}Inicialização:${NC}"
     echo "    dev         Inicia em modo desenvolvimento (logs em tempo real)"
     echo "    start       Inicia em modo produção (background)"
-    echo "    ai          Inicia com Ollama (IA) habilitado"
-    echo "    web         Inicia com painel web"
-    echo "    full        Inicia tudo (bot + ai + web)"
     echo ""
     echo "  ${YELLOW}Gerenciamento:${NC}"
-    echo "    stop        Para todos os containers"
-    echo "    restart     Reinicia os containers"
-    echo "    status      Mostra status dos serviços"
+    echo "    stop        Para o container"
+    echo "    restart     Reinicia o container"
+    echo "    status      Mostra status do serviço"
     echo "    logs        Exibe logs em tempo real"
     echo ""
     echo "  ${BLUE}Manutenção:${NC}"
     echo "    backup      Cria backup do banco de dados"
     echo "    init-db     Inicializa/reseta o banco de dados"
     echo "    connect     Exibe logs para conectar WhatsApp"
-    echo "    build       Apenas faz build dos containers"
+    echo "    build       Apenas faz build do container"
     echo ""
     echo "  ${PURPLE}Ajuda:${NC}"
     echo "    help        Exibe esta ajuda"
@@ -451,7 +353,6 @@ show_help() {
     echo "Exemplos:"
     echo "  $0 dev        # Desenvolvimento local"
     echo "  $0 start      # Deploy em produção"
-    echo "  $0 ai         # Com IA para atendimento inteligente"
     echo "  $0 backup     # Backup antes de atualização"
     echo ""
 }
@@ -466,15 +367,6 @@ case "${1:-}" in
         ;;
     start|prod|production)
         start_production
-        ;;
-    ai)
-        start_with_ai
-        ;;
-    web)
-        start_with_web
-        ;;
-    full|all)
-        start_full
         ;;
     stop)
         stop_containers

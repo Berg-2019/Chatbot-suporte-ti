@@ -1,384 +1,371 @@
-# 🤖 Bot WhatsApp com IA Local (Ollama) + Sistema de Peças
-
-Sistema completo de atendimento técnico via WhatsApp com **IA local usando Ollama**, integração ao grupo técnico, sistema de solicitação de peças e interface web para gerenciamento.
-
-## 🚀 Funcionalidades Principais
-
-### 1. **IA Local com Ollama** ⭐ **NOVO**
-- **Análise inteligente** de mensagens dos usuários
-- **Primeira interação personalizada** - não cria OS automaticamente
-- **Classificação automática** de problemas técnicos
-- **Análise de prioridade** e categorização
-- **Privacidade total** - dados não saem do servidor
-
-### 2. **Integração com Grupo Técnico**
-- Bot envia notificações de novas OS para grupo específico do WhatsApp
-- Comandos funcionam dentro do grupo técnico
-- ID do grupo configurável via interface web
-
-### 3. **Sistema de Solicitação de Peças**
-- Comando `!listpeças [id_os]` para técnicos solicitarem peças
-- Workflow completo: solicitação → separação → disponibilização
-- Notificações automáticas para técnicos e almoxarifado
-- Interface web para gerenciamento pelo almoxarifado
-
-### 4. **Interface Web Completa**
-- **Gerenciamento de OS**: Visualizar, atualizar status, histórico
-- **Gerenciamento de Peças**: Interface para almoxarifado
-- **Configurações do Sistema**: Painel administrativo
-- **Autenticação**: Sistema de login protegido
-
-### 5. **Sistema de Backup e Administração**
-- Backup automático e manual do banco de dados
-- Comandos administrativos avançados
-- Estatísticas e gráficos do sistema
-- Gerenciamento de usuários via interface web
-
-## 📋 Pré-requisitos
-
-- Node.js 18+ 
-- NPM ou Yarn
-- **Ollama instalado** (para IA local)
-- WhatsApp Business ou pessoal para o bot
-- Acesso ao grupo técnico do WhatsApp
-
-## 🛠️ Instalação
-
-### 1. **Instalar Ollama** ⭐ **NOVO**
-```bash
-# Linux/Mac
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Windows: Baixar do site oficial
-# https://ollama.ai/
-```
-
-**Baixar modelo recomendado:**
-```bash
-ollama pull llama3.2:3b
-```
-
-**Iniciar Ollama:**
-```bash
-ollama serve
-```
-
-### 2. **Clonar o Repositório**
-```bash
-git clone <repository-url>
-cd bot-whatsapp-atendimento
-```
-
-### 3. **Instalar Dependências**
-
-**Bot WhatsApp:**
-```bash
-cd bot-whatsapp
-npm install
-```
-
-**Interface Web:**
-```bash
-cd ..
-npm install
-```
-
-### 4. **Configurar Variáveis de Ambiente**
-
-Criar arquivo `.env` na raiz do projeto:
-```env
-# Bot Configuration
-BOT_NUMBER=5569981248816
-ROOT_NUMBERS=5569981170027,5569884268042
-
-# Database
-DB_PATH=./bot-whatsapp/db/atendimento.db
-
-# Ollama Configuration
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
-
-# Logging
-LOG_LEVEL=info
-```
-
-### 5. **Iniciar os Serviços**
-
-**Terminal 1 - Bot WhatsApp:**
-```bash
-cd bot-whatsapp
-npm start
-```
-
-**Terminal 2 - Interface Web:**
-```bash
-npm run dev
-```
-
-**Terminal 3 - Ollama (se não estiver rodando):**
-```bash
-ollama serve
-```
-
-## 🎯 Como Usar
-
-### **Para Usuários Finais:** ⭐ **ATUALIZADO**
-1. **Primeira Mensagem**: Recebe boas-vindas personalizadas da IA
-2. **Abrir Chamado**: Descrever problema técnico (IA analisa automaticamente)
-3. **Consultar Status**: `!status [id]`
-4. **Cancelar OS**: `!cancelar [id]`
-5. **Adicionar Dados**: `!dados`
-
-### **Para Técnicos:**
-1. **Ver OS Abertas**: `!list`
-2. **Assumir OS**: `!atendendo [id]`
-3. **Solicitar Peças**: `!listpeças [id]`
-4. **Finalizar OS**: `!finalizado [id]`
-5. **Marcar Prioridade**: `!prioridade [id]`
-
-### **Para Almoxarifado:**
-1. **Ver Solicitações**: `!pecas`
-2. **Atender Solicitação**: `!atender [id]`
-3. **Acessar Interface Web**: `/parts`
-
-### **Para Administradores:**
-1. **Promover Usuários**: `!tecnico=[telefone]`, `!almoxarifado=[telefone]`
-2. **Ver Estatísticas**: `!grafico`
-3. **Criar Backup**: `!backup`
-4. **Configurar Sistema**: Interface web `/config`
-
-## 📱 Exemplo de Uso ⭐ **ATUALIZADO**
-
-### Fluxo Completo com IA:
-
-1. **Primeira interação do usuário:**
-```
-Usuário: "oi"
-Bot: 👋 Olá! Sou seu assistente técnico de TI.
-
-🔧 Para abrir um chamado, descreva seu problema técnico
-📋 Use !ajuda para ver todos os comandos disponíveis
-💬 Estou aqui para ajudar com questões de TI!
-```
-
-2. **Usuário reporta problema:**
-```
-Usuário: "Minha impressora não está funcionando"
-Bot: ✅ CHAMADO CRIADO COM SUCESSO
-
-🎫 OS #123
-📝 Problema: Minha impressora não está funcionando
-📅 Criado em: 15/12/2024 14:30
-
-🤖 Análise Automática:
-📂 Categoria: Impressora
-⚡ Prioridade: Normal
-🔍 Análise: Problema comum de conectividade com impressora
-
-💡 Próximos passos:
-• Use !dados para adicionar mais informações
-• Use !status 123 para consultar o andamento
-• Nossa equipe técnica foi notificada
-```
-
-3. **Notificação no grupo técnico:**
-```
-🆕 NOVA OS CRIADA
-
-🎫 OS #123
-👤 Usuário: João Silva
-📞 Telefone: 5511999999999
-📝 Problema: Minha impressora não está funcionando
-
-🤖 Análise IA:
-📂 Impressora | ⚡ Normal
-🔍 Problema comum de conectividade com impressora
-
-📅 Criado em: 15/12/2024 14:30
-```
-
-4. **Técnico assume o atendimento:**
-```
-Técnico: "!atendendo 123"
-Bot: ✅ Você assumiu a OS #123. Status: EM ANDAMENTO
-```
-
-5. **Técnico solicita peças:**
-```
-Técnico: "!listpeças 123"
-Bot: 📦 SOLICITAÇÃO DE PEÇAS - OS #123
-     Liste as peças necessárias:
-
-Técnico: "- Cartucho HP 664
-          - Cabo USB"
-Bot: ✅ SOLICITAÇÃO DE PEÇAS CRIADA #456
-```
-
-6. **Almoxarifado atende:**
-```
-Almoxarifado: "!atender 456"
-Bot: ✅ Solicitação #456 atendida!
-     Técnico notificado: peças disponíveis para retirada
-```
-
-7. **Finalização:**
-```
-Técnico: "!finalizado 123"
-Bot: ✅ OS #123 finalizada com sucesso!
-```
-
-## 🌐 Interface Web
-
-### Páginas Disponíveis:
-- **`/`** - Dashboard principal com OS
-- **`/parts`** - Gerenciamento de peças (almoxarifado)
-- **`/config`** - Configurações do sistema (admin)
-
-### Credenciais de Acesso:
-- **Usuário**: `root`
-- **Senha**: `admin847523`
-
-## 📊 Comandos Completos
-
-### **Usuários Gerais:**
-- `!ajuda` - Lista de comandos
-- `!status [id]` - Ver status da OS
-- `!cancelar [id]` - Cancelar OS
-- `!dados` - Adicionar dados da máquina
-
-### **Técnicos:**
-- `!menu` - Menu técnico
-- `!atendendo [id]` - Assumir OS
-- `!prioridade [id]` - Marcar como prioritário
-- `!setor [id]=[setor]` - Alterar setor
-- `!mensagem [id]=[texto]` - Enviar mensagem
-- `!list` - Listar OS abertas
-- `!finalizado [id]` - Finalizar OS
-- `!listpeças [id]` - Solicitar peças
-- `!adm` - Chamar administrador
-
-### **Almoxarifado:**
-- `!pecas` - Ver solicitações de peças
-- `!atender [id]` - Atender solicitação
-
-### **Administradores:**
-- `!config` - Menu de configurações
-- `!listtc` - Listar técnicos
-- `!listadm` - Listar administradores
-- `!tecnico=[num]` - Promover a técnico
-- `!admin=[num]` - Promover a administrador
-- `!almoxarifado=[num]` - Promover a almoxarifado
-- `!ping` - Status do sistema
-- `!historico` - Ver histórico
-
-### **Sistema (Root):**
-- `!user [username] [password]` - Criar usuário web
-- `!grafico` - Estatísticas detalhadas
-- `!backup` - Criar backup manual
-- `!sistema` - Informações do sistema
-
-## 🗄️ Estrutura do Banco
-
-### Tabelas Principais:
-- `usuarios` - Usuários do sistema
-- `ordens_servico` - Ordens de serviço
-- `historico_mensagens` - Histórico de conversas
-- `solicitacoes_pecas` - Solicitações de peças
-- `system_users` - Usuários da interface web
-- `system_config` - Configurações do sistema
-- `backups` - Registro de backups
-
-## 📚 Documentação Adicional
-
-- **[Integração Ollama](./README_OLLAMA_INTEGRATION.md)** ⭐ **NOVO** - Guia completo da IA local
-- **[Sistema de Peças](./README_PARTS_SYSTEM.md)** - Documentação detalhada do sistema de peças
-
-## 🔧 Troubleshooting
-
-### IA não funciona (Ollama)
-1. **Verificar se Ollama está rodando**: `ollama serve`
-2. **Testar conexão**: `curl http://localhost:11434/api/tags`
-3. **Verificar modelo**: `ollama list`
-4. **Baixar modelo**: `ollama pull llama3.2:3b`
-
-### Bot não conecta ao WhatsApp
-1. Verificar se o QR Code foi escaneado
-2. Verificar conexão com internet
-3. Limpar pasta `auth_info_baileys` e reconectar
-
-### Comandos não funcionam
-1. Verificar se o usuário tem permissão
-2. Verificar sintaxe do comando
-3. Consultar logs em `./logs/bot.log`
-
-### Interface web não carrega
-1. Verificar se Next.js está rodando (`npm run dev`)
-2. Verificar porta 3000 disponível
-3. Verificar se banco de dados existe
-
-### Grupo técnico não recebe notificações
-1. Verificar ID do grupo nas configurações
-2. Verificar se bot está no grupo
-3. Verificar permissões do bot no grupo
-
-## 🚀 Recursos Avançados
-
-### Backup Automático
-- Backup a cada 24 horas
-- Limpeza automática de backups antigos
-- Exportação de OS individuais
-
-### Estatísticas Avançadas
-- Gráficos de performance
-- Métricas de atendimento
-- Relatórios de peças
-
-### Segurança
-- Dados locais (Ollama)
-- Autenticação web
-- Logs detalhados
-- Controle de permissões
-
-## 📈 Performance
-
-### Recursos Recomendados:
-- **RAM**: 8GB+ (16GB recomendado para IA)
-- **CPU**: 4+ cores
-- **Armazenamento**: 10GB+ livre
-- **Rede**: Conexão estável para WhatsApp
-
-### Otimizações:
-- Usar modelos Ollama menores para melhor performance
-- Configurar limpeza automática adequada
-- Monitorar uso de recursos
-
-## 🔐 Segurança e Privacidade
-
-### Vantagens do Ollama:
-- **Dados locais**: Nenhuma informação enviada para terceiros
-- **Privacidade**: Conversas permanecem no servidor
-- **Controle total**: Sem dependência de APIs externas
-- **Gratuito**: Sem custos de API
-
-### Configurações de Segurança:
-- Autenticação obrigatória na interface web
-- Controle de permissões por papel de usuário
-- Logs detalhados de todas as ações
-- Backup automático para recuperação
-
-## 📞 Suporte
-
-### Configuração Padrão:
-- **Grupo Técnico**: https://chat.whatsapp.com/H6Mb8FQAnhaJhY5RdyIKjP
-- **Usuário Root**: 5569981170027
-- **Interface Web**: http://localhost:3000
-
-### Em caso de problemas:
-1. Verificar logs em `./logs/bot.log`
-2. Consultar documentação específica
-3. Verificar status de todos os serviços
-4. Reiniciar serviços se necessário
+# 🤖 Bot WhatsApp - Atendimento Técnico
+
+Sistema de Ordens de Serviço via WhatsApp para suporte técnico corporativo.
+
+![Node.js](https://img.shields.io/badge/Node.js-22+-green)
+![Docker](https://img.shields.io/badge/Docker-ready-blue)
+![WhatsApp](https://img.shields.io/badge/WhatsApp-Baileys-25D366)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
+## 📋 Funcionalidades
+
+- ✅ **Abertura de Chamados** - Fluxo conversacional guiado
+- ✅ **15 Setores** - RH, Engenharia, Licitação, Compras, etc.
+- ✅ **7 Tipos de Chamado** - Ponto eletrônico, sistemas, manutenção, etc.
+- ✅ **Gestão de OS** - Atender, finalizar, escalar chamados
+- ✅ **Relatórios** - Semanais e mensais com métricas de desempenho
+- ✅ **Sistema de Permissões** - User, Técnico, Admin, Root
+- ✅ **Notificações** - Grupo técnico recebe alertas de novos chamados
+- ✅ **Docker** - Deploy simplificado com Docker Compose
 
 ---
 
-**Sistema desenvolvido para atendimento técnico eficiente com IA local e total privacidade dos dados.**
+## 🚀 Início Rápido
+
+### Pré-requisitos
+
+- Node.js 20+ ou Docker
+- Número de WhatsApp para o bot
+
+### Opção 1: Com Docker (Recomendado)
+
+```bash
+# Clonar o repositório
+git clone https://github.com/seu-usuario/bot-whatsapp-atendimento.git
+cd bot-whatsapp-atendimento
+
+# Copiar arquivo de configuração
+cp .env.example .env
+
+# Editar configurações (opcional)
+nano .env
+
+# Iniciar em modo desenvolvimento
+./scripts/setup.sh dev
+```
+
+### Opção 2: Sem Docker
+
+```bash
+# Entrar no diretório do bot
+cd bot-whatsapp/
+
+# Instalar dependências
+npm install
+
+# Iniciar o bot
+npm run dev
+```
+
+### Conectando ao WhatsApp
+
+Na primeira execução, o bot solicitará um número de telefone:
+
+```
+⚠️ Credenciais ainda não configuradas!
+ℹ️ Informe o número de telefone do bot (exemplo: "5569981170027"):
+Número de telefone: 5569XXXXXXXXX
+
+💬 Código de pareamento: XXXX-XXXX
+```
+
+1. Abra o WhatsApp no celular
+2. Vá em **Configurações > Dispositivos Conectados > Conectar Dispositivo**
+3. Escolha **Conectar com número de telefone**
+4. Digite o código de pareamento exibido no terminal
+
+---
+
+## 📦 Estrutura do Projeto
+
+```
+bot-whatsapp-atendimento/
+├── bot-whatsapp/
+│   ├── src/
+│   │   ├── index.js              # Ponto de entrada
+│   │   ├── config.js             # Configurações (setores, tipos)
+│   │   ├── connection.js         # Conexão WhatsApp
+│   │   ├── loader.js             # Carregador de eventos
+│   │   ├── middlewares/
+│   │   │   ├── onMessagesUpsert.js  # Processamento de mensagens
+│   │   │   ├── flowHandler.js       # Fluxo de atendimento
+│   │   │   └── commandHandler.js    # Comandos do sistema
+│   │   ├── services/
+│   │   │   ├── database.js          # Banco de dados SQLite
+│   │   │   └── reportService.js     # Geração de relatórios
+│   │   └── utils/
+│   │       ├── logger.js            # Logs coloridos
+│   │       └── badMacHandler.js     # Tratamento de erros
+│   ├── db/                       # Banco de dados SQLite
+│   └── package.json
+├── docker-compose.yml
+├── Dockerfile
+├── .env.example
+└── scripts/
+    └── setup.sh                  # Script de gerenciamento
+```
+
+---
+
+## ⚙️ Configuração
+
+### Variáveis de Ambiente
+
+Edite o arquivo `.env`:
+
+```env
+# Nome do bot
+BOT_NAME="Bot de Atendimento Técnico"
+
+# Prefixo dos comandos
+PREFIX="!"
+
+# ID do grupo de técnicos (obtenha via !grupoid)
+GRUPO_TECNICO_ID=
+
+# Números root (administradores supremos)
+ROOT_NUMBERS=556981170027,556884268042
+```
+
+### Configurando o Grupo Técnico
+
+1. Adicione o bot ao grupo de técnicos
+2. No grupo, digite `!grupoid`
+3. Copie o ID exibido e cole em `GRUPO_TECNICO_ID` no `.env`
+4. Reinicie o bot
+
+---
+
+## 💬 Fluxo de Atendimento
+
+O bot guia o usuário através de um fluxo conversacional:
+
+```
+1. 👋 Usuário envia "oi" ou "olá"
+2. 🏢 Bot pergunta o setor
+3. 🔧 Bot pergunta o tipo de chamado
+4. 📍 Bot solicita o local
+5. 💻 Bot solicita o equipamento
+6. 🏷️ Bot solicita o patrimônio
+7. 📝 Bot solicita descrição do problema
+8. ✅ Usuário confirma os dados
+9. 🔔 OS é criada e grupo técnico é notificado
+```
+
+### Setores Disponíveis
+
+| ID  | Setor                               |
+| --- | ----------------------------------- |
+| 1   | RH                                  |
+| 2   | Engenharia                          |
+| 3   | Licitação                           |
+| 4   | Compras                             |
+| 5   | Transporte                          |
+| 6   | Vendas                              |
+| 7   | Controladoria                       |
+| 8   | Apropriação                         |
+| 9   | Posto Rio Branco                    |
+| 10  | Posto Porto Velho                   |
+| 11  | Escritório de Pedreira              |
+| 12  | Usina de Asfalto                    |
+| 13  | Usina de Concreto                   |
+| 14  | Laboratório de Concreto             |
+| 15  | Adm. Posto Rio Branco e Porto Velho |
+
+### Tipos de Chamado
+
+| ID  | Tipo                              |
+| --- | --------------------------------- |
+| 1   | Outros                            |
+| 2   | Ponto eletrônico                  |
+| 3   | Servidores/Acesso Remoto          |
+| 4   | Sistemas (LOTUS/MOVTRANS/Balança) |
+| 5   | Acessórios (teclado, mouse)       |
+| 6   | Manutenção de PC                  |
+| 7   | Reposição de tinta                |
+
+---
+
+## 📝 Comandos
+
+### Comandos Gerais (Todos os usuários)
+
+| Comando          | Descrição                           |
+| ---------------- | ----------------------------------- |
+| `!ajuda`         | Lista todos os comandos disponíveis |
+| `!menu`          | Exibe o menu principal              |
+| `!status`        | Lista seus chamados                 |
+| `!status <id>`   | Detalhes de um chamado específico   |
+| `!cancelar <id>` | Cancela um chamado                  |
+
+### Comandos de Técnico
+
+| Comando           | Descrição                   |
+| ----------------- | --------------------------- |
+| `!atender <id>`   | Assume um chamado           |
+| `!finalizar <id>` | Conclui um chamado          |
+| `!escalar <id>`   | Escala para nível 2         |
+| `!listar`         | Lista chamados abertos      |
+| `!pendentes`      | Chamados aguardando técnico |
+
+### Comandos de Admin
+
+| Comando                   | Descrição                  |
+| ------------------------- | -------------------------- |
+| `!relatorio semana`       | Relatório semanal          |
+| `!relatorio mes`          | Relatório mensal           |
+| `!promover <tel> <cargo>` | Promove usuário            |
+| `!tecnicos`               | Lista técnicos cadastrados |
+
+### Comandos de Root
+
+| Comando    | Descrição                |
+| ---------- | ------------------------ |
+| `!backup`  | Cria backup do banco     |
+| `!grupoid` | Mostra ID do grupo atual |
+| `!config`  | Exibe configurações      |
+
+---
+
+## 📊 Relatórios
+
+O sistema gera relatórios detalhados de desempenho:
+
+```
+📊 RELATÓRIO SEMANAL - SUPORTE TI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 Período: 06/01 a 13/01/2026
+
+📈 RESUMO GERAL
+• Total de chamados: 47
+• Finalizados: 35 ✅
+• Em andamento: 4 🟡
+• Taxa de resolução: 74.5%
+
+⏱️ TEMPOS
+• Tempo médio de resposta: 15 min
+• Tempo médio de resolução: 2h 34min
+
+🏢 POR SETOR
+• RH: 12 (26%) ▓▓▓░░░░░░░
+• Administrativo: 8 (17%) ▓▓░░░░░░░░
+
+👨‍💻 TOP TÉCNICOS
+🥇 João Silva - 18 atendimentos
+🥈 Maria Santos - 12 atendimentos
+🥉 Pedro Costa - 5 atendimentos
+
+💡 INSIGHTS
+✅ Excelente taxa de resolução!
+⚡ Ótimo tempo de resposta!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+## 🐳 Comandos Docker
+
+```bash
+# Desenvolvimento (com logs em tempo real)
+./scripts/setup.sh dev
+
+# Produção (background)
+./scripts/setup.sh start
+
+# Parar
+./scripts/setup.sh stop
+
+# Reiniciar
+./scripts/setup.sh restart
+
+# Ver logs
+./scripts/setup.sh logs
+
+# Ver status
+./scripts/setup.sh status
+
+# Criar backup
+./scripts/setup.sh backup
+
+# Ver ajuda
+./scripts/setup.sh help
+```
+
+---
+
+## 🔧 Desenvolvimento
+
+### Executar localmente
+
+```bash
+cd bot-whatsapp/
+npm install
+npm run dev
+```
+
+### Scripts disponíveis
+
+```bash
+npm start       # Inicia o bot
+npm run dev     # Inicia com auto-reload
+npm run init-db # Inicializa o banco de dados
+```
+
+---
+
+## 📁 Banco de Dados
+
+O bot usa SQLite para persistência. O banco é criado automaticamente em `bot-whatsapp/db/atendimento.db`.
+
+### Tabelas principais
+
+- `ordens_servico` - Chamados/OS
+- `usuarios` - Usuários e permissões
+- `historico_mensagens` - Histórico de interações
+- `fluxo_conversacao` - Estado do fluxo de cada usuário
+- `configuracoes` - Configurações do sistema
+
+---
+
+## 🔒 Sistema de Permissões
+
+| Role           | Descrição     | Pode                 |
+| -------------- | ------------- | -------------------- |
+| `user`         | Usuário comum | Abrir/ver chamados   |
+| `almoxarifado` | Almoxarife    | Gerenciar peças      |
+| `tecnico`      | Técnico       | Atender chamados     |
+| `admin`        | Administrador | Promover, relatórios |
+| `root`         | Super admin   | Tudo, backup, config |
+
+Para promover um usuário:
+
+```
+!promover 69999888777 tecnico
+```
+
+---
+
+## 🤝 Contribuindo
+
+1. Fork o projeto
+2. Crie uma branch (`git checkout -b feature/nova-funcionalidade`)
+3. Commit suas mudanças (`git commit -m 'Adiciona nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/nova-funcionalidade`)
+5. Abra um Pull Request
+
+---
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+---
+
+## 📞 Suporte
+
+- Abra uma [issue](https://github.com/seu-usuario/bot-whatsapp-atendimento/issues) para reportar bugs
+- Para dúvidas, consulte a documentação acima
+
+---
+
+Desenvolvido com ❤️ para facilitar o suporte técnico corporativo.

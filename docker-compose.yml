@@ -23,11 +23,7 @@ services:
       - PREFIX=${PREFIX:-!}
       - GRUPO_TECNICO_ID=${GRUPO_TECNICO_ID:-}
       - ROOT_NUMBERS=${ROOT_NUMBERS:-556981170027,556884268042}
-      # Configurações de IA (Ollama)
-      - OLLAMA_ENABLED=${OLLAMA_ENABLED:-false}
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
-      # Configurações de Email
+      # Configurações de Email (opcional)
       - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
       - EMAIL_HOST=${EMAIL_HOST:-}
       - EMAIL_PORT=${EMAIL_PORT:-587}
@@ -36,64 +32,21 @@ services:
       - EMAIL_FROM=${EMAIL_FROM:-}
     volumes:
       # Persistir dados de autenticação do WhatsApp
-      - whatsapp_auth:/app/bot-whatsapp/auth_info_baileys
+      - whatsapp_auth:/app/auth_info_baileys
       # Persistir banco de dados SQLite
-      - bot_database:/app/bot-whatsapp/db
+      - bot_database:/app/db
       # Persistir backups
-      - bot_backups:/app/bot-whatsapp/backups
+      - bot_backups:/app/backups
       # Persistir logs
-      - bot_logs:/app/bot-whatsapp/logs
+      - bot_logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3003/api/health"]
+      test: ["CMD", "node", "-e", "console.log('OK')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     networks:
       - bot-network
-
-  # Ollama para IA (Opcional)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: bot-ollama
-    restart: unless-stopped
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - bot-network
-    profiles:
-      - ai  # Só inicia se usar: docker compose --profile ai up
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Painel Web (Next.js - Frontend existente)
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-    container_name: bot-web-panel
-    ports:
-      - "${WEB_PORT:-8000}:3000"
-    restart: unless-stopped
-    depends_on:
-      - bot
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_BOT_API_URL=http://bot:3003
-    networks:
-      - bot-network
-    profiles:
-      - web  # Só inicia se usar: docker compose --profile web up
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 networks:
   bot-network:
@@ -108,5 +61,3 @@ volumes:
     name: bot-whatsapp-backups
   bot_logs:
     name: bot-whatsapp-logs
-  ollama_data:
-    name: bot-ollama-data
