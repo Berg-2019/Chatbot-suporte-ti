@@ -1,13 +1,18 @@
 {
   "name": "bot-whatsapp-atendimento",
-  "version": "2.0.0",
-  "description": "Bot de Atendimento Técnico para WhatsApp",
-  "main": "bot.js",
+  "version": "3.0.0",
+  "description": "Bot de Atendimento Técnico para WhatsApp - Sistema de Ordens de Serviço",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js",
-    "install-ollama": "node scripts/install-ollama.js",
-    "test-ollama": "node scripts/test-ollama.js"
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "init-db": "node init-db.js",
+    "legacy": "node bot.js",
+    "test": "node src/test.js"
   },
   "dependencies": {
     "@cacheable/node-cache": "^1.7.4",
@@ -17,8 +22,7 @@
     "node-cache": "^5.1.2",
     "nodemailer": "^6.9.16",
     "pino": "^10.1.0",
-    "sqlite3": "^5.1.7",
-    "winston": "^3.17.0"
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
@@ -27,8 +31,10 @@
     "whatsapp",
     "bot",
     "atendimento",
-    "tecnico"
+    "tecnico",
+    "ordem-servico",
+    "suporte"
   ],
-  "author": "Sistema de Atendimento",
+  "author": "Sistema de Atendimento Técnico",
   "license": "MIT"
 }

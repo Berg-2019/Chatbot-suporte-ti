@@ -1,0 +1,33 @@
+# Docker
+.env
+*.log
+logs/
+temp/
+backups/
+
+# WhatsApp Auth
+auth_info_baileys/
+bot-whatsapp/auth_info_baileys/
+
+# Node
+node_modules/
+bot-whatsapp/node_modules/
+*.tsbuildinfo
+.next/
+
+# Database (local dev only)
+bot-whatsapp/db/*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
