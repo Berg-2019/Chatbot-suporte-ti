@@ -1,64 +1,64 @@
 # =============================================================================
-# CONFIGURAÇÃO DOCKER - Bot WhatsApp Atendimento Técnico
-# =============================================================================
-# IMPORTANTE: Crie um arquivo .env com as variáveis antes de executar!
-# Use o arquivo .env.example como referência.
-# NOTA: Use 'docker compose' (v2) em vez de 'docker-compose' (v1)
+# Helpdesk - Sistema de Atendimento Técnico via WhatsApp
 # =============================================================================
 
 services:
-  # Bot WhatsApp de Atendimento
-  bot:
+  # Backend API + WhatsApp Bot
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: bot-whatsapp-atendimento
-    ports:
-      - "${BOT_PORT:-3003}:3003"
+    container_name: helpdesk-backend
     restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-3003}:3003"
     environment:
       - NODE_ENV=production
       - PORT=3003
-      - BOT_NAME=${BOT_NAME:-Bot de Atendimento Técnico}
-      - PREFIX=${PREFIX:-!}
-      - BOT_PHONE_NUMBER=${BOT_PHONE_NUMBER:-}
-      - GRUPO_TECNICO_ID=${GRUPO_TECNICO_ID:-}
-      - ROOT_NUMBERS=${ROOT_NUMBERS:-556981170027,556884268042}
-      # Configurações de Email (opcional)
-      - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
-      - EMAIL_HOST=${EMAIL_HOST:-}
-      - EMAIL_PORT=${EMAIL_PORT:-587}
-      - EMAIL_USER=${EMAIL_USER:-}
-      - EMAIL_PASS=${EMAIL_PASS:-}
-      - EMAIL_FROM=${EMAIL_FROM:-}
+      - JWT_SECRET=${JWT_SECRET:-sua-chave-secreta-super-segura-aqui}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@empresa.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - ADMIN_NAME=${ADMIN_NAME:-Administrador}
     volumes:
-      # Persistir dados de autenticação do WhatsApp
-      - whatsapp_auth:/app/auth_info_baileys
-      # Persistir banco de dados SQLite
-      - bot_database:/app/db
-      # Persistir backups
-      - bot_backups:/app/backups
-      # Persistir logs
-      - bot_logs:/app/logs
+      - helpdesk_data:/app/data
+      - helpdesk_auth:/app/auth_info_baileys
+    networks:
+      - helpdesk-network
     healthcheck:
-      test: ["CMD", "node", "-e", "console.log('OK')"]
+      test: ["CMD", "curl", "-f", "http://localhost:3003/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 30s
+
+  # Frontend Painel Web
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: helpdesk-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:3003
+    depends_on:
+      - backend
     networks:
-      - bot-network
+      - helpdesk-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
-  bot-network:
+  helpdesk-network:
     driver: bridge
 
 volumes:
-  whatsapp_auth:
-    name: bot-whatsapp-auth
-  bot_database:
-    name: bot-whatsapp-db
-  bot_backups:
-    name: bot-whatsapp-backups
-  bot_logs:
-    name: bot-whatsapp-logs
+  helpdesk_data:
+    name: helpdesk-data
+  helpdesk_auth:
+    name: helpdesk-auth

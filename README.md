@@ -1,382 +1,174 @@
-# 🤖 Bot WhatsApp - Atendimento Técnico
+# 🎫 Helpdesk - Sistema de Atendimento Técnico via WhatsApp
 
-Sistema de Ordens de Serviço via WhatsApp para suporte técnico corporativo.
+Plataforma web completa de helpdesk para suporte técnico com integração WhatsApp.
 
 ![Node.js](https://img.shields.io/badge/Node.js-22+-green)
+![Next.js](https://img.shields.io/badge/Next.js-15-blue)
 ![Docker](https://img.shields.io/badge/Docker-ready-blue)
 ![WhatsApp](https://img.shields.io/badge/WhatsApp-Baileys-25D366)
-![License](https://img.shields.io/badge/License-MIT-yellow)
 
-## 📋 Funcionalidades
+## ✨ Funcionalidades
 
-- ✅ **Abertura de Chamados** - Fluxo conversacional guiado
-- ✅ **15 Setores** - RH, Engenharia, Licitação, Compras, etc.
-- ✅ **7 Tipos de Chamado** - Ponto eletrônico, sistemas, manutenção, etc.
-- ✅ **Gestão de OS** - Atender, finalizar, escalar chamados
-- ✅ **Relatórios** - Semanais e mensais com métricas de desempenho
-- ✅ **Sistema de Permissões** - User, Técnico, Admin, Root
-- ✅ **Notificações** - Grupo técnico recebe alertas de novos chamados
-- ✅ **Docker** - Deploy simplificado com Docker Compose
+- 🤖 **Chatbot** - Primeiro atendimento automatizado
+- 💬 **Chat unificado** - Bot e técnicos na mesma conversa
+- 📊 **Dashboard** - Visão geral de tickets e filas
+- 👥 **Multi-técnicos** - Cada um com login individual
+- 🔄 **Handoff** - Transferência bot → humano automática
+- 📱 **WhatsApp Web** - Conexão via QR ou código de pareamento
+- 🔐 **Autenticação** - JWT com roles (admin/technician)
 
 ---
 
 ## 🚀 Início Rápido
 
-### Pré-requisitos
-
-- Node.js 20+ ou Docker
-- Número de WhatsApp para o bot
-
-### Opção 1: Com Docker (Recomendado)
+### Desenvolvimento Local
 
 ```bash
-# Clonar o repositório
-git clone https://github.com/seu-usuario/bot-whatsapp-atendimento.git
-cd bot-whatsapp-atendimento
+# 1. Clonar repositório
+git clone https://github.com/seu-usuario/helpdesk-whatsapp.git
+cd helpdesk-whatsapp
 
-# Copiar arquivo de configuração
+# 2. Instalar dependências do backend
+cd backend && npm install && cd ..
+
+# 3. Instalar dependências do frontend
+cd frontend && npm install && cd ..
+
+# 4. Copiar configuração
 cp .env.example .env
 
-# IMPORTANTE: Editar .env e configurar BOT_PHONE_NUMBER
-nano .env
-# Exemplo: BOT_PHONE_NUMBER=5569981170027
+# 5. Iniciar backend (terminal 1)
+cd backend && npm run dev
 
-# Iniciar em modo desenvolvimento
-./scripts/setup.sh dev
+# 6. Iniciar frontend (terminal 2)
+cd frontend && npm run dev
 ```
 
-### Opção 2: Sem Docker
+### Com Docker
 
 ```bash
-# Entrar no diretório do bot
-cd bot-whatsapp/
+# Copiar configuração
+cp .env.example .env
 
-# Instalar dependências
-npm install
+# Iniciar tudo
+docker compose up -d
 
-# Configurar variável de ambiente
-export BOT_PHONE_NUMBER=5569981170027
-
-# Iniciar o bot
-npm run dev
-```
-
-### Conectando ao WhatsApp
-
-1. Configure `BOT_PHONE_NUMBER` no arquivo `.env` com o número do WhatsApp do bot
-2. Inicie o bot com `./scripts/setup.sh dev`
-3. Aguarde o código de pareamento aparecer nos logs:
-
-```
-⚠️ Credenciais ainda não configuradas!
-ℹ️ Aguardando socket ficar pronto (5 segundos)...
-ℹ️ Solicitando código de pareamento para: 5569XXXXXXXXX
-💬 Código de pareamento: XXXX-XXXX
-```
-
-4. No celular, abra **WhatsApp > Configurações > Dispositivos Conectados > Conectar Dispositivo**
-5. Escolha **Conectar com número de telefone**
-6. Digite o código de pareamento exibido nos logs
-
-> **Nota:** O código expira em alguns minutos. Se expirar, reinicie o bot para gerar um novo.
-
----
-
-## 📦 Estrutura do Projeto
-
-```
-bot-whatsapp-atendimento/
-├── bot-whatsapp/
-│   ├── src/
-│   │   ├── index.js              # Ponto de entrada
-│   │   ├── config.js             # Configurações (setores, tipos)
-│   │   ├── connection.js         # Conexão WhatsApp
-│   │   ├── loader.js             # Carregador de eventos
-│   │   ├── middlewares/
-│   │   │   ├── onMessagesUpsert.js  # Processamento de mensagens
-│   │   │   ├── flowHandler.js       # Fluxo de atendimento
-│   │   │   └── commandHandler.js    # Comandos do sistema
-│   │   ├── services/
-│   │   │   ├── database.js          # Banco de dados SQLite
-│   │   │   └── reportService.js     # Geração de relatórios
-│   │   └── utils/
-│   │       ├── logger.js            # Logs coloridos
-│   │       └── badMacHandler.js     # Tratamento de erros
-│   ├── db/                       # Banco de dados SQLite
-│   └── package.json
-├── docker-compose.yml
-├── Dockerfile
-├── .env.example
-└── scripts/
-    └── setup.sh                  # Script de gerenciamento
+# Ver logs
+docker compose logs -f
 ```
 
 ---
 
-## ⚙️ Configuração
+## 🔧 Configuração
 
 ### Variáveis de Ambiente
 
-Edite o arquivo `.env`:
-
 ```env
-# Nome do bot
-BOT_NAME="Bot de Atendimento Técnico"
+# Portas
+BACKEND_PORT=3003
+FRONTEND_PORT=8080
 
-# Prefixo dos comandos
-PREFIX="!"
+# JWT (altere em produção!)
+JWT_SECRET=sua-chave-super-secreta
 
-# OBRIGATÓRIO: Número do WhatsApp do bot (primeira conexão)
-# Formato: código do país + DDD + número
-BOT_PHONE_NUMBER=5569981170027
-
-# ID do grupo de técnicos (obtenha via !grupoid após conectar)
-GRUPO_TECNICO_ID=
-
-# Números root (administradores supremos)
-ROOT_NUMBERS=556981170027,556884268042
+# Admin padrão
+ADMIN_EMAIL=admin@empresa.com
+ADMIN_PASSWORD=admin123
 ```
 
-### Configurando o Grupo Técnico
+---
 
-1. Conecte o bot ao WhatsApp primeiro
-2. Adicione o bot ao grupo de técnicos
-3. No grupo, digite `!grupoid`
-4. Copie o ID exibido e cole em `GRUPO_TECNICO_ID` no `.env`
-5. Reinicie o bot
+## 📱 Conectando WhatsApp
+
+1. Acesse `http://localhost:8080`
+2. Faça login com `admin@empresa.com` / `admin123`
+3. Vá em **Configurações** (ícone de engrenagem)
+4. Escolha **QR Code** ou **Código de Pareamento**
+5. Siga as instruções no painel
 
 ---
 
 ## 💬 Fluxo de Atendimento
 
-O bot guia o usuário através de um fluxo conversacional:
-
 ```
-1. 👋 Usuário envia "oi" ou "olá"
-2. 🏢 Bot pergunta o setor
-3. 🔧 Bot pergunta o tipo de chamado
-4. 📍 Bot solicita o local
-5. 💻 Bot solicita o equipamento
-6. 🏷️ Bot solicita o patrimônio
-7. 📝 Bot solicita descrição do problema
-8. ✅ Usuário confirma os dados
-9. 🔔 OS é criada e grupo técnico é notificado
-```
-
-### Setores Disponíveis
-
-| ID  | Setor                               |
-| --- | ----------------------------------- |
-| 1   | RH                                  |
-| 2   | Engenharia                          |
-| 3   | Licitação                           |
-| 4   | Compras                             |
-| 5   | Transporte                          |
-| 6   | Vendas                              |
-| 7   | Controladoria                       |
-| 8   | Apropriação                         |
-| 9   | Posto Rio Branco                    |
-| 10  | Posto Porto Velho                   |
-| 11  | Escritório de Pedreira              |
-| 12  | Usina de Asfalto                    |
-| 13  | Usina de Concreto                   |
-| 14  | Laboratório de Concreto             |
-| 15  | Adm. Posto Rio Branco e Porto Velho |
-
-### Tipos de Chamado
-
-| ID  | Tipo                              |
-| --- | --------------------------------- |
-| 1   | Outros                            |
-| 2   | Ponto eletrônico                  |
-| 3   | Servidores/Acesso Remoto          |
-| 4   | Sistemas (LOTUS/MOVTRANS/Balança) |
-| 5   | Acessórios (teclado, mouse)       |
-| 6   | Manutenção de PC                  |
-| 7   | Reposição de tinta                |
-
----
-
-## 📝 Comandos
-
-### Comandos Gerais (Todos os usuários)
-
-| Comando          | Descrição                           |
-| ---------------- | ----------------------------------- |
-| `!ajuda`         | Lista todos os comandos disponíveis |
-| `!menu`          | Exibe o menu principal              |
-| `!status`        | Lista seus chamados                 |
-| `!status <id>`   | Detalhes de um chamado específico   |
-| `!cancelar <id>` | Cancela um chamado                  |
-
-### Comandos de Técnico
-
-| Comando           | Descrição                   |
-| ----------------- | --------------------------- |
-| `!atender <id>`   | Assume um chamado           |
-| `!finalizar <id>` | Conclui um chamado          |
-| `!escalar <id>`   | Escala para nível 2         |
-| `!listar`         | Lista chamados abertos      |
-| `!pendentes`      | Chamados aguardando técnico |
-
-### Comandos de Admin
-
-| Comando                   | Descrição                  |
-| ------------------------- | -------------------------- |
-| `!relatorio semana`       | Relatório semanal          |
-| `!relatorio mes`          | Relatório mensal           |
-| `!promover <tel> <cargo>` | Promove usuário            |
-| `!tecnicos`               | Lista técnicos cadastrados |
-
-### Comandos de Root
-
-| Comando    | Descrição                |
-| ---------- | ------------------------ |
-| `!backup`  | Cria backup do banco     |
-| `!grupoid` | Mostra ID do grupo atual |
-| `!config`  | Exibe configurações      |
-
----
-
-## 📊 Relatórios
-
-O sistema gera relatórios detalhados de desempenho:
-
-```
-📊 RELATÓRIO SEMANAL - SUPORTE TI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 Período: 06/01 a 13/01/2026
-
-📈 RESUMO GERAL
-• Total de chamados: 47
-• Finalizados: 35 ✅
-• Em andamento: 4 🟡
-• Taxa de resolução: 74.5%
-
-⏱️ TEMPOS
-• Tempo médio de resposta: 15 min
-• Tempo médio de resolução: 2h 34min
-
-🏢 POR SETOR
-• RH: 12 (26%) ▓▓▓░░░░░░░
-• Administrativo: 8 (17%) ▓▓░░░░░░░░
-
-👨‍💻 TOP TÉCNICOS
-🥇 João Silva - 18 atendimentos
-🥈 Maria Santos - 12 atendimentos
-🥉 Pedro Costa - 5 atendimentos
-
-💡 INSIGHTS
-✅ Excelente taxa de resolução!
-⚡ Ótimo tempo de resposta!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 👤 Cliente envia "oi" no WhatsApp
+2. 🤖 Bot coleta: setor, tipo, local, equipamento, problema
+3. 🎫 Ticket é criado e entra na fila
+4. 🔔 Técnico recebe notificação no painel
+5. 👨‍💻 Técnico assume e responde pelo painel
+6. 📱 Cliente recebe resposta no WhatsApp
+7. ✅ Técnico finaliza o ticket
 ```
 
 ---
 
-## 🐳 Comandos Docker
+## 📁 Estrutura
 
-```bash
-# Desenvolvimento (com logs em tempo real)
-./scripts/setup.sh dev
-
-# Produção (background)
-./scripts/setup.sh start
-
-# Parar
-./scripts/setup.sh stop
-
-# Reiniciar
-./scripts/setup.sh restart
-
-# Ver logs
-./scripts/setup.sh logs
-
-# Ver status
-./scripts/setup.sh status
-
-# Criar backup
-./scripts/setup.sh backup
-
-# Ver ajuda
-./scripts/setup.sh help
+```
+helpdesk-whatsapp/
+├── backend/                # API Node.js + Express
+│   ├── src/
+│   │   ├── app.ts         # Express com Socket.IO
+│   │   ├── routes/        # auth, bot, tickets, chats
+│   │   └── services/      # whatsapp, chatbot
+│   └── package.json
+├── frontend/               # Next.js + TailwindCSS
+│   ├── app/
+│   │   ├── login/         # Página de login
+│   │   ├── dashboard/     # Dashboard principal
+│   │   ├── chat/[id]/     # Interface de chat
+│   │   └── settings/      # Configurações
+│   └── package.json
+├── docker-compose.yml
+└── README.md
 ```
 
 ---
 
-## 🔧 Desenvolvimento
+## 🔌 API Endpoints
 
-### Executar localmente
+### Autenticação
 
-```bash
-cd bot-whatsapp/
-npm install
-npm run dev
-```
+- `POST /api/auth/login` - Login
+- `POST /api/auth/logout` - Logout
+- `GET /api/auth/me` - Usuário logado
+- `POST /api/auth/register` - Criar usuário (admin)
 
-### Scripts disponíveis
+### Bot WhatsApp
 
-```bash
-npm start       # Inicia o bot
-npm run dev     # Inicia com auto-reload
-npm run init-db # Inicializa o banco de dados
-```
+- `GET /api/bot/status` - Status da conexão
+- `POST /api/bot/connect/qr` - Conectar via QR
+- `POST /api/bot/connect/pairing` - Conectar via código
+- `POST /api/bot/disconnect` - Desconectar
 
----
+### Tickets
 
-## 📁 Banco de Dados
+- `GET /api/tickets` - Listar tickets
+- `GET /api/tickets/pending` - Tickets aguardando
+- `POST /api/tickets/:id/assign` - Assumir ticket
+- `POST /api/tickets/:id/close` - Fechar ticket
 
-O bot usa SQLite para persistência. O banco é criado automaticamente em `bot-whatsapp/db/atendimento.db`.
+### Chat
 
-### Tabelas principais
-
-- `ordens_servico` - Chamados/OS
-- `usuarios` - Usuários e permissões
-- `historico_mensagens` - Histórico de interações
-- `fluxo_conversacao` - Estado do fluxo de cada usuário
-- `configuracoes` - Configurações do sistema
+- `GET /api/chats/:id/messages` - Mensagens do ticket
+- `POST /api/chats/:id/messages` - Enviar mensagem
 
 ---
 
-## 🔒 Sistema de Permissões
+## 🛠️ Tecnologias
 
-| Role           | Descrição     | Pode                 |
-| -------------- | ------------- | -------------------- |
-| `user`         | Usuário comum | Abrir/ver chamados   |
-| `almoxarifado` | Almoxarife    | Gerenciar peças      |
-| `tecnico`      | Técnico       | Atender chamados     |
-| `admin`        | Administrador | Promover, relatórios |
-| `root`         | Super admin   | Tudo, backup, config |
-
-Para promover um usuário:
-
-```
-!promover 69999888777 tecnico
-```
-
----
-
-## 🤝 Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch (`git checkout -b feature/nova-funcionalidade`)
-3. Commit suas mudanças (`git commit -m 'Adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/nova-funcionalidade`)
-5. Abra um Pull Request
+| Stack     | Tecnologia                     |
+| --------- | ------------------------------ |
+| Backend   | Node.js, Express, TypeScript   |
+| Frontend  | Next.js 15, React, TailwindCSS |
+| Real-time | Socket.IO                      |
+| WhatsApp  | Baileys                        |
+| Banco     | SQLite                         |
+| Auth      | JWT                            |
+| Deploy    | Docker                         |
 
 ---
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
-
----
-
-## 📞 Suporte
-
-- Abra uma [issue](https://github.com/seu-usuario/bot-whatsapp-atendimento/issues) para reportar bugs
-- Para dúvidas, consulte a documentação acima
-
----
-
-Desenvolvido com ❤️ para facilitar o suporte técnico corporativo.
+MIT
