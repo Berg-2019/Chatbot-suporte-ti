@@ -71,6 +71,30 @@ services:
       retries: 5
 
   # ============================================================================
+  # MySQL - Banco de dados para GLPI (GLPI só suporta MySQL)
+  # ============================================================================
+  mysql:
+    image: mysql:8.0
+    container_name: helpdesk_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: glpi
+      MYSQL_USER: glpi
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-glpi123}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - helpdesk_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
   # GLPI - Sistema de Tickets
   # ============================================================================
   glpi:
@@ -86,7 +110,8 @@ services:
     networks:
       - helpdesk_network
     depends_on:
-      - postgres
+      mysql:
+        condition: service_healthy
 
   # ============================================================================
   # Backend NestJS
@@ -172,6 +197,8 @@ services:
 volumes:
   postgres_data:
     name: helpdesk_postgres
+  mysql_data:
+    name: helpdesk_mysql
   redis_data:
     name: helpdesk_redis
   rabbitmq_data:
