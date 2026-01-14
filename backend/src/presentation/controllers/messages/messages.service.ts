@@ -57,10 +57,14 @@ export class MessagesService {
       });
 
       if (ticket) {
+        // Formatar mensagem com nome do técnico
+        const technicianName = message.sender?.name || 'Suporte';
+        const formattedMessage = `*${technicianName}:*\n${dto.content}`;
+
         // Enviar via RabbitMQ
         await this.rabbitmq.publishOutgoingMessage({
           to: ticket.phoneNumber,
-          text: dto.content,
+          text: formattedMessage,
           ticketId: dto.ticketId,
         });
 

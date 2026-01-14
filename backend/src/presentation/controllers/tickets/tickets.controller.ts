@@ -68,6 +68,15 @@ export class TicketsController {
     return this.ticketsService.assign(id, { userId: req.user.id });
   }
 
+  @Post(':id/transfer')
+  async transfer(
+    @Param('id') id: string,
+    @Body('userId') newUserId: string,
+    @Request() req: any,
+  ) {
+    return this.ticketsService.transfer(id, newUserId, req.user.id);
+  }
+
   @Put(':id/status')
   async updateStatus(
     @Param('id') id: string,

@@ -153,6 +153,50 @@ export class TicketsService {
     return ticket;
   }
 
+  /**
+   * Transferir ticket para outro técnico
+   */
+  async transfer(id: string, newUserId: string, currentUserId: string) {
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { name: true },
+    });
+
+    const newUser = await this.prisma.user.findUnique({
+      where: { id: newUserId },
+      select: { name: true },
+    });
+
+    const ticket = await this.prisma.ticket.update({
+      where: { id },
+      data: { assignedToId: newUserId },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+      },
+    });
+
+    // Notificar cliente via WhatsApp
+    if (ticket.phoneNumber) {
+      const message = `🔄 *Transferência de atendimento*\n\nSeu chamado foi transferido de *${currentUser?.name || 'Técnico'}* para *${newUser?.name || 'Outro técnico'}*.\n\nO novo responsável entrará em contato em breve.`;
+      
+      await this.rabbitmq.publishOutgoingMessage({
+        to: ticket.phoneNumber,
+        text: message,
+        ticketId: id,
+      });
+    }
+
+    // Notificar painel
+    await this.rabbitmq.publishNotification({
+      type: 'ticket_assigned',
+      ticketId: id,
+      userId: newUserId,
+      payload: ticket,
+    });
+
+    return ticket;
+  }
+
   async updateStatus(id: string, status: TicketStatus) {
     const data: any = { status };
 
@@ -163,12 +207,31 @@ export class TicketsService {
     const ticket = await this.prisma.ticket.update({
       where: { id },
       data,
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+      },
     });
+
+    // Se fechou, enviar mensagem ao cliente
+    if (status === 'CLOSED' && ticket.phoneNumber) {
+      const technicianName = ticket.assignedTo?.name || 'Suporte';
+      const closeMessage = `✅ *Chamado Encerrado*\n\nSeu chamado foi finalizado por *${technicianName}*.\n\nSe precisar de mais ajuda, é só enviar uma nova mensagem!\n\nObrigado pelo contato. 😊`;
+      
+      await this.rabbitmq.publishOutgoingMessage({
+        to: ticket.phoneNumber,
+        text: closeMessage,
+        ticketId: id,
+      });
+    }
 
     // Se tiver GLPI ID, atualizar lá também
     if (ticket.glpiId) {
-      const glpiStatus = this.mapStatusToGlpi(status);
-      await this.glpi.updateTicketStatus(ticket.glpiId, glpiStatus);
+      try {
+        const glpiStatus = this.mapStatusToGlpi(status);
+        await this.glpi.updateTicketStatus(ticket.glpiId, glpiStatus);
+      } catch (error: any) {
+        console.warn('⚠️ GLPI status update falhou:', error.message);
+      }
     }
 
     return ticket;
