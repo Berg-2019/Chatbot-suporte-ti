@@ -10,6 +10,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
+import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 import path from 'path';
 import { config } from '../config/index.js';
@@ -45,7 +46,6 @@ class WhatsAppHandler {
     // Criar socket
     this.sock = makeWASocket({
       version,
-      printQRInTerminal: true,
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -75,8 +75,9 @@ class WhatsAppHandler {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log('📱 QR Code gerado - Escaneie com WhatsApp');
-      // Poderia enviar para Redis para o painel web exibir
+      console.log('\n📱 Escaneie o QR Code abaixo com seu WhatsApp:\n');
+      qrcode.generate(qr, { small: true });
+      console.log('\n');
     }
 
     if (connection === 'close') {

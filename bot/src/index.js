@@ -3,6 +3,7 @@
  * Entry Point
  */
 
+import 'dotenv/config';
 import { config } from './config/index.js';
 import { redisService } from './services/redis.js';
 import { rabbitmqService } from './services/rabbitmq.js';
