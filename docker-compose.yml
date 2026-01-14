@@ -1,0 +1,194 @@
+# =============================================================================
+# Helpdesk WhatsApp + GLPI
+# Sistema de Atendimento Técnico com Integração GLPI
+# =============================================================================
+
+services:
+  # ============================================================================
+  # Banco de Dados Principal
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: helpdesk_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: helpdesk
+      POSTGRES_USER: helpdesk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-helpdesk123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - helpdesk_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpdesk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # Cache e Sessões
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: helpdesk_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - helpdesk_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # Fila de Mensagens
+  # ============================================================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: helpdesk_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-helpdesk}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-helpdesk123}
+    ports:
+      - "5672:5672" # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - helpdesk_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ============================================================================
+  # GLPI - Sistema de Tickets
+  # ============================================================================
+  glpi:
+    image: diouxx/glpi:latest
+    container_name: helpdesk_glpi
+    restart: unless-stopped
+    environment:
+      TIMEZONE: America/Porto_Velho
+    ports:
+      - "8080:80"
+    volumes:
+      - glpi_data:/var/www/html/glpi
+    networks:
+      - helpdesk_network
+    depends_on:
+      - postgres
+
+  # ============================================================================
+  # Backend NestJS
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: helpdesk_backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://helpdesk:${POSTGRES_PASSWORD:-helpdesk123}@postgres:5432/helpdesk
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-sua-chave-secreta-jwt}
+      GLPI_URL: http://glpi/apirest.php
+      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN}
+      GLPI_USER_TOKEN: ${GLPI_USER_TOKEN}
+    volumes:
+      - backend_logs:/app/logs
+    networks:
+      - helpdesk_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ============================================================================
+  # Frontend Next.js
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: helpdesk_frontend
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_WS_URL: ws://localhost:3000
+    networks:
+      - helpdesk_network
+    depends_on:
+      - backend
+
+  # ============================================================================
+  # Bot WhatsApp
+  # ============================================================================
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: helpdesk_bot
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
+      BACKEND_URL: http://backend:3000
+      GLPI_URL: http://glpi/apirest.php
+      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN}
+      GLPI_USER_TOKEN: ${GLPI_USER_TOKEN}
+    volumes:
+      - bot_sessions:/app/sessions
+      - bot_logs:/app/logs
+    networks:
+      - helpdesk_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  postgres_data:
+    name: helpdesk_postgres
+  redis_data:
+    name: helpdesk_redis
+  rabbitmq_data:
+    name: helpdesk_rabbitmq
+  glpi_data:
+    name: helpdesk_glpi
+  backend_logs:
+    name: helpdesk_backend_logs
+  bot_sessions:
+    name: helpdesk_bot_sessions
+  bot_logs:
+    name: helpdesk_bot_logs
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  helpdesk_network:
+    name: helpdesk_network
+    driver: bridge

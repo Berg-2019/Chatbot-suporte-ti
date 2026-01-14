@@ -1,0 +1,152 @@
+// ===========================================================================
+// Prisma Schema - Helpdesk + GLPI Integration
+// ===========================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================================================
+// Users / Technicians
+// ===========================================================================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(AGENT)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets   Ticket[]
+  messages  Message[]
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+// ===========================================================================
+// Tickets
+// ===========================================================================
+
+model Ticket {
+  id          String       @id @default(uuid())
+  glpiId      Int?         @unique    // ID do ticket no GLPI
+  title       String
+  description String
+  status      TicketStatus @default(NEW)
+  priority    Priority     @default(NORMAL)
+  phoneNumber String                  // Telefone do cliente
+  customerName String?                // Nome do cliente (coletado pelo bot)
+  sector      String?                 // Setor do cliente
+  category    String?                 // Categoria/tipo do problema
+
+  assignedToId String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  closedAt    DateTime?
+
+  messages    Message[]
+
+  @@map("tickets")
+  @@index([phoneNumber])
+  @@index([status])
+  @@index([glpiId])
+}
+
+enum TicketStatus {
+  NEW            // Novo - aguardando atendimento
+  ASSIGNED       // Atribuído a um técnico
+  IN_PROGRESS    // Em atendimento
+  WAITING_CLIENT // Aguardando resposta do cliente
+  RESOLVED       // Resolvido
+  CLOSED         // Fechado
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// ===========================================================================
+// Messages
+// ===========================================================================
+
+model Message {
+  id        String      @id @default(uuid())
+  ticketId  String
+  ticket    Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  content   String
+  type      MessageType @default(TEXT)
+  direction Direction
+
+  senderId  String?
+  sender    User?       @relation(fields: [senderId], references: [id])
+
+  waMessageId String?   // ID da mensagem no WhatsApp
+
+  createdAt DateTime    @default(now())
+
+  @@map("messages")
+  @@index([ticketId])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  DOCUMENT
+}
+
+enum Direction {
+  INCOMING  // Cliente → Sistema
+  OUTGOING  // Sistema → Cliente
+}
+
+// ===========================================================================
+// Bot Session State (backup do Redis)
+// ===========================================================================
+
+model BotSession {
+  id          String   @id @default(uuid())
+  phoneNumber String   @unique
+  state       String   // Estado atual da conversa (JSON)
+  data        String?  // Dados coletados (JSON)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("bot_sessions")
+  @@index([phoneNumber])
+}
+
+// ===========================================================================
+// Queues / Skills
+// ===========================================================================
+
+model Queue {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  skills      String   // JSON array de skills
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("queues")
+}
