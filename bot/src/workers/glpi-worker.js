@@ -86,6 +86,21 @@ class GlpiWorker {
       const glpiId = response.data.id;
       console.log(`✅ Ticket GLPI criado: #${glpiId}`);
 
+      // Criar ticket no backend (PostgreSQL)
+      try {
+        await axios.post(`${config.backend.url}/api/bot/ticket`, {
+          glpiId: glpiId,
+          title: title,
+          description: description,
+          phoneNumber: phoneNumber,
+          sector: sector || 'TI',
+          category: 'Incidente',
+        });
+        console.log(`✅ Ticket salvo no backend: #${glpiId}`);
+      } catch (backendError) {
+        console.error('⚠️ Erro ao salvar no backend:', backendError.response?.data || backendError.message);
+      }
+
       // Vincular ticket ao telefone
       await redisService.linkTicketToPhone(phoneNumber, glpiId.toString());
 

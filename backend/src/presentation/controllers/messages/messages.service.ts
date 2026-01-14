@@ -64,11 +64,15 @@ export class MessagesService {
           ticketId: dto.ticketId,
         });
 
-        // Adicionar followup no GLPI
+        // Adicionar followup no GLPI (não bloqueia se falhar)
         if (ticket.glpiId) {
-          await this.glpi.addFollowup(ticket.glpiId, {
-            content: `[${message.sender?.name || 'Sistema'}] ${dto.content}`,
-          });
+          try {
+            await this.glpi.addFollowup(ticket.glpiId, {
+              content: `[${message.sender?.name || 'Sistema'}] ${dto.content}`,
+            });
+          } catch (glpiError: any) {
+            console.warn('⚠️ GLPI followup falhou (não crítico):', glpiError.message);
+          }
         }
       }
     }
