@@ -72,10 +72,10 @@ export class GlpiService implements OnModuleInit {
       this.sessionToken = response.data.session_token;
       
       // Cachear por 1 hora
-      await this.redis.setGlpiSession(this.sessionToken, 3500);
+      await this.redis.setGlpiSession(this.sessionToken!, 3500);
       
       console.log('✅ Sessão GLPI iniciada');
-      return this.sessionToken;
+      return this.sessionToken!;
     } catch (error: any) {
       console.error('❌ Erro ao iniciar sessão GLPI:', error.response?.data || error.message);
       throw new Error('Falha ao conectar com GLPI');

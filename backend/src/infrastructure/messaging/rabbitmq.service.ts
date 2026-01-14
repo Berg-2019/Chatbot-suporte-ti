@@ -13,8 +13,8 @@ export interface QueueMessage {
 
 @Injectable()
 export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
-  private connection: amqp.Connection;
-  private channel: amqp.Channel;
+  private connection: any;
+  private channel: any;
   private isConnected = false;
 
   // Filas do sistema
@@ -51,7 +51,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       console.log('✅ RabbitMQ conectado');
 
       // Reconectar em caso de erro
-      this.connection.on('error', async (err) => {
+      this.connection.on('error', async (err: any) => {
         console.error('❌ Erro no RabbitMQ:', err.message);
         this.isConnected = false;
         await this.reconnect();
@@ -114,7 +114,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    await this.channel.consume(queue, async (msg) => {
+    await this.channel.consume(queue, async (msg: any) => {
       if (msg) {
         try {
           const data = JSON.parse(msg.content.toString());
