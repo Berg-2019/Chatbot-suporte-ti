@@ -60,6 +60,9 @@ export const ticketsApi = {
   
   assign: (id: string) => api.post(`/tickets/${id}/assign`),
   
+  transfer: (id: string, userId: string) =>
+    api.post(`/tickets/${id}/transfer`, { userId }),
+  
   updateStatus: (id: string, status: string) =>
     api.put(`/tickets/${id}/status`, { status }),
   

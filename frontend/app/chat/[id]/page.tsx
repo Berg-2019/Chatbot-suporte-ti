@@ -8,7 +8,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/hooks/useSocket';
-import { ticketsApi, messagesApi } from '@/lib/api';
+import { ticketsApi, messagesApi, usersApi } from '@/lib/api';
 import Link from 'next/link';
 
 interface Message {
@@ -28,6 +28,13 @@ interface Ticket {
   sector?: string;
   description: string;
   createdAt: string;
+  assignedTo?: { id: string; name: string };
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
 }
 
 export default function ChatPage() {
@@ -41,6 +48,10 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [technicians, setTechnicians] = useState<User[]>([]);
+  const [selectedTechnician, setSelectedTechnician] = useState('');
+  const [transferring, setTransferring] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,6 +94,17 @@ export default function ChatPage() {
     }
   }
 
+  async function loadTechnicians() {
+    try {
+      const response = await usersApi.technicians();
+      // Filtrar o técnico atual se já tiver assignedTo
+      const filtered = response.data.filter((t: User) => t.id !== ticket?.assignedTo?.id);
+      setTechnicians(filtered);
+    } catch (error) {
+      console.error('Erro ao carregar técnicos:', error);
+    }
+  }
+
   function scrollToBottom() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }
@@ -114,6 +136,28 @@ export default function ChatPage() {
     }
   }
 
+  async function handleTransfer() {
+    if (!selectedTechnician) return;
+    
+    setTransferring(true);
+    try {
+      await ticketsApi.transfer(ticketId, selectedTechnician);
+      setShowTransferModal(false);
+      await loadTicket(); // Recarregar para atualizar assignedTo
+      alert('Chamado transferido com sucesso!');
+    } catch (error) {
+      console.error('Erro ao transferir:', error);
+      alert('Erro ao transferir chamado');
+    } finally {
+      setTransferring(false);
+    }
+  }
+
+  function openTransferModal() {
+    loadTechnicians();
+    setShowTransferModal(true);
+  }
+
   if (loading || !user || !ticket) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -134,6 +178,7 @@ export default function ChatPage() {
             <h1 className="font-semibold text-gray-900 dark:text-white">{ticket.title}</h1>
             <p className="text-sm text-gray-500">
               📱 {ticket.phoneNumber} • 📍 {ticket.sector || 'N/A'}
+              {ticket.assignedTo && <span> • 👤 {ticket.assignedTo.name}</span>}
             </p>
           </div>
         </div>
@@ -141,18 +186,28 @@ export default function ChatPage() {
           <span className={`px-3 py-1 text-sm rounded-full ${
             ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
             ticket.status === 'CLOSED' ? 'bg-gray-100 text-gray-700' :
+            ticket.status === 'ASSIGNED' ? 'bg-green-100 text-green-700' :
             'bg-yellow-100 text-yellow-700'
           }`}>
             {ticket.status === 'IN_PROGRESS' ? 'Em atendimento' : 
-             ticket.status === 'CLOSED' ? 'Fechado' : ticket.status}
+             ticket.status === 'CLOSED' ? 'Fechado' : 
+             ticket.status === 'ASSIGNED' ? 'Atribuído' : ticket.status}
           </span>
           {ticket.status !== 'CLOSED' && (
-            <button
-              onClick={handleClose}
-              className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm transition"
-            >
-              Fechar
-            </button>
+            <>
+              <button
+                onClick={openTransferModal}
+                className="px-3 py-1 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 rounded-lg text-sm transition"
+              >
+                🔄 Transferir
+              </button>
+              <button
+                onClick={handleClose}
+                className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm transition"
+              >
+                Fechar
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -227,6 +282,50 @@ export default function ChatPage() {
           </div>
         </form>
       )}
+
+      {/* Transfer Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              🔄 Transferir Chamado
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+              Selecione o técnico para quem deseja transferir este chamado:
+            </p>
+            
+            <select
+              value={selectedTechnician}
+              onChange={(e) => setSelectedTechnician(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white mb-4"
+            >
+              <option value="">Selecione um técnico...</option>
+              {technicians.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.name} ({tech.email})
+                </option>
+              ))}
+            </select>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleTransfer}
+                disabled={!selectedTechnician || transferring}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition"
+              >
+                {transferring ? 'Transferindo...' : 'Transferir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
