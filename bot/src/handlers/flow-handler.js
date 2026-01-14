@@ -159,8 +159,9 @@ class FlowHandler {
 
     if (['sim', 's', 'yes', 'confirmar', 'confirmo'].includes(text)) {
       // Criar ticket via RabbitMQ
+      // IMPORTANTE: usar 'from' completo (com @s.whatsapp.net) para envio funcionar
       const ticketData = {
-        phoneNumber: phone,
+        phoneNumber: from,  // JID completo para envio funcionar
         title: `[${session.data.sector}] Chamado via WhatsApp`,
         description: session.data.problem,
         sector: session.data.sector,

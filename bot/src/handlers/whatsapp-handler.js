@@ -159,10 +159,13 @@ class WhatsAppHandler {
     }
 
     try {
-      await this.sock.sendMessage(to, { text });
+      console.log(`📨 Baileys sendMessage para: ${to}`);
+      const result = await this.sock.sendMessage(to, { text });
+      console.log(`📨 Baileys resultado:`, result?.key?.id || 'sem ID');
       return true;
     } catch (error) {
       console.error('❌ Erro ao enviar mensagem:', error.message);
+      console.error('❌ Stack:', error.stack);
       return false;
     }
   }
