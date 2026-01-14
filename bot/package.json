@@ -1,0 +1,19 @@
+{
+  "name": "helpdesk-bot",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp com Baileys para sistema Helpdesk",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.16",
+    "amqplib": "^0.10.5",
+    "axios": "^1.7.9",
+    "ioredis": "^5.4.2",
+    "pino": "^9.6.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
