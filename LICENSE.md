@@ -1,6 +1,6 @@
 # Licença Proprietária - Uso Empresarial Limitado
 
-**Copyright (c) 2026 [SEU NOME COMPLETO]**
+**Copyright (c) 2026 Matheus Spanamberg Soares**
 
 ## TERMOS DE USO
 
