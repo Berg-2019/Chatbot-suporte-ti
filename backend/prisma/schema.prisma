@@ -81,6 +81,7 @@ model Ticket {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   closedAt    DateTime?
+  escalatedAt DateTime?   // Timestamp do último escalonamento
 
   messages    Message[]
   partUsages  PartUsage[]
