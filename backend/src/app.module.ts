@@ -17,6 +17,7 @@ import { TicketsModule } from './presentation/controllers/tickets/tickets.module
 import { MessagesModule } from './presentation/controllers/messages/messages.module';
 import { BotModule } from './presentation/controllers/bot/bot.module';
 import { UsersModule } from './presentation/controllers/users/users.module';
+import { PartsModule } from './presentation/controllers/parts/parts.module';
 import { WebsocketModule } from './presentation/websockets/websocket.module';
 
 // Health check
@@ -42,8 +43,10 @@ import { HealthController } from './presentation/controllers/health.controller';
     MessagesModule,
     BotModule,
     UsersModule,
+    PartsModule,
     WebsocketModule,
   ],
   controllers: [HealthController],
 })
 export class AppModule {}
+

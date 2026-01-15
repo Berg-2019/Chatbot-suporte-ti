@@ -86,7 +86,22 @@ export class TicketsController {
   }
 
   @Post(':id/close')
-  async close(@Param('id') id: string) {
-    return this.ticketsService.close(id);
+  async close(
+    @Param('id') id: string,
+    @Body()
+    closeData?: {
+      solution?: string;
+      solutionType?: string;
+      timeWorked?: number;
+      parts?: Array<{
+        partId?: string;
+        partName: string;
+        quantity: number;
+        unitCost: number;
+        purchased?: boolean;
+      }>;
+    },
+  ) {
+    return this.ticketsService.close(id, closeData);
   }
 }

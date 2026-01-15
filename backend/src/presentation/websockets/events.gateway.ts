@@ -40,6 +40,9 @@ export class EventsGateway
           case 'ticket_assigned':
             this.server.emit('ticket:assigned', data.payload);
             break;
+          case 'ticket_updated':
+            this.server.emit('ticket:updated', data.payload);
+            break;
           case 'new_message':
             this.server.to(`ticket:${data.ticketId}`).emit('message:new', data.payload);
             break;

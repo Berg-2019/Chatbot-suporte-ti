@@ -20,6 +20,7 @@ interface Ticket {
   customerName?: string;
   sector?: string;
   createdAt: string;
+  closedAt?: string;
   assignedTo?: { name: string };
 }
 
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [pendingTickets, setPendingTickets] = useState<Ticket[]>([]);
   const [myTickets, setMyTickets] = useState<Ticket[]>([]);
+  const [closedToday, setClosedToday] = useState(0);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function DashboardPage() {
     }
   }, [user]);
 
+  // Listener para novos tickets
   useEffect(() => {
     const cleanup = on('ticket:created', (ticket: Ticket) => {
       setPendingTickets((prev) => [ticket, ...prev]);
@@ -50,16 +53,43 @@ export default function DashboardPage() {
     return cleanup;
   }, [on]);
 
+  // Listener para tickets atribuídos/atualizados - recarrega dados
+  useEffect(() => {
+    const cleanupAssigned = on('ticket:assigned', () => {
+      loadData();
+    });
+    return cleanupAssigned;
+  }, [on]);
+
+  useEffect(() => {
+    const cleanupUpdated = on('ticket:updated', () => {
+      loadData();
+    });
+    return cleanupUpdated;
+  }, [on]);
+
   async function loadData() {
     try {
       const [pending, all] = await Promise.all([
         ticketsApi.pending(),
-        ticketsApi.list({ assignedTo: user?.id }),
+        ticketsApi.list(),
       ]);
+      
       setPendingTickets(pending.data);
-      setMyTickets(all.data.tickets.filter((t: Ticket) => 
-        ['ASSIGNED', 'IN_PROGRESS', 'WAITING_CLIENT'].includes(t.status)
-      ));
+      
+      // Meus atendimentos ativos
+      const activeTickets = all.data.tickets.filter((t: Ticket) => 
+        t.assignedTo && ['ASSIGNED', 'IN_PROGRESS', 'WAITING_CLIENT'].includes(t.status)
+      );
+      setMyTickets(activeTickets);
+      
+      // Finalizados hoje
+      const today = new Date().toDateString();
+      const closedTodayCount = all.data.tickets.filter((t: Ticket) => 
+        t.status === 'CLOSED' && t.closedAt && new Date(t.closedAt).toDateString() === today
+      ).length;
+      setClosedToday(closedTodayCount);
+      
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -142,7 +172,7 @@ export default function DashboardPage() {
                 <span className="text-2xl">✅</span>
               </div>
               <div>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">-</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{closedToday}</p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Finalizados hoje</p>
               </div>
             </div>

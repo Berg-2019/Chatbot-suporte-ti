@@ -52,6 +52,11 @@ model Ticket {
   sector      String?                 // Setor do cliente
   category    String?                 // Categoria/tipo do problema
 
+  // Campos de fechamento
+  solution     String?                // Texto da solução aplicada
+  solutionType String?                // Categoria da solução (Hardware, Software, etc)
+  timeWorked   Int?                   // Tempo trabalhado em minutos
+
   assignedToId String?
   assignedTo   User?   @relation(fields: [assignedToId], references: [id])
 
@@ -60,6 +65,7 @@ model Ticket {
   closedAt    DateTime?
 
   messages    Message[]
+  partUsages  PartUsage[]
 
   @@map("tickets")
   @@index([phoneNumber])
@@ -149,4 +155,45 @@ model Queue {
   createdAt   DateTime @default(now())
 
   @@map("queues")
+}
+
+// ===========================================================================
+// Parts Inventory - Controle de Peças
+// ===========================================================================
+
+model Part {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique  // SKU/Código interno
+  description String?
+  quantity    Int      @default(0)
+  minQuantity Int      @default(5)  // Alerta de estoque baixo
+  unitCost    Decimal  @db.Decimal(10,2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usages      PartUsage[]
+
+  @@map("parts")
+}
+
+// ===========================================================================
+// Part Usage - Peças usadas nos tickets
+// ===========================================================================
+
+model PartUsage {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  partId    String?
+  part      Part?    @relation(fields: [partId], references: [id])
+  partName  String   // Nome da peça (útil para peças compradas avulso)
+  quantity  Int
+  unitCost  Decimal  @db.Decimal(10,2)
+  purchased Boolean  @default(false)  // Se foi comprada para este chamado
+  createdAt DateTime @default(now())
+
+  @@map("part_usages")
+  @@index([ticketId])
 }

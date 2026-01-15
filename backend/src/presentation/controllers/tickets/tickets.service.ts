@@ -234,11 +234,139 @@ export class TicketsService {
       }
     }
 
+    // Notificar painel para atualizar listas
+    await this.rabbitmq.publishNotification({
+      type: 'ticket_updated',
+      ticketId: id,
+      payload: ticket,
+    });
+
     return ticket;
   }
 
-  async close(id: string) {
-    return this.updateStatus(id, 'CLOSED');
+  /**
+   * Fechar ticket com formulário completo
+   */
+  async close(
+    id: string,
+    closeData?: {
+      solution?: string;
+      solutionType?: string;
+      timeWorked?: number;
+      parts?: Array<{
+        partId?: string;
+        partName: string;
+        quantity: number;
+        unitCost: number;
+        purchased?: boolean;
+      }>;
+    },
+  ) {
+    // Atualizar ticket com solução
+    const ticket = await this.prisma.ticket.update({
+      where: { id },
+      data: {
+        status: 'CLOSED',
+        closedAt: new Date(),
+        solution: closeData?.solution,
+        solutionType: closeData?.solutionType,
+        timeWorked: closeData?.timeWorked,
+      },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+      },
+    });
+
+    // Registrar peças usadas
+    if (closeData?.parts && closeData.parts.length > 0) {
+      for (const part of closeData.parts) {
+        // Criar registro de uso
+        await this.prisma.partUsage.create({
+          data: {
+            ticketId: id,
+            partId: part.partId || null,
+            partName: part.partName,
+            quantity: part.quantity,
+            unitCost: part.unitCost,
+            purchased: part.purchased || false,
+          },
+        });
+
+        // Baixar do estoque se vier do inventário
+        if (part.partId) {
+          await this.prisma.part.update({
+            where: { id: part.partId },
+            data: {
+              quantity: { decrement: part.quantity },
+            },
+          });
+        }
+      }
+    }
+
+    // Buscar peças para a mensagem
+    const partUsages = await this.prisma.partUsage.findMany({
+      where: { ticketId: id },
+    });
+
+    // Enviar mensagem ao cliente via WhatsApp
+    if (ticket.phoneNumber) {
+      const technicianName = ticket.assignedTo?.name || 'Suporte';
+      
+      let closeMessage = `✅ *Chamado Encerrado*\n\n`;
+      
+      if (closeData?.solution) {
+        closeMessage += `📝 *Solução:* ${closeData.solution}\n\n`;
+      }
+      
+      if (partUsages.length > 0) {
+        closeMessage += `🔧 *Peças utilizadas:*\n`;
+        for (const pu of partUsages) {
+          closeMessage += `• ${pu.quantity}x ${pu.partName}\n`;
+        }
+        closeMessage += `\n`;
+      }
+      
+      if (closeData?.timeWorked) {
+        const hours = Math.floor(closeData.timeWorked / 60);
+        const minutes = closeData.timeWorked % 60;
+        const timeStr = hours > 0 ? `${hours}h${minutes > 0 ? minutes + 'min' : ''}` : `${minutes}min`;
+        closeMessage += `⏱️ *Tempo:* ${timeStr}\n`;
+      }
+      
+      closeMessage += `👤 *Técnico:* ${technicianName}\n\n`;
+      closeMessage += `Se precisar de mais ajuda, é só enviar uma nova mensagem!\n`;
+      closeMessage += `Obrigado pelo contato. 😊`;
+
+      await this.rabbitmq.publishOutgoingMessage({
+        to: ticket.phoneNumber,
+        text: closeMessage,
+        ticketId: id,
+      });
+    }
+
+    // Atualizar GLPI
+    if (ticket.glpiId) {
+      try {
+        await this.glpi.updateTicketStatus(ticket.glpiId, 6); // CLOSED
+        if (closeData?.solution) {
+          await this.glpi.addFollowup(ticket.glpiId, {
+            content: `[Solução] ${closeData.solution}`,
+          });
+        }
+      } catch (error: any) {
+        console.warn('⚠️ GLPI update falhou:', error.message);
+      }
+    }
+
+    // Notificar painel
+    await this.rabbitmq.publishNotification({
+      type: 'ticket_updated',
+      ticketId: id,
+      payload: ticket,
+    });
+
+    return ticket;
   }
 
   async linkToGlpi(id: string, glpiId: number) {
