@@ -26,7 +26,7 @@ show_banner() {
     echo "║                                                                ║"
     echo "║   🎫 HELPDESK - Sistema de Atendimento Técnico                ║"
     echo "║                                                                ║"
-    echo "║   WhatsApp + GLPI + Painel Web                                ║"
+    echo "║                                 ║"
     echo "║                                                                ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"

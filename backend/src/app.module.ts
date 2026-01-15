@@ -10,6 +10,7 @@ import { PrismaModule } from './infrastructure/database/prisma.module';
 import { RedisModule } from './infrastructure/cache/redis.module';
 import { RabbitMQModule } from './infrastructure/messaging/rabbitmq.module';
 import { ExternalModule } from './infrastructure/external/external.module';
+import { ServicesModule } from './infrastructure/services/services.module';
 
 // Presentation
 import { AuthModule } from './presentation/controllers/auth/auth.module';
@@ -37,6 +38,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     RedisModule,
     RabbitMQModule,
     ExternalModule,
+    ServicesModule,
 
     // Features
     AuthModule,
@@ -50,5 +52,5 @@ import { HealthController } from './presentation/controllers/health.controller';
   ],
   controllers: [HealthController],
 })
-export class AppModule {}
+export class AppModule { }
 

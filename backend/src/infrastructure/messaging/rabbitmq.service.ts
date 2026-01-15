@@ -26,7 +26,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     NOTIFICATIONS: 'notifications',
   };
 
-  constructor(private config: ConfigService) {}
+  constructor(private config: ConfigService) { }
 
   async onModuleInit() {
     await this.connect();
@@ -147,6 +147,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     to: string;
     text: string;
     ticketId?: string;
+    isAlert?: boolean;
   }): Promise<boolean> {
     return this.publish(RabbitMQService.QUEUES.OUTGOING_MESSAGES, data);
   }
@@ -162,11 +163,13 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   }
 
   async publishNotification(data: {
-    type: 'ticket_created' | 'ticket_assigned' | 'ticket_updated' | 'new_message';
-    ticketId: string;
+    type: 'ticket_created' | 'ticket_assigned' | 'ticket_updated' | 'new_message' | 'technician_alert';
+    ticketId?: string;
     userId?: string;
+    alertId?: string;
     payload: any;
   }): Promise<boolean> {
     return this.publish(RabbitMQService.QUEUES.NOTIFICATIONS, data);
   }
 }
+

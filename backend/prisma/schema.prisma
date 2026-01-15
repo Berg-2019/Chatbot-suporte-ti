@@ -25,8 +25,20 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Integração GLPI
+  glpiUserId    Int?              // ID do usuário no GLPI
+  glpiGroupId   Int?              // ID do grupo no GLPI (N1, N2, N3)
+  
+  // Nível técnico
+  technicianLevel TechnicianLevel @default(N1)
+  
+  // Alertas
+  phoneNumber   String?           // WhatsApp para receber alertas
+  receiveAlerts Boolean           @default(true)
+
   tickets   Ticket[]
   messages  Message[]
+  alerts    TechnicianAlert[]
 
   @@map("users")
 }
@@ -34,6 +46,12 @@ model User {
 enum Role {
   ADMIN
   AGENT
+}
+
+enum TechnicianLevel {
+  N1   // Primeiro nível - atendimento básico
+  N2   // Segundo nível - suporte intermediário
+  N3   // Terceiro nível - especialista
 }
 
 // ===========================================================================
@@ -216,4 +234,40 @@ model Faq {
 
   @@map("faqs")
   @@index([keywords])
+}
+
+// ===========================================================================
+// Technician Alerts - Alertas para técnicos
+// ===========================================================================
+
+model TechnicianAlert {
+  id          String     @id @default(uuid())
+  
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  ticketId    String?    // ID local do ticket
+  glpiId      Int?       // ID do ticket no GLPI
+  
+  type        AlertType
+  message     String
+  
+  sentViaWa   Boolean    @default(false)  // Enviado via WhatsApp
+  sentViaPush Boolean    @default(false)  // Enviado via Socket.IO
+  readAt      DateTime?
+  
+  createdAt   DateTime   @default(now())
+
+  @@map("technician_alerts")
+  @@index([userId])
+  @@index([ticketId])
+}
+
+enum AlertType {
+  NEW_TICKET    // Novo ticket atribuído
+  ESCALATED     // Ticket escalonado do nível anterior
+  SLA_WARNING   // 75% do tempo SLA atingido
+  SLA_BREACH    // SLA estourado
+  NEW_MESSAGE   // Nova mensagem do cliente
+  TRANSFERRED   // Ticket transferido para você
 }

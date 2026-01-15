@@ -240,6 +240,168 @@ export class GlpiService implements OnModuleInit {
     }
   }
 
+  // ===========================================================================
+  // Grupos e Técnicos
+  // ===========================================================================
+
+  /**
+   * Buscar todos os grupos
+   */
+  async getGroups(): Promise<any[]> {
+    await this.ensureSession();
+
+    try {
+      const response = await this.client.get('/Group', {
+        headers: this.getHeaders(),
+        params: {
+          range: '0-100',
+        },
+      });
+      return response.data || [];
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar grupos GLPI:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Buscar usuários de um grupo
+   */
+  async getGroupUsers(groupId: number): Promise<any[]> {
+    await this.ensureSession();
+
+    try {
+      const response = await this.client.get(`/Group/${groupId}/Group_User`, {
+        headers: this.getHeaders(),
+      });
+      return response.data || [];
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar usuários do grupo GLPI:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Atribuir ticket a um grupo
+   */
+  async assignTicketToGroup(ticketId: number, groupId: number): Promise<void> {
+    await this.ensureSession();
+
+    try {
+      await this.client.post(
+        `/Ticket/${ticketId}/Group_Ticket`,
+        {
+          input: {
+            groups_id: groupId,
+            type: 2, // 2 = Assigned to
+          },
+        },
+        { headers: this.getHeaders() },
+      );
+      console.log(`✅ Ticket GLPI #${ticketId} atribuído ao grupo ${groupId}`);
+    } catch (error: any) {
+      console.error('❌ Erro ao atribuir ticket ao grupo:', error.response?.data || error.message);
+      throw new Error('Falha ao atribuir ticket ao grupo');
+    }
+  }
+
+  /**
+   * Atribuir ticket a um usuário/técnico
+   */
+  async assignTicketToUser(ticketId: number, userId: number): Promise<void> {
+    await this.ensureSession();
+
+    try {
+      await this.client.post(
+        `/Ticket/${ticketId}/Ticket_User`,
+        {
+          input: {
+            users_id: userId,
+            type: 2, // 2 = Assigned to
+          },
+        },
+        { headers: this.getHeaders() },
+      );
+      console.log(`✅ Ticket GLPI #${ticketId} atribuído ao usuário ${userId}`);
+    } catch (error: any) {
+      console.error('❌ Erro ao atribuir ticket ao usuário:', error.response?.data || error.message);
+      throw new Error('Falha ao atribuir ticket ao usuário');
+    }
+  }
+
+  // ===========================================================================
+  // SLA
+  // ===========================================================================
+
+  /**
+   * Buscar SLAs configurados
+   */
+  async getSLAs(): Promise<any[]> {
+    await this.ensureSession();
+
+    try {
+      const response = await this.client.get('/SLA', {
+        headers: this.getHeaders(),
+        params: {
+          range: '0-50',
+        },
+      });
+      return response.data || [];
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar SLAs GLPI:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Obter informações de SLA de um ticket
+   */
+  async getTicketSLA(ticketId: number): Promise<any> {
+    await this.ensureSession();
+
+    try {
+      const ticket = await this.getTicket(ticketId);
+      return {
+        slas_id_tto: ticket.slas_id_tto,
+        slas_id_ttr: ticket.slas_id_ttr,
+        time_to_own: ticket.time_to_own,
+        time_to_resolve: ticket.time_to_resolve,
+        date_creation: ticket.date_creation,
+        date_mod: ticket.date_mod,
+      };
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar SLA do ticket:', error.response?.data || error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Buscar tickets com SLA próximo de estourar
+   */
+  async getTicketsNearSLABreach(hoursRemaining: number = 1): Promise<any[]> {
+    await this.ensureSession();
+
+    try {
+      // Buscar tickets abertos ordenados por tempo restante
+      const response = await this.client.get('/search/Ticket', {
+        headers: this.getHeaders(),
+        params: {
+          criteria: JSON.stringify([
+            { field: 12, searchtype: 'notequals', value: 6 }, // Status != Closed
+            { field: 12, searchtype: 'notequals', value: 5 }, // Status != Solved
+          ]),
+          forcedisplay: [1, 2, 12, 15, 18, 19, 30, 82], // ID, name, status, priority, time_to_resolve
+          sort: 30, // Sort by time_to_resolve
+          order: 'ASC',
+        },
+      });
+      return response.data?.data || [];
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar tickets próximos do SLA:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
   /**
    * Status codes do GLPI
    */
@@ -263,3 +425,4 @@ export class GlpiService implements OnModuleInit {
     VERY_HIGH: 5,
   };
 }
+
