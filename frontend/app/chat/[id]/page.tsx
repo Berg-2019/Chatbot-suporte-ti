@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/hooks/useSocket';
 import { ticketsApi, messagesApi, usersApi } from '@/lib/api';
 import Link from 'next/link';
+import CloseTicketModal from '@/components/CloseTicketModal';
 
 interface Message {
   id: string;
@@ -52,6 +53,7 @@ export default function ChatPage() {
   const [technicians, setTechnicians] = useState<User[]>([]);
   const [selectedTechnician, setSelectedTechnician] = useState('');
   const [transferring, setTransferring] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -125,14 +127,25 @@ export default function ChatPage() {
     }
   }
 
-  async function handleClose() {
-    if (!confirm('Deseja fechar este chamado?')) return;
-    
+  async function handleClose(closeData: {
+    solution: string;
+    solutionType: string;
+    timeWorked: number;
+    parts: Array<{
+      partId?: string;
+      partName: string;
+      quantity: number;
+      unitCost: number;
+      purchased?: boolean;
+    }>;
+  }) {
     try {
-      await ticketsApi.close(ticketId);
+      await ticketsApi.close(ticketId, closeData);
+      setShowCloseModal(false);
       router.push('/dashboard');
     } catch (error) {
       console.error('Erro ao fechar ticket:', error);
+      alert('Erro ao fechar chamado');
     }
   }
 
@@ -202,7 +215,7 @@ export default function ChatPage() {
                 🔄 Transferir
               </button>
               <button
-                onClick={handleClose}
+                onClick={() => setShowCloseModal(true)}
                 className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm transition"
               >
                 Fechar
@@ -325,6 +338,13 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Close Ticket Modal */}
+      <CloseTicketModal
+        isOpen={showCloseModal}
+        onClose={() => setShowCloseModal(false)}
+        onSubmit={handleClose}
+      />
     </div>
   );
 }

@@ -5,12 +5,13 @@
 import { Module } from '@nestjs/common';
 import { PartsController } from './parts.controller';
 import { PartsService } from './parts.service';
-import { DatabaseModule } from '../../../infrastructure/database/database.module';
+import { PrismaModule } from '../../../infrastructure/database/prisma.module';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [PrismaModule],
   controllers: [PartsController],
   providers: [PartsService],
   exports: [PartsService],
 })
 export class PartsModule {}
+

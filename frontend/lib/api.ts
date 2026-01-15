@@ -66,7 +66,18 @@ export const ticketsApi = {
   updateStatus: (id: string, status: string) =>
     api.put(`/tickets/${id}/status`, { status }),
   
-  close: (id: string) => api.post(`/tickets/${id}/close`),
+  close: (id: string, closeData?: {
+    solution?: string;
+    solutionType?: string;
+    timeWorked?: number;
+    parts?: Array<{
+      partId?: string;
+      partName: string;
+      quantity: number;
+      unitCost: number;
+      purchased?: boolean;
+    }>;
+  }) => api.post(`/tickets/${id}/close`, closeData || {}),
 };
 
 // === Messages ===
@@ -93,4 +104,15 @@ export const usersApi = {
 // === Bot ===
 export const botApi = {
   status: () => api.get('/bot/status'),
+};
+
+// === Parts (Estoque) ===
+export const partsApi = {
+  list: () => api.get('/parts'),
+  get: (id: string) => api.get(`/parts/${id}`),
+  create: (data: { name: string; code: string; description?: string; quantity?: number; minQuantity?: number; unitCost: number }) =>
+    api.post('/parts', data),
+  update: (id: string, data: any) => api.put(`/parts/${id}`, data),
+  addStock: (id: string, quantity: number) => api.post(`/parts/${id}/add-stock`, { quantity }),
+  removeStock: (id: string, quantity: number) => api.post(`/parts/${id}/remove-stock`, { quantity }),
 };
