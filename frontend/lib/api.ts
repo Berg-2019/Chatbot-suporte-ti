@@ -112,7 +112,17 @@ export const partsApi = {
   get: (id: string) => api.get(`/parts/${id}`),
   create: (data: { name: string; code: string; description?: string; quantity?: number; minQuantity?: number; unitCost: number }) =>
     api.post('/parts', data),
-  update: (id: string, data: any) => api.put(`/parts/${id}`, data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/parts/${id}`, data),
   addStock: (id: string, quantity: number) => api.post(`/parts/${id}/add-stock`, { quantity }),
   removeStock: (id: string, quantity: number) => api.post(`/parts/${id}/remove-stock`, { quantity }),
+};
+
+// === FAQ (Base de Conhecimento) ===
+export const faqApi = {
+  list: () => api.get('/faq?includeInactive=true'),
+  search: (q: string) => api.get(`/faq/search?q=${encodeURIComponent(q)}`),
+  create: (data: { question: string; answer: string; keywords: string; category?: string }) =>
+    api.post('/faq', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/faq/${id}`, data),
+  delete: (id: string) => api.delete(`/faq/${id}`),
 };

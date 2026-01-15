@@ -197,3 +197,23 @@ model PartUsage {
   @@map("part_usages")
   @@index([ticketId])
 }
+
+// ===========================================================================
+// FAQ - Base de Conhecimento
+// ===========================================================================
+
+model Faq {
+  id          String   @id @default(uuid())
+  question    String
+  answer      String   @db.Text
+  keywords    String   // Palavras-chave separadas por vírgula
+  category    String?
+  views       Int      @default(0)
+  helpful     Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("faqs")
+  @@index([keywords])
+}
