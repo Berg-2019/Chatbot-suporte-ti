@@ -32,6 +32,10 @@ export default function AdminLayout({
         if (!loading && !user) {
             router.push('/login');
         }
+        // Técnicos (AGENT) não podem acessar área admin - redireciona para atendimento
+        if (!loading && user && user.role !== 'ADMIN') {
+            router.push('/dashboard');
+        }
     }, [user, loading, router]);
 
     if (loading || !user) {
@@ -42,7 +46,10 @@ export default function AdminLayout({
         );
     }
 
-    const isAdmin = user.role === 'ADMIN';
+    // Só mostra para ADMIN
+    if (user.role !== 'ADMIN') {
+        return null;
+    }
 
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex">
@@ -62,42 +69,29 @@ export default function AdminLayout({
                 {/* Menu */}
                 <nav className="flex-1 p-4">
                     <ul className="space-y-1">
-                        {menuItems
-                            .filter(item => !item.adminOnly || isAdmin)
-                            .map((item) => {
-                                const isActive = pathname === item.href;
-                                return (
-                                    <li key={item.href}>
-                                        <Link
-                                            href={item.href}
-                                            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition ${isActive
-                                                    ? 'bg-blue-600 text-white'
-                                                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                                                }`}
-                                        >
-                                            <span className="text-xl">{item.icon}</span>
-                                            <span>{item.label}</span>
-                                        </Link>
-                                    </li>
-                                );
-                            })}
+                        {menuItems.map((item) => {
+                            const isActive = pathname === item.href;
+                            return (
+                                <li key={item.href}>
+                                    <Link
+                                        href={item.href}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition ${isActive
+                                            ? 'bg-blue-600 text-white'
+                                            : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                                            }`}
+                                    >
+                                        <span className="text-xl">{item.icon}</span>
+                                        <span>{item.label}</span>
+                                    </Link>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </nav>
 
                 {/* Separador */}
                 <div className="px-4">
                     <hr className="border-gray-700" />
-                </div>
-
-                {/* Link para atendimento */}
-                <div className="p-4">
-                    <Link
-                        href="/dashboard"
-                        className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition"
-                    >
-                        <span className="text-xl">💬</span>
-                        <span>Ir para Atendimento</span>
-                    </Link>
                 </div>
 
                 {/* User Info */}

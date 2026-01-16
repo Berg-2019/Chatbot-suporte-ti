@@ -37,6 +37,10 @@ export default function DashboardPage() {
     if (!loading && !user) {
       router.push('/login');
     }
+    // ADMIN não pode acessar área de atendimento - redireciona para admin
+    if (!loading && user && user.role === 'ADMIN') {
+      router.push('/admin');
+    }
   }, [user, loading, router]);
 
   useEffect(() => {
@@ -260,8 +264,8 @@ export default function DashboardPage() {
                           </p>
                         </div>
                         <span className={`px-2 py-1 text-xs rounded-full ${ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
-                            ticket.status === 'WAITING_CLIENT' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-gray-100 text-gray-700'
+                          ticket.status === 'WAITING_CLIENT' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-700'
                           }`}>
                           {ticket.status === 'IN_PROGRESS' ? 'Em atendimento' :
                             ticket.status === 'WAITING_CLIENT' ? 'Aguardando cliente' :

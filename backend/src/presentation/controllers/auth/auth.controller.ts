@@ -40,7 +40,7 @@ class RegisterDto {
   role?: 'ADMIN' | 'AGENT';
 }
 
-@Controller('api/auth')
+@Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) { }
 

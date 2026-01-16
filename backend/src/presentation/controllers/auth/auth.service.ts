@@ -125,11 +125,19 @@ export class AuthService {
     const groups = await this.glpi.getUserGroups(authResult.user.id, authResult.sessionToken);
     const groupNames = groups.map(g => g.name.toLowerCase());
 
-    // 3. Determinar role baseado nos grupos
+    // 3. Determinar role baseado nos grupos, login ou nome
     let role: 'ADMIN' | 'AGENT' = 'AGENT';
     let technicianLevel: TechnicianLevel = TechnicianLevel.N1;
 
-    if (groupNames.some(g => ADMIN_GROUPS.some(ag => g.includes(ag)))) {
+    const userLogin = dto.login.toLowerCase();
+    const userName = authResult.user.name?.toLowerCase() || '';
+
+    // Verifica se é ADMIN por grupos, login ou nome
+    const isAdminByGroups = groupNames.some(g => ADMIN_GROUPS.some(ag => g.includes(ag)));
+    const isAdminByLogin = ADMIN_GROUPS.some(ag => userLogin.includes(ag));
+    const isAdminByName = ADMIN_GROUPS.some(ag => userName.includes(ag));
+
+    if (isAdminByGroups || isAdminByLogin || isAdminByName) {
       role = 'ADMIN';
     }
 
