@@ -32,7 +32,7 @@ export class GlpiService implements OnModuleInit {
   constructor(
     private config: ConfigService,
     private redis: RedisService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     const baseURL = this.config.get<string>('GLPI_URL') || 'http://localhost:8080/apirest.php';
@@ -70,10 +70,10 @@ export class GlpiService implements OnModuleInit {
       });
 
       this.sessionToken = response.data.session_token;
-      
+
       // Cachear por 1 hora
       await this.redis.setGlpiSession(this.sessionToken!, 3500);
-      
+
       console.log('✅ Sessão GLPI iniciada');
       return this.sessionToken!;
     } catch (error: any) {
@@ -145,14 +145,14 @@ export class GlpiService implements OnModuleInit {
       return ticketId;
     } catch (error: any) {
       console.error('❌ Erro ao criar ticket GLPI:', error.response?.data || error.message);
-      
+
       // Se sessão expirou, renovar e tentar novamente
       if (error.response?.status === 401) {
         this.sessionToken = null;
         await this.redis.del('glpi:session');
         return this.createTicket(ticket);
       }
-      
+
       throw new Error('Falha ao criar ticket no GLPI');
     }
   }
@@ -202,10 +202,13 @@ export class GlpiService implements OnModuleInit {
     await this.ensureSession();
 
     try {
+      // Método 1: Usando ITILFollowup diretamente
       await this.client.post(
-        `/Ticket/${ticketId}/ITILFollowup`,
+        '/ITILFollowup',
         {
           input: {
+            itemtype: 'Ticket',
+            items_id: ticketId,
             content: followup.content,
             is_private: followup.is_private ? 1 : 0,
           },

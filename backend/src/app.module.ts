@@ -20,6 +20,7 @@ import { BotModule } from './presentation/controllers/bot/bot.module';
 import { UsersModule } from './presentation/controllers/users/users.module';
 import { PartsModule } from './presentation/controllers/parts/parts.module';
 import { FaqModule } from './presentation/controllers/faq/faq.module';
+import { MetricsModule } from './presentation/controllers/metrics/metrics.module';
 import { WebsocketModule } from './presentation/websockets/websocket.module';
 
 // Health check
@@ -48,6 +49,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     UsersModule,
     PartsModule,
     FaqModule,
+    MetricsModule,
     WebsocketModule,
   ],
   controllers: [HealthController],
