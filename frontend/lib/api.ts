@@ -42,9 +42,9 @@ api.interceptors.response.use(
 export const authApi = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
-  
+
   me: () => api.get('/auth/me'),
-  
+
   register: (data: { email: string; password: string; name: string; role?: string }) =>
     api.post('/auth/register', data),
 };
@@ -53,19 +53,19 @@ export const authApi = {
 export const ticketsApi = {
   list: (params?: { status?: string; assignedTo?: string }) =>
     api.get('/tickets', { params }),
-  
+
   pending: () => api.get('/tickets/pending'),
-  
+
   get: (id: string) => api.get(`/tickets/${id}`),
-  
+
   assign: (id: string) => api.post(`/tickets/${id}/assign`),
-  
+
   transfer: (id: string, userId: string) =>
     api.post(`/tickets/${id}/transfer`, { userId }),
-  
+
   updateStatus: (id: string, status: string) =>
     api.put(`/tickets/${id}/status`, { status }),
-  
+
   close: (id: string, closeData?: {
     solution?: string;
     solutionType?: string;
@@ -83,7 +83,7 @@ export const ticketsApi = {
 // === Messages ===
 export const messagesApi = {
   list: (ticketId: string) => api.get(`/tickets/${ticketId}/messages`),
-  
+
   send: (ticketId: string, content: string) =>
     api.post(`/tickets/${ticketId}/messages`, { content }),
 };
@@ -91,13 +91,13 @@ export const messagesApi = {
 // === Users ===
 export const usersApi = {
   list: () => api.get('/users'),
-  
+
   technicians: () => api.get('/users/technicians'),
-  
+
   get: (id: string) => api.get(`/users/${id}`),
-  
+
   update: (id: string, data: any) => api.put(`/users/${id}`, data),
-  
+
   delete: (id: string) => api.delete(`/users/${id}`),
 };
 
@@ -126,3 +126,17 @@ export const faqApi = {
   update: (id: string, data: Record<string, unknown>) => api.put(`/faq/${id}`, data),
   delete: (id: string) => api.delete(`/faq/${id}`),
 };
+
+// === Metrics (Métricas e Relatórios) ===
+export const metricsApi = {
+  dashboard: () => api.get('/metrics/dashboard'),
+  technicians: () => api.get('/metrics/technicians'),
+  technician: (id: string) => api.get(`/metrics/technicians/${id}`),
+  sector: (startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    return api.get(`/metrics/sector?${params.toString()}`);
+  },
+};
+

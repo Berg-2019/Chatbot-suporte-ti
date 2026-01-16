@@ -74,22 +74,22 @@ export default function DashboardPage() {
         ticketsApi.pending(),
         ticketsApi.list(),
       ]);
-      
+
       setPendingTickets(pending.data);
-      
+
       // Meus atendimentos ativos
-      const activeTickets = all.data.tickets.filter((t: Ticket) => 
+      const activeTickets = all.data.tickets.filter((t: Ticket) =>
         t.assignedTo && ['ASSIGNED', 'IN_PROGRESS', 'WAITING_CLIENT'].includes(t.status)
       );
       setMyTickets(activeTickets);
-      
+
       // Finalizados hoje
       const today = new Date().toDateString();
-      const closedTodayCount = all.data.tickets.filter((t: Ticket) => 
+      const closedTodayCount = all.data.tickets.filter((t: Ticket) =>
         t.status === 'CLOSED' && t.closedAt && new Date(t.closedAt).toDateString() === today
       ).length;
       setClosedToday(closedTodayCount);
-      
+
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -139,6 +139,12 @@ export default function DashboardPage() {
               className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm transition"
             >
               📚 FAQ
+            </Link>
+            <Link
+              href="/admin/metrics"
+              className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-lg text-sm transition"
+            >
+              📊 Métricas
             </Link>
             <span className="text-sm text-gray-600 dark:text-gray-400">
               {user.name} ({user.role})
@@ -253,14 +259,13 @@ export default function DashboardPage() {
                             📱 {ticket.phoneNumber}
                           </p>
                         </div>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
-                          ticket.status === 'WAITING_CLIENT' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs rounded-full ${ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                            ticket.status === 'WAITING_CLIENT' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-700'
+                          }`}>
                           {ticket.status === 'IN_PROGRESS' ? 'Em atendimento' :
-                           ticket.status === 'WAITING_CLIENT' ? 'Aguardando cliente' :
-                           ticket.status}
+                            ticket.status === 'WAITING_CLIENT' ? 'Aguardando cliente' :
+                              ticket.status}
                         </span>
                       </div>
                     </div>
