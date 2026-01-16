@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
+import { ExternalModule } from '../../../infrastructure/external/external.module';
 
 @Module({
   imports: [
@@ -20,9 +21,11 @@ import { JwtStrategy } from './jwt.strategy';
         signOptions: { expiresIn: '7d' },
       }),
     }),
+    ExternalModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService, JwtStrategy],
 })
-export class AuthModule {}
+export class AuthModule { }
+

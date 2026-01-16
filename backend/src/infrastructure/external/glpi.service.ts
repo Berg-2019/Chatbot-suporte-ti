@@ -83,17 +83,21 @@ export class GlpiService implements OnModuleInit {
   }
 
   /**
-   * Encerra sessão
+   * Encerra sessão GLPI
+   * @param sessionToken Token específico ou usa o token interno
    */
-  async killSession(): Promise<void> {
-    if (!this.sessionToken) return;
+  async killSession(sessionToken?: string): Promise<void> {
+    const token = sessionToken || this.sessionToken;
+    if (!token) return;
 
     try {
       await this.client.get('/killSession', {
-        headers: { 'Session-Token': this.sessionToken },
+        headers: { 'Session-Token': token },
       });
-      this.sessionToken = null;
-      await this.redis.del('glpi:session');
+      if (!sessionToken) {
+        this.sessionToken = null;
+        await this.redis.del('glpi:session');
+      }
     } catch (error) {
       // Ignora erros ao encerrar
     }
@@ -247,25 +251,7 @@ export class GlpiService implements OnModuleInit {
   // Grupos e Técnicos
   // ===========================================================================
 
-  /**
-   * Buscar todos os grupos
-   */
-  async getGroups(): Promise<any[]> {
-    await this.ensureSession();
-
-    try {
-      const response = await this.client.get('/Group', {
-        headers: this.getHeaders(),
-        params: {
-          range: '0-100',
-        },
-      });
-      return response.data || [];
-    } catch (error: any) {
-      console.error('❌ Erro ao buscar grupos GLPI:', error.response?.data || error.message);
-      return [];
-    }
-  }
+  // getGroups movido para seção de autenticação e usuários
 
   /**
    * Buscar usuários de um grupo
@@ -427,5 +413,189 @@ export class GlpiService implements OnModuleInit {
     HIGH: 4,
     VERY_HIGH: 5,
   };
-}
 
+  // ============================================================
+  // AUTENTICAÇÃO E USUÁRIOS
+  // ============================================================
+
+  /**
+   * Autenticar usuário com login e senha do GLPI
+   * Retorna dados do usuário + session token
+   */
+  async authenticateWithCredentials(login: string, password: string): Promise<{
+    success: boolean;
+    sessionToken?: string;
+    user?: {
+      id: number;
+      name: string;
+      realname: string;
+      firstname: string;
+      email: string;
+      phone: string;
+    };
+    error?: string;
+  }> {
+    try {
+      // Codificar credenciais em Base64
+      const credentials = Buffer.from(`${login}:${password}`).toString('base64');
+
+      const response = await this.client.get('/initSession', {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+        },
+      });
+
+      const sessionToken = response.data.session_token;
+
+      // Buscar dados do usuário logado
+      const userResponse = await this.client.get('/getFullSession', {
+        headers: {
+          'Session-Token': sessionToken,
+        },
+      });
+
+      const userData = userResponse.data?.session?.glpiactiveprofile;
+      const glpiUser = userResponse.data?.session?.glpiname_full || login;
+      const glpiId = userResponse.data?.session?.glpiID;
+
+      // Buscar dados completos do usuário
+      let fullUser = null;
+      if (glpiId) {
+        try {
+          const userDetailResponse = await this.client.get(`/User/${glpiId}`, {
+            headers: {
+              'Session-Token': sessionToken,
+            },
+          });
+          fullUser = userDetailResponse.data;
+        } catch (e) {
+          // Ignorar se não conseguir buscar detalhes
+        }
+      }
+
+      return {
+        success: true,
+        sessionToken,
+        user: {
+          id: glpiId,
+          name: fullUser?.name || login,
+          realname: fullUser?.realname || '',
+          firstname: fullUser?.firstname || '',
+          email: fullUser?.email || fullUser?.email1 || '',
+          phone: fullUser?.phone || fullUser?.mobile || '',
+        },
+      };
+    } catch (error: any) {
+      console.error('❌ Erro na autenticação GLPI:', error.response?.data || error.message);
+      return {
+        success: false,
+        error: error.response?.data?.[1] || 'Credenciais inválidas',
+      };
+    }
+  }
+
+  /**
+   * Buscar grupos de um usuário GLPI
+   */
+  async getUserGroups(userId: number, sessionToken?: string): Promise<{
+    id: number;
+    name: string;
+    completename: string;
+    is_manager: boolean;
+  }[]> {
+    const token = sessionToken || this.sessionToken;
+    if (!token) {
+      await this.ensureSession();
+    }
+
+    try {
+      const response = await this.client.get('/Group_User', {
+        headers: {
+          'Session-Token': token || this.sessionToken,
+        },
+        params: {
+          'searchText[users_id]': userId,
+          expand_dropdowns: true,
+        },
+      });
+
+      const groups = response.data || [];
+      return groups.map((g: any) => ({
+        id: g.groups_id || g.id,
+        name: g.groups_id_name || g.name || 'Grupo',
+        completename: g.groups_id_completename || g.completename || '',
+        is_manager: g.is_manager === 1,
+      }));
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar grupos do usuário:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Listar todos os usuários do GLPI
+   */
+  async getUsers(): Promise<{
+    id: number;
+    name: string;
+    realname: string;
+    firstname: string;
+    email: string;
+    is_active: boolean;
+  }[]> {
+    await this.ensureSession();
+
+    try {
+      const response = await this.client.get('/User', {
+        headers: this.getHeaders(),
+        params: {
+          range: '0-100',
+          expand_dropdowns: true,
+        },
+      });
+
+      return (response.data || []).map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        realname: u.realname || '',
+        firstname: u.firstname || '',
+        email: u.email || u.email1 || '',
+        is_active: u.is_active === 1,
+      }));
+    } catch (error: any) {
+      console.error('❌ Erro ao listar usuários GLPI:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Listar todos os grupos do GLPI
+   */
+  async getGroups(): Promise<{
+    id: number;
+    name: string;
+    completename: string;
+    level: number;
+  }[]> {
+    await this.ensureSession();
+
+    try {
+      const response = await this.client.get('/Group', {
+        headers: this.getHeaders(),
+        params: {
+          range: '0-100',
+        },
+      });
+
+      return (response.data || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        completename: g.completename || g.name,
+        level: g.level || 0,
+      }));
+    } catch (error: any) {
+      console.error('❌ Erro ao listar grupos GLPI:', error.response?.data || error.message);
+      return [];
+    }
+  }
+}

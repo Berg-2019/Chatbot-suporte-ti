@@ -1,5 +1,5 @@
 /**
- * Login Page
+ * Login Page - SSO via GLPI
  */
 
 'use client';
@@ -8,11 +8,11 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { loginWithGlpi } = useAuth();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await loginWithGlpi(login, password);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Credenciais inválidas');
     } finally {
@@ -52,15 +52,16 @@ export default function LoginPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Email
+              Usuário GLPI
             </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              placeholder="seu@email.com"
+              placeholder="seu_usuario"
               required
+              autoComplete="username"
             />
           </div>
 
@@ -75,6 +76,7 @@ export default function LoginPage() {
               className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               placeholder="••••••••"
               required
+              autoComplete="current-password"
             />
           </div>
 
@@ -98,7 +100,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
-          Admin padrão: admin@empresa.com / admin123
+          Use suas credenciais do GLPI
         </p>
       </div>
     </div>

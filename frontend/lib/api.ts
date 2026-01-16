@@ -43,6 +43,9 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
 
+  glpiLogin: (login: string, password: string) =>
+    api.post('/auth/glpi-login', { login, password }),
+
   me: () => api.get('/auth/me'),
 
   register: (data: { email: string; password: string; name: string; role?: string }) =>

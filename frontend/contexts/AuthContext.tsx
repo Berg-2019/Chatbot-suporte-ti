@@ -13,12 +13,15 @@ interface User {
   email: string;
   name: string;
   role: 'ADMIN' | 'AGENT';
+  technicianLevel?: 'N1' | 'N2' | 'N3';
+  groups?: string[];
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGlpi: (login: string, password: string) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
 }
@@ -58,6 +61,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/dashboard');
   }
 
+  async function loginWithGlpi(login: string, password: string) {
+    const response = await authApi.glpiLogin(login, password);
+    localStorage.setItem('token', response.data.token);
+    setUser(response.data.user);
+    // Redirecionar para admin se for ADMIN, senão dashboard
+    if (response.data.user.role === 'ADMIN') {
+      router.push('/admin');
+    } else {
+      router.push('/dashboard');
+    }
+  }
+
   function logout() {
     localStorage.removeItem('token');
     setUser(null);
@@ -70,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
+        loginWithGlpi,
         logout,
         isAdmin: user?.role === 'ADMIN',
       }}
@@ -86,3 +102,4 @@ export function useAuth() {
   }
   return context;
 }
+
