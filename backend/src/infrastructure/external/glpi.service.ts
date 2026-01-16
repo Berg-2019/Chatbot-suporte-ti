@@ -598,4 +598,105 @@ export class GlpiService implements OnModuleInit {
       return [];
     }
   }
+
+  /**
+   * Criar usuário no GLPI
+   */
+  async createUser(userData: {
+    name: string;
+    realname?: string;
+    firstname?: string;
+    password: string;
+    email?: string;
+    phone?: string;
+    is_active?: boolean;
+  }): Promise<{ success: boolean; id?: number; error?: string }> {
+    await this.ensureSession();
+
+    try {
+      const response = await this.client.post(
+        '/User',
+        {
+          input: {
+            name: userData.name,
+            realname: userData.realname || '',
+            firstname: userData.firstname || '',
+            password: userData.password,
+            password2: userData.password,
+            _useremails: userData.email ? [userData.email] : [],
+            phone: userData.phone || '',
+            is_active: userData.is_active !== false ? 1 : 0,
+          },
+        },
+        { headers: this.getHeaders() },
+      );
+
+      const userId = response.data.id;
+      console.log(`✅ Usuário GLPI criado: #${userId} (${userData.name})`);
+      return { success: true, id: userId };
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.[0] || error.response?.data?.message || error.message;
+      console.error('❌ Erro ao criar usuário GLPI:', errorMsg);
+      return { success: false, error: typeof errorMsg === 'string' ? errorMsg : 'Falha ao criar usuário' };
+    }
+  }
+
+  /**
+   * Adicionar usuário a um grupo
+   */
+  async addUserToGroup(userId: number, groupId: number): Promise<boolean> {
+    await this.ensureSession();
+
+    try {
+      await this.client.post(
+        '/Group_User',
+        {
+          input: {
+            users_id: userId,
+            groups_id: groupId,
+          },
+        },
+        { headers: this.getHeaders() },
+      );
+
+      console.log(`✅ Usuário #${userId} adicionado ao grupo #${groupId}`);
+      return true;
+    } catch (error: any) {
+      console.error('❌ Erro ao adicionar usuário ao grupo:', error.response?.data || error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Atualizar usuário no GLPI
+   */
+  async updateUser(userId: number, userData: {
+    realname?: string;
+    firstname?: string;
+    phone?: string;
+    is_active?: boolean;
+  }): Promise<boolean> {
+    await this.ensureSession();
+
+    try {
+      await this.client.put(
+        `/User/${userId}`,
+        {
+          input: {
+            realname: userData.realname,
+            firstname: userData.firstname,
+            phone: userData.phone,
+            is_active: userData.is_active !== undefined ? (userData.is_active ? 1 : 0) : undefined,
+          },
+        },
+        { headers: this.getHeaders() },
+      );
+
+      console.log(`✅ Usuário GLPI #${userId} atualizado`);
+      return true;
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar usuário GLPI:', error.response?.data || error.message);
+      return false;
+    }
+  }
 }

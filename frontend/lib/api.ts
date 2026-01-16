@@ -97,11 +97,23 @@ export const usersApi = {
 
   technicians: () => api.get('/users/technicians'),
 
+  groups: () => api.get('/users/groups'),
+
   get: (id: string) => api.get(`/users/${id}`),
 
   update: (id: string, data: any) => api.put(`/users/${id}`, data),
 
   delete: (id: string) => api.delete(`/users/${id}`),
+
+  createGlpi: (data: {
+    login: string;
+    password: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    groupId?: number;
+  }) => api.post('/users/glpi', data),
 };
 
 // === Bot ===
