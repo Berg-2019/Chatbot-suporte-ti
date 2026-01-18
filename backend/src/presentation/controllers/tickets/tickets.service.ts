@@ -287,6 +287,11 @@ export class TicketsService {
         unitCost: number;
         purchased?: boolean;
       }>;
+      // Salvar contato para próximos chamados
+      saveContact?: boolean;
+      contactName?: string;
+      contactDepartment?: string;
+      contactRamal?: string;
     },
   ) {
     // Atualizar ticket com solução
@@ -335,6 +340,32 @@ export class TicketsService {
     const partUsages = await this.prisma.partUsage.findMany({
       where: { ticketId: id },
     });
+
+    // Salvar contato para próximos chamados
+    if (closeData?.saveContact && ticket.phoneNumber) {
+      try {
+        await this.prisma.contact.upsert({
+          where: { jid: ticket.phoneNumber },
+          create: {
+            jid: ticket.phoneNumber,
+            phoneNumber: ticket.phoneNumber.split('@')[0],
+            name: closeData.contactName || ticket.customerName || 'Cliente',
+            sector: ticket.sector || 'Geral',
+            department: closeData.contactDepartment,
+            ramal: closeData.contactRamal,
+          },
+          update: {
+            name: closeData.contactName || ticket.customerName || 'Cliente',
+            sector: ticket.sector || 'Geral',
+            department: closeData.contactDepartment,
+            ramal: closeData.contactRamal,
+          },
+        });
+        console.log(`📇 Contato salvo: ${ticket.phoneNumber} -> ${ticket.sector}`);
+      } catch (error: any) {
+        console.warn('⚠️ Erro ao salvar contato:', error.message);
+      }
+    }
 
     // Enviar mensagem ao cliente via WhatsApp
     if (ticket.phoneNumber) {

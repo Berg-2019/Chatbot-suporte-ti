@@ -105,6 +105,27 @@ class FlowHandler {
 
     switch (text) {
       case '1': // Abrir chamado
+        // Verificar se contato já está cadastrado
+        try {
+          const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+          const contactRes = await axios.get(`${backendUrl}/api/contacts/by-jid/${encodeURIComponent(from)}`, {
+            timeout: 3000,
+          }).catch(() => null);
+
+          if (contactRes?.data) {
+            const contact = contactRes.data;
+            // Contato existe! Pular seleção de setor
+            session.data.sector = contact.sector;
+            session.data.contactName = contact.name;
+            session.state = STATES.DESCRIBE_PROBLEM;
+            await redisService.setSession(phone, session);
+            await this.sendMessage(sock, from, `👋 Olá *${contact.name}*! (${contact.sector})\n\n${config.messages.askProblem}`);
+            break;
+          }
+        } catch (e) {
+          // Contato não encontrado, seguir fluxo normal
+        }
+
         session.state = STATES.SELECT_SECTOR;
         await redisService.setSession(phone, session);
         await this.sendMessage(sock, from, config.messages.askSector);

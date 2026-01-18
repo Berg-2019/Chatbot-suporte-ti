@@ -31,6 +31,10 @@ interface CloseTicketModalProps {
     solutionType: string;
     timeWorked: number;
     parts: SelectedPart[];
+    saveContact?: boolean;
+    contactName?: string;
+    contactDepartment?: string;
+    contactRamal?: string;
   }) => void;
 }
 
@@ -61,6 +65,12 @@ export default function CloseTicketModal({
   const [newPartCost, setNewPartCost] = useState(0);
   const [newPartQty, setNewPartQty] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  // Salvar contato
+  const [saveContact, setSaveContact] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactDepartment, setContactDepartment] = useState('');
+  const [contactRamal, setContactRamal] = useState('');
 
   const loadParts = useCallback(async () => {
     try {
@@ -134,6 +144,10 @@ export default function CloseTicketModal({
       solutionType,
       timeWorked,
       parts: selectedParts,
+      saveContact,
+      contactName: saveContact ? contactName : undefined,
+      contactDepartment: saveContact ? contactDepartment : undefined,
+      contactRamal: saveContact ? contactRamal : undefined,
     });
   }
 
@@ -325,6 +339,52 @@ export default function CloseTicketModal({
                     Cancelar
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Salvar Contato */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={saveContact}
+                onChange={(e) => setSaveContact(e.target.checked)}
+                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                📇 Salvar contato para próximos chamados
+              </span>
+            </label>
+
+            {saveContact && (
+              <div className="mt-4 space-y-3 pl-8">
+                <input
+                  type="text"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  placeholder="Nome do contato"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={contactDepartment}
+                    onChange={(e) => setContactDepartment(e.target.value)}
+                    placeholder="Departamento (opcional)"
+                    className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <input
+                    type="text"
+                    value={contactRamal}
+                    onChange={(e) => setContactRamal(e.target.value)}
+                    placeholder="Ramal"
+                    className="w-24 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  O setor será definido automaticamente pelo setor do chamado atual
+                </p>
               </div>
             )}
           </div>
