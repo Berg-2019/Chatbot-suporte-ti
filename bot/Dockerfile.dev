@@ -1,0 +1,24 @@
+# Bot Dockerfile.dev - Modo Desenvolvimento com Hot Reload
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Dependências do sistema
+RUN apk add --no-cache python3 make g++
+
+# Instalar nodemon globalmente para hot reload
+RUN npm install -g nodemon
+
+# Copiar package.json
+COPY package*.json ./
+
+# Instalar dependências
+RUN npm install
+
+# Criar diretórios
+RUN mkdir -p /app/sessions /app/logs
+
+EXPOSE 3002
+
+# Iniciar com nodemon para hot reload
+CMD ["nodemon", "--watch", "src", "--ext", "js,json", "src/index.js"]

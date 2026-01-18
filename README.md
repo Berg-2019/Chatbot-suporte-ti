@@ -40,35 +40,39 @@ git clone <repo> && cd Chatbot-suporte-ti
 cp .env.example .env
 # Edite o .env com suas configurações
 
-# Modo Desenvolvimento (local)
-./setup.sh dev
+# Instalar dependências
+./helpdesk.sh install
+
+# Modo Desenvolvimento (Docker com hot-reload)
+./helpdesk.sh dev
 
 # Modo Produção (Docker)
-./setup.sh prod
+./helpdesk.sh prod
 ```
 
 ### Comandos Disponíveis
 
 | Comando | Descrição |
 |---------|-----------|
-| `./setup.sh dev` | Inicia em modo desenvolvimento (npm local) |
-| `./setup.sh prod` | Inicia em modo produção (Docker) |
-| `./setup.sh stop` | Para todos os serviços |
-| `./setup.sh logs` | Mostra logs dos containers |
-| `./setup.sh status` | Status dos serviços |
+| `./helpdesk.sh install` | Instala dependências npm em todos os serviços |
+| `./helpdesk.sh build` | Constrói imagens Docker para produção |
+| `./helpdesk.sh dev` | Inicia ambiente de desenvolvimento (hot-reload) |
+| `./helpdesk.sh prod` | Inicia em modo produção |
+| `./helpdesk.sh stop` | Para todos os containers |
+| `./helpdesk.sh logs [serviço]` | Mostra logs (todos ou de um serviço específico) |
+| `./helpdesk.sh status` | Mostra status dos containers |
+| `./helpdesk.sh migrate` | Executa migrações do Prisma |
+| `./helpdesk.sh shell <serviço>` | Acessa shell de um container |
 
-### Manual (Desenvolvimento)
+### Portas em Desenvolvimento
 
-```bash
-# Terminal 1 - Backend
-cd backend && npm install && npm run start:dev
-
-# Terminal 2 - Frontend
-cd frontend && npm install && npm run dev
-
-# Terminal 3 - Bot
-cd bot && npm install && node src/index.js
-```
+| Serviço | Porta |
+|---------|-------|
+| Backend | 3000 (debug: 9229) |
+| Frontend | 3001 |
+| Bot | 3002 |
+| GLPI | 8080 |
+| RabbitMQ | 15672 |
 
 ---
 
@@ -158,9 +162,9 @@ Chatbot-suporte-ti/
 │       └── services/        # GLPI, RabbitMQ
 │
 ├── nginx/             # Configurações Nginx
-├── docker-compose.yml         # Full stack
-├── docker-compose.prod.yml    # Apenas app (produção)
-├── setup.sh                   # Script de gerenciamento
+├── docker-compose.yml         # Produção
+├── docker-compose.dev.yml     # Desenvolvimento (hot-reload)
+├── helpdesk.sh                # Script unificado de gerenciamento
 └── .env.example               # Template de configuração
 ```
 
