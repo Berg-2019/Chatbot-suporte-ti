@@ -299,3 +299,25 @@ model Attachment {
   @@map("attachments")
   @@index([ticketId])
 }
+
+// ===========================================================================
+// Contacts - Contatos cadastrados por setor
+// ===========================================================================
+
+model Contact {
+  id          String   @id @default(uuid())
+  
+  jid         String   @unique  // JID completo do WhatsApp (ex: "123456789:0@s.whatsapp.net")
+  phoneNumber String?           // Número para exibição (opcional)
+  name        String            // Nome do contato
+  sector      String            // Setor do contato
+  department  String?           // Departamento/subdivisão
+  ramal       String?           // Ramal telefônico
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("contacts")
+  @@index([jid])
+  @@index([sector])
+}
