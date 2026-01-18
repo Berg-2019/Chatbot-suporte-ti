@@ -20,7 +20,7 @@ import { TicketStatus, Priority } from '@prisma/client';
 @Controller('tickets')
 @UseGuards(AuthGuard('jwt'))
 export class TicketsController {
-  constructor(private ticketsService: TicketsService) {}
+  constructor(private ticketsService: TicketsService) { }
 
   @Get()
   async findAll(
@@ -103,5 +103,25 @@ export class TicketsController {
     },
   ) {
     return this.ticketsService.close(id, closeData);
+  }
+
+  // === Novos endpoints para bot ===
+
+  @Post(':id/rate')
+  async rateTicket(
+    @Param('id') id: string,
+    @Body('rating') rating: number,
+  ) {
+    return this.ticketsService.rate(id, rating);
+  }
+
+  @Get('by-phone/:phone')
+  async findByPhone(@Param('phone') phone: string) {
+    return this.ticketsService.findByPhone(phone);
+  }
+
+  @Get('glpi/:glpiId')
+  async findByGlpiId(@Param('glpiId') glpiId: string) {
+    return this.ticketsService.findByGlpiId(parseInt(glpiId));
   }
 }

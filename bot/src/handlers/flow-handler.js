@@ -35,6 +35,14 @@ class FlowHandler {
     // Obter sessão atual
     let session = await redisService.getSession(phone);
 
+    // === Comando STATUS ===
+    // Formato: "status 12345" ou "status"
+    const statusMatch = normalizedText.match(/^status\s*(\d+)?$/);
+    if (statusMatch) {
+      await this.handleStatusQuery(sock, from, statusMatch[1], phone);
+      return;
+    }
+
     // Reset com comandos especiais
     if (['oi', 'olá', 'ola', 'menu', 'inicio', 'iniciar'].includes(normalizedText)) {
       session = { state: STATES.MENU, data: {} };
@@ -62,7 +70,7 @@ class FlowHandler {
         break;
 
       case STATES.DESCRIBE_PROBLEM:
-        await this.handleDescribeProblem(sock, from, text, session);
+        await this.handleDescribeProblem(sock, from, text, session, msg);
         break;
 
       case STATES.ASK_LOCATION:
@@ -78,7 +86,11 @@ class FlowHandler {
         break;
 
       case STATES.WAITING_TECHNICIAN:
-        await this.handleWaitingTechnician(sock, from, text, session);
+        await this.handleWaitingTechnician(sock, from, text, session, msg);
+        break;
+
+      case STATES.RATING_TICKET:
+        await this.handleRatingTicket(sock, from, normalizedText, session);
         break;
 
       default:
@@ -287,13 +299,118 @@ class FlowHandler {
     }
   }
 
-  async handleWaitingTechnician(sock, from, text, session) {
-    // Cliente já está aguardando técnico, encaminhar mensagem
+  async handleWaitingTechnician(sock, from, text, session, msg) {
     const phone = from.split('@')[0];
 
-    await rabbitmqService.publishIncomingMessage(from, text);
+    // Verificar se é uma imagem
+    const imageMessage = msg?.message?.imageMessage;
+    if (imageMessage) {
+      await this.handleImageReceived(sock, from, msg, session);
+      return;
+    }
 
+    await rabbitmqService.publishIncomingMessage(from, text);
     // Não responder automaticamente, técnico vai responder
+  }
+
+  /**
+   * Consultar status de um chamado
+   */
+  async handleStatusQuery(sock, from, ticketId, phone) {
+    try {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+
+      let url;
+      if (ticketId) {
+        // Buscar por ID específico
+        url = `${backendUrl}/api/tickets/glpi/${ticketId}`;
+      } else {
+        // Buscar último ticket do telefone
+        url = `${backendUrl}/api/tickets/by-phone/${phone}`;
+      }
+
+      const response = await axios.get(url, { timeout: 5000 });
+      const ticket = response.data;
+
+      if (!ticket) {
+        await this.sendMessage(sock, from, '❓ Chamado não encontrado.\n\nDigite *oi* para abrir um novo chamado.');
+        return;
+      }
+
+      const statusEmoji = {
+        'NEW': '🆕 Novo',
+        'ASSIGNED': '👨‍💻 Atribuído',
+        'IN_PROGRESS': '🔧 Em Atendimento',
+        'WAITING_CLIENT': '⏳ Aguardando Resposta',
+        'RESOLVED': '✅ Resolvido',
+        'CLOSED': '🔒 Fechado',
+      };
+
+      let message = `📋 *Status do Chamado #${ticket.glpiId || ticket.id}*\n\n`;
+      message += `Status: ${statusEmoji[ticket.status] || ticket.status}\n`;
+      message += `Título: ${ticket.title}\n`;
+      if (ticket.assignedTo) {
+        message += `Técnico: ${ticket.assignedTo.name}\n`;
+      }
+      message += `Aberto em: ${new Date(ticket.createdAt).toLocaleString('pt-BR')}\n`;
+
+      await this.sendMessage(sock, from, message);
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar status:', error.message);
+      await this.sendMessage(sock, from, '❓ Chamado não encontrado.\n\nDigite *oi* para abrir um novo chamado.');
+    }
+  }
+
+  /**
+   * Processar avaliação do chamado
+   */
+  async handleRatingTicket(sock, from, text, session) {
+    const phone = from.split('@')[0];
+    const rating = parseInt(text);
+
+    if (isNaN(rating) || rating < 1 || rating > 5) {
+      await this.sendMessage(sock, from, 'Por favor, responda com um número de *1 a 5*:\n_(1 = Ruim, 5 = Excelente)_');
+      return;
+    }
+
+    try {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+      const ticketId = session.data.ticketId;
+
+      await axios.post(`${backendUrl}/api/tickets/${ticketId}/rate`, { rating }, { timeout: 5000 });
+
+      const stars = '⭐'.repeat(rating);
+      await this.sendMessage(sock, from, `${stars}\n\n🙏 Obrigado pela sua avaliação!\n\nSe precisar de ajuda novamente, é só enviar *oi*. 😊`);
+
+      // Limpar sessão
+      await redisService.deleteSession(phone);
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar avaliação:', error.message);
+      await this.sendMessage(sock, from, '🙏 Obrigado pela avaliação!\n\nSe precisar de ajuda, envie *oi*.');
+      await redisService.deleteSession(phone);
+    }
+  }
+
+  /**
+   * Processar imagem recebida
+   */
+  async handleImageReceived(sock, from, msg, session) {
+    const phone = from.split('@')[0];
+    const imageMessage = msg.message.imageMessage;
+
+    // Publicar no RabbitMQ para backend processar
+    await rabbitmqService.publish('ticket.image', {
+      from,
+      phone,
+      ticketId: session?.data?.ticketId,
+      caption: imageMessage?.caption || '',
+      mimetype: imageMessage?.mimetype,
+      // Em produção, aqui baixaria a imagem e faria upload
+    });
+
+    await this.sendMessage(sock, from, '📷 Imagem recebida! O técnico poderá visualizá-la.');
   }
 
   async sendMessage(sock, to, text) {

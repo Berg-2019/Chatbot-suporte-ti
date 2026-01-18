@@ -28,7 +28,7 @@ export class TicketsService {
     private prisma: PrismaService,
     private glpi: GlpiService,
     private rabbitmq: RabbitMQService,
-  ) {}
+  ) { }
 
   async findAll(filters?: {
     status?: TicketStatus;
@@ -131,6 +131,11 @@ export class TicketsService {
   }
 
   async assign(id: string, dto: AssignTicketDto) {
+    const technician = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+      select: { id: true, name: true, phoneNumber: true, receiveAlerts: true },
+    });
+
     const ticket = await this.prisma.ticket.update({
       where: { id },
       data: {
@@ -138,11 +143,33 @@ export class TicketsService {
         status: 'ASSIGNED',
       },
       include: {
-        assignedTo: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, name: true, phoneNumber: true } },
       },
     });
 
-    // Notificar
+    // Notificar usuário que técnico assumiu
+    if (ticket.phoneNumber) {
+      const message = `✅ *Ótima notícia!*\n\nSeu chamado *#${ticket.glpiId || ticket.id.slice(-6)}* foi atribuído ao técnico *${technician?.name || 'Suporte'}*.\n\nEle entrará em contato em breve para resolver seu problema.`;
+
+      await this.rabbitmq.publishOutgoingMessage({
+        to: ticket.phoneNumber,
+        text: message,
+        ticketId: id,
+      });
+    }
+
+    // Notificar técnico via WhatsApp
+    if (technician?.phoneNumber && technician?.receiveAlerts) {
+      const techMessage = `🎫 *Novo chamado atribuído!*\n\nID: *#${ticket.glpiId || ticket.id.slice(-6)}*\nTítulo: ${ticket.title}\nCliente: ${ticket.phoneNumber?.split('@')[0] || 'N/A'}\n\nAcesse o painel para mais detalhes.`;
+
+      await this.rabbitmq.publishOutgoingMessage({
+        to: technician.phoneNumber.includes('@') ? technician.phoneNumber : `${technician.phoneNumber}@s.whatsapp.net`,
+        text: techMessage,
+        ticketId: id,
+      });
+    }
+
+    // Notificar painel
     await this.rabbitmq.publishNotification({
       type: 'ticket_assigned',
       ticketId: id,
@@ -178,7 +205,7 @@ export class TicketsService {
     // Notificar cliente via WhatsApp
     if (ticket.phoneNumber) {
       const message = `🔄 *Transferência de atendimento*\n\nSeu chamado foi transferido de *${currentUser?.name || 'Técnico'}* para *${newUser?.name || 'Outro técnico'}*.\n\nO novo responsável entrará em contato em breve.`;
-      
+
       await this.rabbitmq.publishOutgoingMessage({
         to: ticket.phoneNumber,
         text: message,
@@ -216,7 +243,7 @@ export class TicketsService {
     if (status === 'CLOSED' && ticket.phoneNumber) {
       const technicianName = ticket.assignedTo?.name || 'Suporte';
       const closeMessage = `✅ *Chamado Encerrado*\n\nSeu chamado foi finalizado por *${technicianName}*.\n\nSe precisar de mais ajuda, é só enviar uma nova mensagem!\n\nObrigado pelo contato. 😊`;
-      
+
       await this.rabbitmq.publishOutgoingMessage({
         to: ticket.phoneNumber,
         text: closeMessage,
@@ -312,13 +339,13 @@ export class TicketsService {
     // Enviar mensagem ao cliente via WhatsApp
     if (ticket.phoneNumber) {
       const technicianName = ticket.assignedTo?.name || 'Suporte';
-      
+
       let closeMessage = `✅ *Chamado Encerrado*\n\n`;
-      
+
       if (closeData?.solution) {
         closeMessage += `📝 *Solução:* ${closeData.solution}\n\n`;
       }
-      
+
       if (partUsages.length > 0) {
         closeMessage += `🔧 *Peças utilizadas:*\n`;
         for (const pu of partUsages) {
@@ -326,22 +353,28 @@ export class TicketsService {
         }
         closeMessage += `\n`;
       }
-      
+
       if (closeData?.timeWorked) {
         const hours = Math.floor(closeData.timeWorked / 60);
         const minutes = closeData.timeWorked % 60;
         const timeStr = hours > 0 ? `${hours}h${minutes > 0 ? minutes + 'min' : ''}` : `${minutes}min`;
         closeMessage += `⏱️ *Tempo:* ${timeStr}\n`;
       }
-      
+
       closeMessage += `👤 *Técnico:* ${technicianName}\n\n`;
-      closeMessage += `Se precisar de mais ajuda, é só enviar uma nova mensagem!\n`;
-      closeMessage += `Obrigado pelo contato. 😊`;
+      closeMessage += `⭐ *Por favor, avalie nosso atendimento de 1 a 5:*\n`;
+      closeMessage += `_(1 = Ruim, 5 = Excelente)_`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: ticket.phoneNumber,
         text: closeMessage,
         ticketId: id,
+      });
+
+      // Marcar que está aguardando avaliação
+      await this.prisma.ticket.update({
+        where: { id },
+        data: { awaitingRating: true },
       });
     }
 
@@ -386,5 +419,51 @@ export class TicketsService {
       CLOSED: 6,
     };
     return map[status] || 1;
+  }
+
+  // === Novos métodos para bot ===
+
+  async rate(id: string, rating: number) {
+    if (rating < 1 || rating > 5) {
+      throw new Error('Rating deve ser entre 1 e 5');
+    }
+
+    const ticket = await this.prisma.ticket.update({
+      where: { id },
+      data: {
+        rating,
+        ratedAt: new Date(),
+        awaitingRating: false,
+      },
+    });
+
+    console.log(`⭐ Ticket ${id} avaliado com nota ${rating}`);
+    return ticket;
+  }
+
+  async findByPhone(phone: string) {
+    // Buscar último ticket do telefone
+    const ticket = await this.prisma.ticket.findFirst({
+      where: {
+        phoneNumber: { contains: phone },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+      },
+    });
+
+    return ticket;
+  }
+
+  async findByGlpiId(glpiId: number) {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { glpiId },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+      },
+    });
+
+    return ticket;
   }
 }
