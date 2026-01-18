@@ -23,9 +23,14 @@ class WhatsAppHandler {
     this.isConnected = false;
     this.phoneNumber = null;
     this.startTime = null;
+    this.currentQR = null;
+    this.connectionState = 'disconnected'; // disconnected, connecting, connected
   }
 
   async connect() {
+    this.connectionState = 'connecting';
+    this.currentQR = null;
+
     // Garantir que diretório de sessão existe
     const sessionPath = config.bot.sessionPath;
     if (!fs.existsSync(sessionPath)) {
@@ -75,9 +80,12 @@ class WhatsAppHandler {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      this.currentQR = qr;
+      this.connectionState = 'waiting_qr';
       console.log('\n📱 Escaneie o QR Code abaixo com seu WhatsApp:\n');
       qrcode.generate(qr, { small: true });
       console.log('\n');
+      console.log('📱 QR também disponível em: http://localhost:3002/api/qr');
     }
 
     if (connection === 'close') {
@@ -176,13 +184,81 @@ class WhatsAppHandler {
       phoneNumber: this.phoneNumber,
       uptime: this.startTime ? Date.now() - this.startTime : 0,
       lastConnected: this.isConnected ? new Date().toISOString() : null,
+      connectionState: this.connectionState,
     });
+  }
+
+  // === Métodos para API ===
+
+  getStatus() {
+    return {
+      connected: this.isConnected,
+      phoneNumber: this.phoneNumber,
+      uptime: this.startTime ? Date.now() - this.startTime : 0,
+      connectionState: this.connectionState,
+      hasQR: !!this.currentQR,
+    };
+  }
+
+  getCurrentQR() {
+    return this.currentQR;
+  }
+
+  async requestPairingCode(phoneNumber) {
+    if (!this.sock) {
+      throw new Error('Socket não inicializado');
+    }
+
+    if (this.isConnected) {
+      throw new Error('Já está conectado');
+    }
+
+    try {
+      console.log(`📱 Solicitando código de pareamento para: ${phoneNumber}`);
+      const code = await this.sock.requestPairingCode(phoneNumber);
+      console.log(`✅ Código de pareamento gerado: ${code}`);
+      return code;
+    } catch (error) {
+      console.error('❌ Erro ao gerar pairing code:', error.message);
+      throw error;
+    }
   }
 
   async disconnect() {
     if (this.sock) {
       this.sock.end();
       this.isConnected = false;
+      this.connectionState = 'disconnected';
+      this.currentQR = null;
+      await this.updateStatus();
+    }
+  }
+
+  async restart() {
+    console.log('🔄 Reiniciando conexão...');
+    await this.disconnect();
+    setTimeout(() => this.connect(), 1000);
+  }
+
+  async logout() {
+    if (this.sock) {
+      try {
+        await this.sock.logout();
+      } catch (e) {
+        console.log('Logout forçado');
+      }
+      this.sock.end();
+      this.isConnected = false;
+      this.connectionState = 'disconnected';
+      this.currentQR = null;
+
+      // Limpar sessão
+      const sessionPath = path.join(config.bot.sessionPath, config.bot.sessionName);
+      if (fs.existsSync(sessionPath)) {
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+        console.log('🗑️ Sessão removida');
+      }
+
       await this.updateStatus();
     }
   }

@@ -10,6 +10,7 @@ import { rabbitmqService } from './services/rabbitmq.js';
 import { whatsappHandler } from './handlers/whatsapp-handler.js';
 import { whatsappWorker } from './workers/whatsapp-worker.js';
 import { glpiWorker } from './workers/glpi-worker.js';
+import { startApiServer } from './api-server.js';
 
 async function main() {
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
@@ -32,7 +33,11 @@ async function main() {
     await whatsappWorker.start();
     await glpiWorker.start();
 
-    // 4. Conectar WhatsApp
+    // 4. Iniciar API Server (para QR Code no painel)
+    console.log('🌐 Iniciando API Server...');
+    await startApiServer();
+
+    // 5. Conectar WhatsApp
     console.log('📱 Conectando WhatsApp...');
     await whatsappHandler.connect();
 

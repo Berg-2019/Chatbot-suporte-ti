@@ -119,6 +119,11 @@ export const usersApi = {
 // === Bot ===
 export const botApi = {
   status: () => api.get('/bot/status'),
+  qr: () => api.get('/bot/qr'),
+  pairingCode: (phoneNumber: string) => api.post('/bot/pairing-code', { phoneNumber }),
+  disconnect: () => api.post('/bot/disconnect'),
+  restart: () => api.post('/bot/restart'),
+  logout: () => api.post('/bot/logout'),
 };
 
 // === Parts (Estoque) ===

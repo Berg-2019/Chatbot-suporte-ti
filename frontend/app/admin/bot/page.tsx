@@ -1,10 +1,20 @@
 /**
- * Configurar Bot Page - Configurações do Bot WhatsApp
+ * Configurar Bot Page - Conexão WhatsApp + Configurações
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { botApi } from '@/lib/api';
+import QRCode from 'qrcode';
+
+interface BotStatus {
+    connected: boolean;
+    phoneNumber: string | null;
+    uptime: number;
+    connectionState: string;
+    hasQR: boolean;
+}
 
 interface BotConfig {
     greeting: string;
@@ -43,18 +53,123 @@ const weekDays = [
 ];
 
 export default function BotConfigPage() {
+    // Conexão WhatsApp
+    const [status, setStatus] = useState<BotStatus | null>(null);
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+    const [connectionTab, setConnectionTab] = useState<'qr' | 'code'>('qr');
+    const [phoneNumber, setPhoneNumber] = useState('');
+    const [pairingCode, setPairingCode] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Configurações
     const [config, setConfig] = useState<BotConfig>(defaultConfig);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
 
+    // Buscar status e QR
+    const fetchStatus = useCallback(async () => {
+        try {
+            const [statusRes, qrRes] = await Promise.all([
+                botApi.status(),
+                botApi.qr(),
+            ]);
+            setStatus(statusRes.data);
+
+            if (qrRes.data.available && qrRes.data.qr) {
+                const dataUrl = await QRCode.toDataURL(qrRes.data.qr, {
+                    width: 256,
+                    margin: 2,
+                    color: { dark: '#000000', light: '#ffffff' },
+                });
+                setQrDataUrl(dataUrl);
+            } else {
+                setQrDataUrl(null);
+            }
+            setError(null);
+        } catch (err: any) {
+            setError('Bot não disponível');
+            setStatus(null);
+        }
+    }, []);
+
     useEffect(() => {
-        // Carregar config do localStorage por enquanto
+        fetchStatus();
+        const interval = setInterval(fetchStatus, 3000);
+        return () => clearInterval(interval);
+    }, [fetchStatus]);
+
+    useEffect(() => {
         const savedConfig = localStorage.getItem('botConfig');
         if (savedConfig) {
             setConfig(JSON.parse(savedConfig));
         }
     }, []);
 
+    // Gerar código de pareamento
+    async function handleRequestPairingCode() {
+        if (!phoneNumber) {
+            setError('Digite o número do telefone');
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await botApi.pairingCode(phoneNumber);
+            if (res.data.success && res.data.code) {
+                setPairingCode(res.data.code);
+            } else {
+                setError(res.data.error || 'Erro ao gerar código');
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Erro ao gerar código');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // Desconectar
+    async function handleDisconnect() {
+        setLoading(true);
+        try {
+            await botApi.disconnect();
+            setTimeout(fetchStatus, 1000);
+        } catch (err) {
+            setError('Erro ao desconectar');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // Logout (limpar sessão)
+    async function handleLogout() {
+        if (!confirm('Isso vai remover a sessão. Você precisará escanear o QR novamente. Continuar?')) return;
+        setLoading(true);
+        try {
+            await botApi.logout();
+            setPairingCode(null);
+            setTimeout(fetchStatus, 1000);
+        } catch (err) {
+            setError('Erro ao fazer logout');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // Reiniciar
+    async function handleRestart() {
+        setLoading(true);
+        try {
+            await botApi.restart();
+            setTimeout(fetchStatus, 2000);
+        } catch (err) {
+            setError('Erro ao reiniciar');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // Config handlers
     function handleChange(field: keyof BotConfig, value: any) {
         setConfig(prev => ({ ...prev, [field]: value }));
         setSaved(false);
@@ -69,21 +184,149 @@ export default function BotConfigPage() {
 
     async function handleSave() {
         setSaving(true);
-        // Por enquanto salva no localStorage
-        // TODO: Salvar no backend
         localStorage.setItem('botConfig', JSON.stringify(config));
         await new Promise(r => setTimeout(r, 500));
         setSaving(false);
         setSaved(true);
     }
 
+    const formatUptime = (ms: number) => {
+        const hours = Math.floor(ms / 3600000);
+        const minutes = Math.floor((ms % 3600000) / 60000);
+        return `${hours}h ${minutes}m`;
+    };
+
     return (
         <div className="p-8">
             <div className="mb-8">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">🤖 Configurar Bot</h1>
-                <p className="text-gray-600 dark:text-gray-400">Configure as mensagens e comportamento do bot WhatsApp</p>
+                <p className="text-gray-600 dark:text-gray-400">Conexão WhatsApp e configurações do bot</p>
             </div>
 
+            {/* Conexão WhatsApp */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">📱 Conexão WhatsApp</h2>
+
+                {error && (
+                    <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm mb-4">
+                        {error}
+                    </div>
+                )}
+
+                {/* Status */}
+                <div className="flex items-center gap-4 mb-6">
+                    <div className={`w-3 h-3 rounded-full ${status?.connected ? 'bg-green-500' : 'bg-red-500'}`} />
+                    <span className="text-gray-900 dark:text-white font-medium">
+                        {status?.connected ? `Conectado: ${status.phoneNumber}` : 'Desconectado'}
+                    </span>
+                    {status?.connected && (
+                        <span className="text-gray-500 text-sm">Uptime: {formatUptime(status.uptime)}</span>
+                    )}
+                </div>
+
+                {/* Conexão */}
+                {!status?.connected && (
+                    <>
+                        {/* Tabs */}
+                        <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+                            <button
+                                onClick={() => setConnectionTab('qr')}
+                                className={`px-4 py-2 font-medium ${connectionTab === 'qr' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
+                            >
+                                📷 QR Code
+                            </button>
+                            <button
+                                onClick={() => setConnectionTab('code')}
+                                className={`px-4 py-2 font-medium ${connectionTab === 'code' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
+                            >
+                                🔢 Código
+                            </button>
+                        </div>
+
+                        {connectionTab === 'qr' && (
+                            <div className="flex flex-col items-center">
+                                {qrDataUrl ? (
+                                    <>
+                                        <img src={qrDataUrl} alt="QR Code" className="w-64 h-64 rounded-lg border" />
+                                        <p className="text-sm text-gray-500 mt-2">Escaneie com seu WhatsApp</p>
+                                    </>
+                                ) : (
+                                    <div className="w-64 h-64 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                                        <span className="text-gray-500">Aguardando QR Code...</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {connectionTab === 'code' && (
+                            <div className="flex flex-col items-center">
+                                <div className="w-full max-w-xs mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Número do WhatsApp
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={phoneNumber}
+                                        onChange={e => setPhoneNumber(e.target.value)}
+                                        placeholder="5511999999999"
+                                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Com código do país (ex: 55 para Brasil)</p>
+                                </div>
+
+                                <button
+                                    onClick={handleRequestPairingCode}
+                                    disabled={loading || !phoneNumber}
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition mb-4"
+                                >
+                                    {loading ? 'Gerando...' : 'Gerar Código'}
+                                </button>
+
+                                {pairingCode && (
+                                    <div className="bg-green-50 dark:bg-green-900/30 p-6 rounded-lg text-center">
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Digite este código no seu WhatsApp:</p>
+                                        <p className="text-4xl font-mono font-bold text-green-600 dark:text-green-400 tracking-widest">
+                                            {pairingCode}
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-2">Configurações → Aparelhos conectados → Conectar → Conectar com número</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* Ações */}
+                <div className="flex gap-3 mt-6">
+                    {status?.connected && (
+                        <>
+                            <button
+                                onClick={handleDisconnect}
+                                disabled={loading}
+                                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition"
+                            >
+                                Desconectar
+                            </button>
+                            <button
+                                onClick={handleLogout}
+                                disabled={loading}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition"
+                            >
+                                Encerrar Sessão
+                            </button>
+                        </>
+                    )}
+                    <button
+                        onClick={handleRestart}
+                        disabled={loading}
+                        className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition"
+                    >
+                        Reiniciar Bot
+                    </button>
+                </div>
+            </div>
+
+            {/* Configurações */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Mensagens */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -116,18 +359,6 @@ export default function BotConfigPage() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Categorias de Chamado
-                            </label>
-                            <textarea
-                                value={config.categoryPrompt}
-                                onChange={e => handleChange('categoryPrompt', e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                rows={4}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Confirmação de Chamado
                             </label>
                             <textarea
@@ -153,7 +384,7 @@ export default function BotConfigPage() {
                     </div>
                 </div>
 
-                {/* Horário de Funcionamento */}
+                {/* Horário */}
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">⏰ Horário de Atendimento</h2>
@@ -186,8 +417,8 @@ export default function BotConfigPage() {
                                     key={day.id}
                                     onClick={() => toggleDay(day.id)}
                                     className={`px-3 py-1 rounded-lg text-sm font-medium transition ${config.workingDays.includes(day.id)
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                                         }`}
                                 >
                                     {day.label}

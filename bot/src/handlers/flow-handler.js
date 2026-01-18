@@ -17,6 +17,7 @@ const STATES = {
   ASK_LOCATION: 'ask_location',
   CONFIRM: 'confirm',
   WAITING_TECHNICIAN: 'waiting_technician',
+  RATING_TICKET: 'rating_ticket',  // Aguardando avaliação 1-5
 };
 
 class FlowHandler {
@@ -111,7 +112,7 @@ class FlowHandler {
         session.data.requestedHuman = true;
         await redisService.setSession(phone, session);
         await this.sendMessage(sock, from, config.messages.transferToHuman);
-        
+
         // Notificar painel
         await rabbitmqService.publishNotification(
           'human_requested',
@@ -163,11 +164,11 @@ class FlowHandler {
 
         // Montar mensagem com sugestões
         let faqMessage = `💡 *Encontrei algumas soluções que podem ajudar:*\n\n`;
-        
+
         faqs.forEach((faq, index) => {
           faqMessage += `*${index + 1}.* ${faq.question}\n`;
         });
-        
+
         faqMessage += `\n✅ Responda com o *número* para ver a resposta`;
         faqMessage += `\n❌ Ou digite *0* para continuar abrindo o chamado`;
 
@@ -231,7 +232,7 @@ class FlowHandler {
       }
 
       await this.sendMessage(sock, from, `🎉 Que ótimo! Fico feliz que tenha ajudado!\n\nSe precisar de mais ajuda, é só enviar *oi* a qualquer momento. 😊`);
-      
+
       // Limpar sessão
       await redisService.deleteSession(phone);
       return;

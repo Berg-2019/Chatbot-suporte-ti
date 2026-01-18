@@ -1,33 +1,76 @@
 /**
  * Bot Controller - Status e controle do bot WhatsApp
- * O bot roda em container separado, aqui apenas expõe status
+ * O bot roda em container separado, aqui faz proxy para os endpoints do bot
  */
 
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { ConfigService } from '@nestjs/config';
+
+const BOT_API_URL = process.env.BOT_API_URL || 'http://bot:3002';
 
 @Controller('bot')
 export class BotController {
   constructor(
     private redis: RedisService,
     private prisma: PrismaService,
-  ) {}
+    private config: ConfigService,
+  ) { }
+
+  private async proxyToBot(path: string, method: 'GET' | 'POST' = 'GET', body?: any) {
+    try {
+      const url = `${BOT_API_URL}${path}`;
+      const options: RequestInit = {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+      };
+      if (body) {
+        options.body = JSON.stringify(body);
+      }
+      const response = await fetch(url, options);
+      return await response.json();
+    } catch (error) {
+      console.error(`❌ Erro ao conectar com bot: ${error.message}`);
+      throw new HttpException('Bot não disponível', HttpStatus.SERVICE_UNAVAILABLE);
+    }
+  }
 
   @Get('status')
   @UseGuards(AuthGuard('jwt'))
   async getStatus() {
-    // O bot atualiza seu status no Redis
-    const statusRaw = await this.redis.get('bot:status');
-    const status = statusRaw ? JSON.parse(statusRaw) : null;
+    return this.proxyToBot('/api/status');
+  }
 
-    return {
-      connected: status?.connected || false,
-      phoneNumber: status?.phoneNumber || null,
-      uptime: status?.uptime || 0,
-      lastConnected: status?.lastConnected || null,
-    };
+  @Get('qr')
+  @UseGuards(AuthGuard('jwt'))
+  async getQR() {
+    return this.proxyToBot('/api/qr');
+  }
+
+  @Post('pairing-code')
+  @UseGuards(AuthGuard('jwt'))
+  async getPairingCode(@Body() dto: { phoneNumber: string }) {
+    return this.proxyToBot('/api/pairing-code', 'POST', dto);
+  }
+
+  @Post('disconnect')
+  @UseGuards(AuthGuard('jwt'))
+  async disconnect() {
+    return this.proxyToBot('/api/disconnect', 'POST');
+  }
+
+  @Post('restart')
+  @UseGuards(AuthGuard('jwt'))
+  async restart() {
+    return this.proxyToBot('/api/restart', 'POST');
+  }
+
+  @Post('logout')
+  @UseGuards(AuthGuard('jwt'))
+  async logout() {
+    return this.proxyToBot('/api/logout', 'POST');
   }
 
   /**

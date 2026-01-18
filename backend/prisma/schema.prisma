@@ -75,6 +75,11 @@ model Ticket {
   solutionType String?                // Categoria da solução (Hardware, Software, etc)
   timeWorked   Int?                   // Tempo trabalhado em minutos
 
+  // Avaliação
+  rating        Int?                  // Nota 1-5 dada pelo cliente
+  ratedAt       DateTime?             // Quando avaliou
+  awaitingRating Boolean  @default(false)  // Se está aguardando avaliação
+
   assignedToId String?
   assignedTo   User?   @relation(fields: [assignedToId], references: [id])
 
@@ -85,6 +90,7 @@ model Ticket {
 
   messages    Message[]
   partUsages  PartUsage[]
+  attachments Attachment[]
 
   @@map("tickets")
   @@index([phoneNumber])
@@ -271,4 +277,25 @@ enum AlertType {
   SLA_BREACH    // SLA estourado
   NEW_MESSAGE   // Nova mensagem do cliente
   TRANSFERRED   // Ticket transferido para você
+}
+
+// ===========================================================================
+// Attachments - Arquivos anexados aos tickets
+// ===========================================================================
+
+model Attachment {
+  id        String   @id @default(uuid())
+  
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  filename  String           // Nome original do arquivo
+  path      String           // Caminho no servidor
+  mimeType  String           // image/jpeg, etc
+  size      Int              // Tamanho em bytes
+  
+  createdAt DateTime @default(now())
+
+  @@map("attachments")
+  @@index([ticketId])
 }

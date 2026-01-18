@@ -12,7 +12,9 @@
     "@whiskeysockets/baileys": "^6.7.16",
     "amqplib": "^0.10.5",
     "axios": "^1.7.9",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "ioredis": "^5.4.2",
     "pino": "^9.6.0",
     "qrcode-terminal": "^0.12.0"
