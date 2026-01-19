@@ -321,3 +321,34 @@ model Contact {
   @@index([jid])
   @@index([sector])
 }
+
+// ===========================================================================
+// Printers - Impressoras de rede para monitoramento
+// ===========================================================================
+
+model Printer {
+  id          String   @id @default(uuid())
+  
+  name        String            // Nome amigável
+  ip          String   @unique  // IP da impressora
+  community   String   @default("public")  // Community SNMP
+  model       String?           // Modelo detectado via SNMP
+  serialNumber String?          // Número de série
+  location    String?           // Localização física
+  
+  // Cache do último status
+  lastStatus     String?        // online, offline, error
+  lastTonerBlack Int?           // Nível toner preto (0-100)
+  lastTonerCyan  Int?           // Nível toner ciano
+  lastTonerMagenta Int?         // Nível toner magenta
+  lastTonerYellow Int?          // Nível toner amarelo
+  lastPageCount  Int?           // Contador de páginas
+  lastCheckedAt  DateTime?      // Última verificação
+  
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("printers")
+  @@index([ip])
+}

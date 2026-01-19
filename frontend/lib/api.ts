@@ -160,3 +160,14 @@ export const metricsApi = {
   },
 };
 
+// === Printers (Monitoramento de Impressoras) ===
+export const printerApi = {
+  list: () => api.get('/printers'),
+  get: (id: string) => api.get(`/printers/${id}`),
+  status: (id: string) => api.get(`/printers/${id}/status`),
+  statusAll: () => api.get('/printers/status/all'),
+  create: (data: { name: string; ip: string; community?: string; location?: string }) =>
+    api.post('/printers', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/printers/${id}`, data),
+  delete: (id: string) => api.delete(`/printers/${id}`),
+};

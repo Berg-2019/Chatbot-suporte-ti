@@ -22,6 +22,7 @@ import { PartsModule } from './presentation/controllers/parts/parts.module';
 import { FaqModule } from './presentation/controllers/faq/faq.module';
 import { MetricsModule } from './presentation/controllers/metrics/metrics.module';
 import { ContactsModule } from './presentation/controllers/contacts/contacts.module';
+import { PrinterModule } from './presentation/controllers/printers/printer.module';
 import { WebsocketModule } from './presentation/websockets/websocket.module';
 
 // Health check
@@ -52,6 +53,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     FaqModule,
     MetricsModule,
     ContactsModule,
+    PrinterModule,
     WebsocketModule,
   ],
   controllers: [HealthController],
