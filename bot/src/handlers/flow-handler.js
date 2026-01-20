@@ -12,6 +12,7 @@ const STATES = {
   IDLE: 'idle',
   MENU: 'menu',
   SELECT_SECTOR: 'select_sector',
+  ASK_NAME: 'ask_name',
   DESCRIBE_PROBLEM: 'describe_problem',
   CHECK_FAQ: 'check_faq',
   ASK_LOCATION: 'ask_location',
@@ -63,6 +64,10 @@ class FlowHandler {
     switch (session.state) {
       case STATES.MENU:
         await this.handleMenu(sock, from, normalizedText, session);
+        break;
+
+      case STATES.ASK_NAME:
+        await this.handleAskName(sock, from, text, session);
         break;
 
       case STATES.SELECT_SECTOR:
@@ -126,9 +131,10 @@ class FlowHandler {
           // Contato não encontrado, seguir fluxo normal
         }
 
-        session.state = STATES.SELECT_SECTOR;
+
+        session.state = STATES.ASK_NAME;
         await redisService.setSession(phone, session);
-        await this.sendMessage(sock, from, config.messages.askSector);
+        await this.sendMessage(sock, from, 'Olá! Antes de começarmos, qual é o seu *nome*?');
         break;
 
       case '2': // Consultar status
@@ -146,6 +152,17 @@ class FlowHandler {
         await redisService.setSession(phone, session);
         await this.sendMessage(sock, from, config.messages.transferToHuman);
 
+        // Criar ticket de solicitação de técnico
+        await rabbitmqService.publishCreateTicket({
+          phoneNumber: from,
+          title: "Falar com Técnico",
+          description: "Solicitação direta de atendimento humano via menu do bot.",
+          sector: "Atendimento",
+          category: "Suporte",
+          customerName: session.data.contactName || "Cliente",
+          priority: "HIGH"
+        });
+
         // Notificar painel
         await rabbitmqService.publishNotification(
           'human_requested',
@@ -157,6 +174,21 @@ class FlowHandler {
       default:
         await this.sendMessage(sock, from, config.messages.invalidOption);
     }
+  }
+
+  async handleAskName(sock, from, text, session) {
+    const phone = from.split('@')[0];
+    const name = text.trim();
+
+    if (name.length < 3) {
+      await this.sendMessage(sock, from, 'Por favor, informe seu nome completo para que possamos te identificar.');
+      return;
+    }
+
+    session.data.contactName = name;
+    session.state = STATES.SELECT_SECTOR;
+    await redisService.setSession(phone, session);
+    await this.sendMessage(sock, from, `Obrigado, ${name}!\n\n${config.messages.askSector}`);
   }
 
   async handleSelectSector(sock, from, text, session) {
@@ -297,7 +329,10 @@ class FlowHandler {
         description: session.data.problem,
         sector: session.data.sector,
         location: session.data.location,
+        sector: session.data.sector,
+        location: session.data.location,
         category: session.data.sector,
+        customerName: session.data.contactName,
       };
 
       await rabbitmqService.publishCreateTicket(ticketData);

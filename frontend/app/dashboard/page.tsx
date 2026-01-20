@@ -150,6 +150,12 @@ export default function DashboardPage() {
             >
               📊 Métricas
             </Link>
+            <Link
+              href="/dashboard/chat"
+              className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-lg text-sm transition font-medium flex items-center gap-2"
+            >
+              💬 Chat Equipe
+            </Link>
             <span className="text-sm text-gray-600 dark:text-gray-400">
               {user.name} ({user.role})
             </span>

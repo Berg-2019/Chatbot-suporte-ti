@@ -39,16 +39,16 @@ app.get('/api/qr', (req, res) => {
 app.post('/api/pairing-code', async (req, res) => {
   try {
     const { phoneNumber } = req.body;
-    
+
     if (!phoneNumber) {
       return res.status(400).json({ error: 'Número de telefone obrigatório' });
     }
-    
+
     // Formatar número (remover + e espaços)
     const formattedNumber = phoneNumber.replace(/\D/g, '');
-    
+
     const code = await whatsappHandler.requestPairingCode(formattedNumber);
-    
+
     if (code) {
       res.json({ code, success: true });
     } else {
@@ -98,8 +98,8 @@ app.post('/api/logout', async (req, res) => {
 
 export function startApiServer() {
   return new Promise((resolve) => {
-    app.listen(PORT, () => {
-      console.log(`🌐 API Server rodando em http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🌐 API Server rodando em http://0.0.0.0:${PORT}`);
       resolve();
     });
   });

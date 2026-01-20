@@ -39,6 +39,7 @@ model User {
   tickets   Ticket[]
   messages  Message[]
   alerts    TechnicianAlert[]
+  teamMessages TeamMessage[]
 
   @@map("users")
 }
@@ -351,4 +352,19 @@ model Printer {
 
   @@map("printers")
   @@index([ip])
+}
+
+// ===========================================================================
+// Team Chat - Chat interno para técnicos
+// ===========================================================================
+
+model TeamMessage {
+  id        String   @id @default(uuid())
+  content   String
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("team_messages")
+  @@index([createdAt])
 }

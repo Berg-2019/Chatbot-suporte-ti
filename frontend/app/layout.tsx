@@ -3,6 +3,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 
+import { Toaster } from 'react-hot-toast';
+import { NotificationListener } from "@/components/NotificationListener";
+
 const inter = Inter({
   subsets: ["latin"],
 });
@@ -22,6 +25,8 @@ export default function RootLayout({
       <body className={`${inter.className} antialiased bg-gray-50 dark:bg-gray-900`}>
         <AuthProvider>
           {children}
+          <NotificationListener />
+          <Toaster />
         </AuthProvider>
       </body>
     </html>

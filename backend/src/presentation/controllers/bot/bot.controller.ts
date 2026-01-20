@@ -87,6 +87,7 @@ export class BotController {
       phoneNumber: string;
       sector?: string;
       category?: string;
+      customerName?: string;
     },
   ) {
     const ticket = await this.prisma.ticket.create({
@@ -95,6 +96,7 @@ export class BotController {
         title: dto.title,
         description: dto.description,
         phoneNumber: dto.phoneNumber,
+        customerName: dto.customerName,
         sector: dto.sector || 'TI',
         category: dto.category || 'Incidente',
         priority: 'NORMAL',

@@ -1,0 +1,7 @@
+{
+    "ignore": [
+        "sessions/*",
+        "logs/*"
+    ],
+    "delay": "2500"
+}

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { RabbitMQService } from '../../infrastructure/messaging/rabbitmq.service';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @WebSocketGateway({
   cors: {
@@ -19,12 +20,14 @@ import { RabbitMQService } from '../../infrastructure/messaging/rabbitmq.service
   },
 })
 export class EventsGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(private rabbitmq: RabbitMQService) {}
+  constructor(
+    private rabbitmq: RabbitMQService,
+    private prisma: PrismaService,
+  ) { }
 
   afterInit() {
     console.log('✅ WebSocket Gateway inicializado');
@@ -45,6 +48,9 @@ export class EventsGateway
             break;
           case 'new_message':
             this.server.to(`ticket:${data.ticketId}`).emit('message:new', data.payload);
+            break;
+          case 'human_requested':
+            this.server.emit('human:requested', data.payload);
             break;
         }
       },
@@ -70,6 +76,44 @@ export class EventsGateway
     client.leave(`ticket:${ticketId}`);
     console.log(`👁️ Cliente ${client.id} saiu do ticket ${ticketId}`);
   }
+
+  // --- Chat Interno da Equipe ---
+
+  @SubscribeMessage('team:join')
+  handleJoinTeamChat(client: Socket) {
+    client.join('team-chat');
+    console.log(`👥 Cliente ${client.id} entrou no chat da equipe`);
+  }
+
+  @SubscribeMessage('team:message')
+  async handleTeamMessage(client: Socket, payload: { content: string; senderId: string }) {
+    try {
+      // Salvar no banco
+      const message = await this.prisma.teamMessage.create({
+        data: {
+          content: payload.content,
+          senderId: payload.senderId,
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              role: true,
+            }
+          }
+        }
+      });
+
+      // Broadcast para sala 'team-chat'
+      this.server.to('team-chat').emit('team:message', message);
+
+    } catch (error) {
+      console.error('Erro ao salvar mensagem do time:', error);
+    }
+  }
+
+  // --- Fim Chat Interno ---
 
   // Métodos para emitir eventos programaticamente
   emitTicketCreated(ticket: any) {

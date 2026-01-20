@@ -171,3 +171,8 @@ export const printerApi = {
   update: (id: string, data: Record<string, unknown>) => api.put(`/printers/${id}`, data),
   delete: (id: string) => api.delete(`/printers/${id}`),
 };
+
+// === Team Chat ===
+export const teamChatApi = {
+  list: () => api.get('/team-chat'),
+};

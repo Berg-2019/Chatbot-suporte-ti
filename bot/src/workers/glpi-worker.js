@@ -56,9 +56,9 @@ class GlpiWorker {
   }
 
   async processCreateTicket(data) {
-    const { phoneNumber, title, description, sector, location } = data;
+    const { phoneNumber, title, description, sector, location, customerName } = data;
 
-    console.log(`🎫 Criando ticket para ${phoneNumber}: ${title}`);
+    console.log(`🎫 Criando ticket para ${phoneNumber} (${customerName || 'Anonimo'}): ${title}`);
 
     try {
       await this.ensureSession();
@@ -95,6 +95,7 @@ class GlpiWorker {
           phoneNumber: phoneNumber,
           sector: sector || 'TI',
           category: 'Incidente',
+          customerName: customerName,
         });
         console.log(`✅ Ticket salvo no backend: #${glpiId}`);
       } catch (backendError) {

@@ -56,7 +56,7 @@ class WhatsAppHandler {
         keys: makeCacheableSignalKeyStore(state.keys, logger),
       },
       logger,
-      browser: ['Helpdesk Bot', 'Chrome', '120.0.0'],
+      browser: ['Ubuntu', 'Chrome', '20.0.04'],
       getMessage: async () => undefined,
     });
 
@@ -97,11 +97,21 @@ class WhatsAppHandler {
 
       await this.updateStatus();
 
-      if (shouldReconnect) {
+      // Se for 401 ou LoggedOut, limpar sessão e reconectar
+      if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+        console.log('❌ Sessão inválida ou desconectada pelo WhatsApp.');
+        console.log('🗑️ Limpando sessão e reiniciando...');
+
+        const sessionPath = path.join(config.bot.sessionPath, config.bot.sessionName);
+        if (fs.existsSync(sessionPath)) {
+          fs.rmSync(sessionPath, { recursive: true, force: true });
+        }
+
+        this.sock = null;
+        setTimeout(() => this.connect(), 1000);
+      } else if (shouldReconnect) {
         console.log('🔄 Reconectando em 3s...');
         setTimeout(() => this.connect(), 3000);
-      } else {
-        console.log('❌ Deslogado. Limpe a sessão e reconecte.');
       }
     }
 
