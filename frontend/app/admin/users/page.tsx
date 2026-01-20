@@ -54,6 +54,14 @@ export default function UsersPage() {
         groupId: null,
     });
 
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [editForm, setEditForm] = useState({
+        name: '',
+        role: 'AGENT' as 'ADMIN' | 'AGENT',
+        active: true,
+    });
+
     useEffect(() => {
         loadData();
     }, []);
@@ -84,6 +92,45 @@ export default function UsersPage() {
             ));
         } catch (error) {
             console.error('Erro ao atualizar usuário:', error);
+        }
+    }
+
+    function openEditModal(user: User) {
+        setEditingUser(user);
+        setEditForm({
+            name: user.name,
+            role: user.role,
+            active: user.active,
+        });
+        setShowEditModal(true);
+        setError('');
+        setSuccess('');
+    }
+
+    async function handleUpdateUser(e: React.FormEvent) {
+        e.preventDefault();
+        if (!editingUser) return;
+
+        setError('');
+        setSuccess('');
+        setLoading(true); // Using loading state for button disabled style mostly
+
+        try {
+            await usersApi.update(editingUser.id, editForm);
+
+            setUsers(prev => prev.map(u =>
+                u.id === editingUser.id ? { ...u, ...editForm } : u
+            ));
+
+            setSuccess('Usuário atualizado com sucesso!');
+            setTimeout(() => {
+                setShowEditModal(false);
+                setSuccess('');
+            }, 1500);
+        } catch (error: any) {
+            setError(error.response?.data?.message || 'Erro ao atualizar usuário');
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -135,7 +182,7 @@ export default function UsersPage() {
         return matchesFilter && matchesSearch;
     });
 
-    if (loading) {
+    if (loading && users.length === 0) {
         return (
             <div className="p-8 flex items-center justify-center">
                 <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full"></div>
@@ -234,15 +281,24 @@ export default function UsersPage() {
                                         {user.glpiUserId ? `#${user.glpiUserId}` : '-'}
                                     </td>
                                     <td className="px-4 md:px-6 py-4 text-right">
-                                        <button
-                                            onClick={() => toggleUserStatus(user.id)}
-                                            className={`px-3 py-1 text-xs font-medium rounded transition ${user.active
-                                                ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300'
-                                                : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300'
-                                                }`}
-                                        >
-                                            {user.active ? 'Desativar' : 'Ativar'}
-                                        </button>
+                                        <div className="flex justify-end gap-2">
+                                            <button
+                                                onClick={() => openEditModal(user)}
+                                                className="p-1 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition"
+                                                title="Editar"
+                                            >
+                                                ✏️
+                                            </button>
+                                            <button
+                                                onClick={() => toggleUserStatus(user.id)}
+                                                className={`px-3 py-1 text-xs font-medium rounded transition ${user.active
+                                                    ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300'
+                                                    : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300'
+                                                    }`}
+                                            >
+                                                {user.active ? 'Desativar' : 'Ativar'}
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -260,6 +316,80 @@ export default function UsersPage() {
             <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
                 Mostrando {filteredUsers.length} de {users.length} usuários
             </div>
+
+            {/* Modal Editar Usuário */}
+            {showEditModal && editingUser && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">✏️ Editar Usuário</h2>
+                        </div>
+
+                        <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
+                            {error && (
+                                <div className="p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm">
+                                    {error}
+                                </div>
+                            )}
+                            {success && (
+                                <div className="p-3 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg text-sm">
+                                    {success}
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome</label>
+                                <input
+                                    type="text"
+                                    value={editForm.name}
+                                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Função</label>
+                                <select
+                                    value={editForm.role}
+                                    onChange={e => setEditForm({ ...editForm, role: e.target.value as 'ADMIN' | 'AGENT' })}
+                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                                    <option value="AGENT">Agente (Técnico)</option>
+                                    <option value="ADMIN">Administrador</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.active}
+                                        onChange={e => setEditForm({ ...editForm, active: e.target.checked })}
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Usuário Ativo</span>
+                                </label>
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEditModal(false)}
+                                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                                >
+                                    Salvar Alterações
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Modal Criar Usuário */}
             {showModal && (
