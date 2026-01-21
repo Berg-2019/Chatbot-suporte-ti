@@ -17,6 +17,7 @@ const menuItems = [
     { href: '/admin/faq', icon: '📚', label: 'FAQ', adminOnly: true },
     { href: '/admin/estoque', icon: '📦', label: 'Estoque', adminOnly: true },
     { href: '/admin/users', icon: '👥', label: 'Usuários', adminOnly: true },
+    { href: '/dashboard/chat', icon: '💬', label: 'Chat Equipe', adminOnly: false },
 ];
 
 export default function AdminLayout({

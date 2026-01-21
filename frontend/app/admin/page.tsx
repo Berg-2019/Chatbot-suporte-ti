@@ -169,6 +169,13 @@ export default function AdminDashboardPage() {
                             <span className="text-3xl">📦</span>
                             <span className="text-sm font-medium text-orange-700 dark:text-orange-300">Estoque</span>
                         </Link>
+                        <Link
+                            href="/dashboard/chat"
+                            className="flex flex-col items-center gap-2 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition"
+                        >
+                            <span className="text-3xl">💬</span>
+                            <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Chat Equipe</span>
+                        </Link>
                     </div>
                 </div>
 
@@ -196,9 +203,9 @@ export default function AdminDashboardPage() {
                                         </p>
                                     </div>
                                     <span className={`px-2 py-1 text-xs rounded-full ${ticket.status === 'CLOSED' ? 'bg-gray-100 text-gray-600' :
-                                            ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
-                                                ticket.status === 'OPEN' ? 'bg-yellow-100 text-yellow-700' :
-                                                    'bg-gray-100 text-gray-600'
+                                        ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                                            ticket.status === 'OPEN' ? 'bg-yellow-100 text-yellow-700' :
+                                                'bg-gray-100 text-gray-600'
                                         }`}>
                                         {ticket.status}
                                     </span>
