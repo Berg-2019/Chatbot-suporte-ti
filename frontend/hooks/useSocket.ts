@@ -7,16 +7,26 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3000';
+// Use relative URL - Socket.IO will connect to the same origin the page was loaded from
+// For external access, this ensures it connects through the same host
+function getSocketUrl(): string {
+  if (typeof window === 'undefined') return '';
+  // Use the current page origin for WebSocket connection
+  return window.location.origin;
+}
 
 export function useSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    const socket = io(WS_URL, {
-      transports: ['websocket'],
+    const wsUrl = getSocketUrl();
+    if (!wsUrl) return;
+
+    const socket = io(wsUrl, {
+      transports: ['websocket', 'polling'],
       autoConnect: true,
+      path: '/socket.io',
     });
 
     socketRef.current = socket;

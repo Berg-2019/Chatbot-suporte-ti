@@ -114,18 +114,24 @@ export class AuthService {
    * Autentica no GLPI, cria usuário local se não existir, define role pelos grupos
    */
   async loginWithGlpi(dto: GlpiLoginDto) {
+    console.log(`Step 1: Authenticating with GLPI for user ${dto.login}`);
     // 1. Autenticar no GLPI
     const authResult = await this.glpi.authenticateWithCredentials(dto.login, dto.password);
 
     if (!authResult.success || !authResult.user) {
+      console.log('Step 1 failed: Invalid credentials');
       throw new UnauthorizedException(authResult.error || 'Credenciais inválidas');
     }
+    console.log('Step 1 success: GLPI session started');
 
     // 2. Buscar grupos do usuário no GLPI
+    console.log('Step 2: Fetching user groups');
     const groups = await this.glpi.getUserGroups(authResult.user.id, authResult.sessionToken);
+    console.log(`Step 2 success: Found ${groups.length} groups`);
     const groupNames = groups.map(g => g.name.toLowerCase());
 
     // 3. Determinar role baseado nos grupos, login ou nome
+    console.log('Step 3: Determining role');
     let role: 'ADMIN' | 'AGENT' = 'AGENT';
     let technicianLevel: TechnicianLevel = TechnicianLevel.N1;
 
@@ -150,8 +156,10 @@ export class AuthService {
     } else {
       technicianLevel = TechnicianLevel.N1;
     }
+    console.log(`Step 3 success: Role=${role}, Level=${technicianLevel}`);
 
     // 4. Buscar ou criar usuário local
+    console.log('Step 4: Syncing local user');
     let user = await this.prisma.user.findFirst({
       where: { glpiUserId: authResult.user.id },
     });
@@ -162,6 +170,7 @@ export class AuthService {
 
     if (!user) {
       // Criar novo usuário
+      console.log('Creating new user');
       const randomPassword = await bcrypt.hash(Math.random().toString(36), 12);
 
       user = await this.prisma.user.create({
@@ -178,6 +187,7 @@ export class AuthService {
       console.log(`✅ Usuário GLPI sincronizado: ${user.name} (${role})`);
     } else {
       // Atualizar dados se mudaram
+      console.log('Updating existing user');
       user = await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -188,19 +198,24 @@ export class AuthService {
         },
       });
     }
+    console.log('Step 4 success: User synced');
 
     // 5. Encerrar sessão GLPI (limpeza)
     if (authResult.sessionToken) {
+      console.log('Step 5: Killing GLPI session');
       await this.glpi.killSession(authResult.sessionToken);
+      console.log('Step 5 success: Session killed');
     }
 
     // 6. Gerar token JWT local
+    console.log('Step 6: Generating JWT');
     const token = this.jwt.sign({
       sub: user.id,
       email: user.email,
       role: user.role,
       glpiId: user.glpiUserId,
     });
+    console.log('Step 6 success: Token generated');
 
     return {
       token,
