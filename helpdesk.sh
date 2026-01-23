@@ -137,6 +137,11 @@ cmd_dev() {
     $DOCKER_COMPOSE -f docker-compose.dev.yml up -d
     
     echo ""
+    echo -e "${BLUE}📦 Regenerando Prisma Client...${NC}"
+    sleep 5  # Aguardar container inicializar
+    docker exec helpdesk_backend_dev npx prisma generate 2>/dev/null || true
+    
+    echo ""
     echo -e "${GREEN}✅ Ambiente de desenvolvimento iniciado!${NC}"
     echo ""
     echo -e "   Backend:  ${BLUE}http://localhost:3000${NC} (debug: 9229)"

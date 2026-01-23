@@ -56,8 +56,13 @@ export default function UsersPage() {
 
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [userToDelete, setUserToDelete] = useState<User | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const [editForm, setEditForm] = useState({
         name: '',
+        email: '',
+        password: '',
         role: 'AGENT' as 'ADMIN' | 'AGENT',
         active: true,
     });
@@ -99,6 +104,8 @@ export default function UsersPage() {
         setEditingUser(user);
         setEditForm({
             name: user.name,
+            email: user.email || '',
+            password: '',
             role: user.role,
             active: user.active,
         });
@@ -113,10 +120,20 @@ export default function UsersPage() {
 
         setError('');
         setSuccess('');
-        setLoading(true); // Using loading state for button disabled style mostly
+        setLoading(true);
 
         try {
-            await usersApi.update(editingUser.id, editForm);
+            // Only include password if it was changed
+            const updateData: Record<string, unknown> = {
+                name: editForm.name,
+                email: editForm.email,
+                role: editForm.role,
+                active: editForm.active,
+            };
+            if (editForm.password) {
+                updateData.password = editForm.password;
+            }
+            await usersApi.update(editingUser.id, updateData);
 
             setUsers(prev => prev.map(u =>
                 u.id === editingUser.id ? { ...u, ...editForm } : u
@@ -131,6 +148,32 @@ export default function UsersPage() {
             setError(error.response?.data?.message || 'Erro ao atualizar usuário');
         } finally {
             setLoading(false);
+        }
+    }
+
+    function openDeleteModal(user: User) {
+        setUserToDelete(user);
+        setShowDeleteModal(true);
+        setError('');
+    }
+
+    async function handleDeleteUser() {
+        if (!userToDelete) return;
+
+        setDeleting(true);
+        setError('');
+
+        try {
+            await usersApi.delete(userToDelete.id);
+            setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+            setShowDeleteModal(false);
+            setUserToDelete(null);
+            setSuccess('Usuário deletado com sucesso!');
+            setTimeout(() => setSuccess(''), 2000);
+        } catch (error: any) {
+            setError(error.response?.data?.message || 'Erro ao deletar usuário');
+        } finally {
+            setDeleting(false);
         }
     }
 
@@ -290,6 +333,13 @@ export default function UsersPage() {
                                                 ✏️
                                             </button>
                                             <button
+                                                onClick={() => openDeleteModal(user)}
+                                                className="p-1 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition"
+                                                title="Deletar"
+                                            >
+                                                🗑️
+                                            </button>
+                                            <button
                                                 onClick={() => toggleUserStatus(user.id)}
                                                 className={`px-3 py-1 text-xs font-medium rounded transition ${user.active
                                                     ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300'
@@ -348,6 +398,30 @@ export default function UsersPage() {
                             </div>
 
                             <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                                <input
+                                    type="email"
+                                    value={editForm.email}
+                                    onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    placeholder="usuario@empresa.com"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Nova Senha <span className="text-gray-400 font-normal">(deixe vazio para manter a atual)</span>
+                                </label>
+                                <input
+                                    type="password"
+                                    value={editForm.password}
+                                    onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    placeholder="••••••••"
+                                />
+                            </div>
+
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Função</label>
                                 <select
                                     value={editForm.role}
@@ -387,6 +461,53 @@ export default function UsersPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Deletar Usuário */}
+            {showDeleteModal && userToDelete && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">🗑️ Deletar Usuário</h2>
+                        </div>
+
+                        <div className="p-6">
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm">
+                                    {error}
+                                </div>
+                            )}
+
+                            <p className="text-gray-700 dark:text-gray-300 mb-4">
+                                Tem certeza que deseja deletar o usuário <strong>{userToDelete.name}</strong>?
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Esta ação não pode ser desfeita. O usuário será removido permanentemente do sistema.
+                            </p>
+
+                            <div className="flex gap-3 pt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowDeleteModal(false);
+                                        setUserToDelete(null);
+                                        setError('');
+                                    }}
+                                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleDeleteUser}
+                                    disabled={deleting}
+                                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition"
+                                >
+                                    {deleting ? 'Deletando...' : 'Deletar'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

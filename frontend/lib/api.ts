@@ -176,3 +176,50 @@ export const printerApi = {
 export const teamChatApi = {
   list: () => api.get('/team-chat'),
 };
+
+// === Purchases (Compras de Equipamentos) ===
+export type EquipmentCategory = 'COMPUTER' | 'PRINTER' | 'MONITOR' | 'PERIPHERAL' | 'NETWORK' | 'SOFTWARE' | 'OTHER';
+
+export interface CreatePurchaseDto {
+  name: string;
+  category?: EquipmentCategory;
+  serialNumber?: string;
+  assetTag?: string;
+  quantity?: number;
+  unitPrice: number;
+  supplierId?: string;
+  supplierName?: string;
+  sector: string;
+  location?: string;
+  responsibleName?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  warrantyMonths?: number;
+  purchaseDate?: string;
+  notes?: string;
+}
+
+export const purchasesApi = {
+  list: (params?: { sector?: string; category?: EquipmentCategory; startDate?: string; endDate?: string; supplierId?: string }) =>
+    api.get('/purchases', { params }),
+  get: (id: string) => api.get(`/purchases/${id}`),
+  create: (data: CreatePurchaseDto) => api.post('/purchases', data),
+  update: (id: string, data: Partial<CreatePurchaseDto>) => api.put(`/purchases/${id}`, data),
+  delete: (id: string) => api.delete(`/purchases/${id}`),
+  stats: () => api.get('/purchases/stats'),
+  sectors: () => api.get('/purchases/sectors'),
+  monthlyReport: (year: number, month: number) =>
+    api.get(`/purchases/reports/monthly?year=${year}&month=${month}`),
+  sectorReport: (sector: string, startDate?: string, endDate?: string) =>
+    api.get('/purchases/reports/sector', { params: { sector, startDate, endDate } }),
+};
+
+// === Suppliers (Fornecedores) ===
+export const suppliersApi = {
+  list: () => api.get('/suppliers'),
+  get: (id: string) => api.get(`/suppliers/${id}`),
+  create: (data: { name: string; cnpj?: string; phone?: string; email?: string; address?: string }) =>
+    api.post('/suppliers', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/suppliers/${id}`, data),
+  delete: (id: string) => api.delete(`/suppliers/${id}`),
+};

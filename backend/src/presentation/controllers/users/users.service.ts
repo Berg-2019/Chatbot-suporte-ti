@@ -56,10 +56,25 @@ export class UsersService {
     return user;
   }
 
-  async update(id: string, data: { name?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean }) {
+  async update(id: string, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean }) {
+    // Prepare data for update
+    const updateData: Record<string, unknown> = {};
+
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.role !== undefined) updateData.role = data.role;
+    if (data.active !== undefined) updateData.active = data.active;
+
+    // Hash password if provided
+    if (data.password) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const bcrypt = require('bcryptjs');
+      updateData.password = await bcrypt.hash(data.password, 12);
+    }
+
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: updateData,
       select: {
         id: true,
         email: true,

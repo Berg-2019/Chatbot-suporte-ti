@@ -368,3 +368,80 @@ model TeamMessage {
   @@map("team_messages")
   @@index([createdAt])
 }
+
+// ===========================================================================
+// Suppliers - Fornecedores
+// ===========================================================================
+
+model Supplier {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  cnpj        String?
+  phone       String?
+  email       String?
+  address     String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  purchases   Purchase[]
+  
+  @@map("suppliers")
+}
+
+// ===========================================================================
+// Purchases - Registro de Compras de Equipamentos
+// ===========================================================================
+
+enum EquipmentCategory {
+  COMPUTER
+  PRINTER
+  MONITOR
+  PERIPHERAL
+  NETWORK
+  SOFTWARE
+  OTHER
+}
+
+model Purchase {
+  id            String           @id @default(uuid())
+  
+  // Equipamento
+  name          String           // Ex: "Impressora HP LaserJet Pro"
+  category      EquipmentCategory @default(OTHER)
+  serialNumber  String?
+  assetTag      String?          // Patrimônio
+  quantity      Int              @default(1)
+  unitPrice     Decimal          @db.Decimal(10,2)
+  
+  // Fornecedor
+  supplierId    String?
+  supplier      Supplier?        @relation(fields: [supplierId], references: [id])
+  supplierName  String?          // Backup caso não use fornecedor cadastrado
+  
+  // Destino
+  sector        String           // Setor destino (Engenharia, RH, etc)
+  location      String?          // Local específico
+  responsibleName String?        // Responsável pelo recebimento
+  
+  // Documento fiscal
+  invoiceNumber String?          // Número da NF
+  invoiceDate   DateTime?        // Data da NF
+  warrantyMonths Int?            // Meses de garantia
+  
+  // GLPI
+  glpiAssetId   Int?             // ID do ativo no GLPI após sincronização
+  syncedToGlpi  Boolean          @default(false)
+  
+  // Controle
+  purchaseDate  DateTime         @default(now())
+  notes         String?
+  createdById   String?          // Quem registrou
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  
+  @@map("purchases")
+  @@index([sector])
+  @@index([category])
+  @@index([purchaseDate])
+}
