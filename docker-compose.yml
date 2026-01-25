@@ -191,6 +191,8 @@ services:
       rabbitmq:
         condition: service_healthy
 
+
+
 # ==============================================================================
 # Volumes
 # ==============================================================================
@@ -217,5 +219,5 @@ volumes:
 # ==============================================================================
 networks:
   helpdesk_network:
-    name: helpdesk_network
-    driver: bridge
+    name: helpdesk_shared
+    external: true

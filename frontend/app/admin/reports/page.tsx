@@ -118,8 +118,8 @@ export default function ReportsPage() {
                             key={type.id}
                             onClick={() => setConfig(prev => ({ ...prev, type: type.id as ReportType }))}
                             className={`p-3 md:p-4 rounded-lg border-2 transition text-left ${config.type === type.id
-                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                                 }`}
                         >
                             <div className="text-lg md:text-xl mb-1">{type.label}</div>
@@ -201,7 +201,11 @@ export default function ReportsPage() {
                         <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4">
                             <h3 className="text-md font-medium text-gray-900 dark:text-white mb-4">📊 Por Categoria</h3>
                             <PieChart
-                                data={reportData.byCategory?.map((c: any) => ({ label: c.category, value: c.count })) || []}
+                                data={
+                                    Array.isArray(reportData.byCategory)
+                                        ? reportData.byCategory.map((c: any) => ({ label: c.category, value: c.count }))
+                                        : Object.entries(reportData.byCategory || {}).map(([category, count]) => ({ label: category, value: count as number }))
+                                }
                                 size={160}
                             />
                         </div>
@@ -210,7 +214,11 @@ export default function ReportsPage() {
                         <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4">
                             <h3 className="text-md font-medium text-gray-900 dark:text-white mb-4">🎯 Por Prioridade</h3>
                             <PieChart
-                                data={reportData.byPriority?.map((p: any) => ({ label: p.priority, value: p.count })) || []}
+                                data={
+                                    Array.isArray(reportData.byPriority)
+                                        ? reportData.byPriority.map((p: any) => ({ label: p.priority, value: p.count }))
+                                        : Object.entries(reportData.byPriority || {}).map(([priority, count]) => ({ label: priority, value: count as number }))
+                                }
                                 size={160}
                             />
                         </div>
@@ -220,7 +228,11 @@ export default function ReportsPage() {
                     <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-6">
                         <h3 className="text-md font-medium text-gray-900 dark:text-white mb-4">👨‍🔧 Por Técnico - Tickets Fechados</h3>
                         <BarChart
-                            data={reportData.byTechnician?.map((t: any) => ({ label: t.name, value: t.closed })) || []}
+                            data={
+                                Array.isArray(reportData.byTechnician)
+                                    ? reportData.byTechnician.map((t: any) => ({ label: t.name, value: t.count || t.closed || 0 }))
+                                    : []
+                            }
                             height={180}
                         />
                     </div>
@@ -238,22 +250,22 @@ export default function ReportsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportData.byTechnician?.map((t: any, i: number) => (
+                                {(Array.isArray(reportData.byTechnician) ? reportData.byTechnician : []).map((t: any, i: number) => (
                                     <tr key={i} className="border-b border-gray-100 dark:border-gray-700/50">
                                         <td className="py-3 pr-4 text-sm text-gray-900 dark:text-white">{t.name}</td>
-                                        <td className="py-3 pr-4 text-sm text-right text-gray-900 dark:text-white">{t.closed}</td>
-                                        <td className="py-3 pr-4 text-sm text-right text-gray-900 dark:text-white">{t.avgTime}min</td>
+                                        <td className="py-3 pr-4 text-sm text-right text-gray-900 dark:text-white">{t.count || t.closed || 0}</td>
+                                        <td className="py-3 pr-4 text-sm text-right text-gray-900 dark:text-white">{t.avgTime || '-'}min</td>
                                         <td className="py-3 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <div className="w-16 md:w-24">
                                                     <ProgressBar
-                                                        value={t.sla}
+                                                        value={t.sla || 0}
                                                         showPercent={false}
-                                                        color={t.sla >= 90 ? 'bg-green-500' : t.sla >= 75 ? 'bg-yellow-500' : 'bg-red-500'}
+                                                        color={(t.sla || 0) >= 90 ? 'bg-green-500' : (t.sla || 0) >= 75 ? 'bg-yellow-500' : 'bg-red-500'}
                                                     />
                                                 </div>
-                                                <span className={`text-sm font-medium ${t.sla >= 90 ? 'text-green-600' : t.sla >= 75 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                                    {t.sla}%
+                                                <span className={`text-sm font-medium ${(t.sla || 0) >= 90 ? 'text-green-600' : (t.sla || 0) >= 75 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                    {t.sla || 0}%
                                                 </span>
                                             </div>
                                         </td>
