@@ -7,7 +7,7 @@ export class ReportRecipientsService {
   constructor(
     private prisma: PrismaService,
     private rabbitmq: RabbitMQService,
-  ) {}
+  ) { }
 
   async create(name: string, jid: string) {
     // Check if exists
@@ -37,7 +37,7 @@ export class ReportRecipientsService {
 
   async sendReport(recipientJid: string, reportData: any, type: string) {
     const formattedMessage = this.formatReportMessage(reportData, type);
-    
+
     await this.rabbitmq.publishOutgoingMessage({
       to: recipientJid,
       text: formattedMessage,
@@ -57,7 +57,7 @@ export class ReportRecipientsService {
       msg += `• Abertos: ${data.openTickets} 🟡\n`;
       msg += `• Fechados: ${data.closedTickets} ✅\n`;
       msg += `• Tempo Médio: ${data.avgResolutionMinutes}min ⏱️\n`;
-      
+
       const sla = Number(data.slaCompliance);
       const slaIcon = sla >= 90 ? '✅' : sla >= 75 ? '⚠️' : '🚨';
       msg += `• SLA: ${sla}% ${slaIcon}\n\n`;
@@ -66,19 +66,19 @@ export class ReportRecipientsService {
         msg += `👨‍🔧 *Top Técnicos (Fechados)*\n`;
         const sorted = [...data.byTechnician].sort((a, b) => b.closed - a.closed).slice(0, 5);
         sorted.forEach(t => {
-           msg += `• ${t.name}: ${t.closed}\n`;
+          msg += `• ${t.name}: ${t.closed}\n`;
         });
       }
     } else if (type === 'categories') {
-       msg += `📊 *Por Categoria*\n`;
-       if (data.byCategory) {
-         data.byCategory.forEach((c: any) => {
-            msg += `• ${c.category}: ${c.count}\n`;
-         });
-       }
+      msg += `📊 *Por Categoria*\n`;
+      if (data.byCategory) {
+        data.byCategory.forEach((c: any) => {
+          msg += `• ${c.category}: ${c.count}\n`;
+        });
+      }
     }
 
-    msg += `\n🤖 _Enviado via Takeshi Bot_`;
+    msg += `\n🤖 _Enviado via MSM Bot_`;
     return msg;
   }
 }
