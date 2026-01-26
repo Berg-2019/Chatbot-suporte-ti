@@ -44,6 +44,22 @@ class FlowHandler {
       return;
     }
 
+    // === Comando !ceo (Registrar Destinatário de Relatório) ===
+    const ceoMatch = normalizedText.match(/^!ceo\s+(.+)$/);
+    if (ceoMatch) {
+      const name = ceoMatch[1].trim();
+      try {
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+        // Enviar JID completo
+        await axios.post(`${backendUrl}/api/reports/recipients`, { name, jid: from });
+        await this.sendMessage(sock, from, `✅ *Sucesso!* \n\nVocê (${name}) foi registrado como destinatário de relatórios.`);
+      } catch (error) {
+        console.error('❌ Erro ao registrar CEO:', error.message);
+        await this.sendMessage(sock, from, '❌ Erro ao registrar. Tente novamente mais tarde.');
+      }
+      return;
+    }
+
     // Reset com comandos especiais
     if (['oi', 'olá', 'ola', 'menu', 'inicio', 'iniciar'].includes(normalizedText)) {
       session = { state: STATES.MENU, data: {} };

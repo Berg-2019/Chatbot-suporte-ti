@@ -160,6 +160,13 @@ export const metricsApi = {
   },
 };
 
+// === Report Recipients (!ceo) ===
+export const recipientsApi = {
+  list: () => api.get('/reports/recipients'),
+  send: (recipientJid: string, reportData: any, type: string) =>
+    api.post('/reports/recipients/send', { recipientJid, reportData, type }),
+};
+
 // === Printers (Monitoramento de Impressoras) ===
 export const printerApi = {
   list: () => api.get('/printers'),

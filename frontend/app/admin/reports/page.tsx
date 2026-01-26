@@ -4,8 +4,8 @@
 
 'use client';
 
-import { useState } from 'react';
-import { metricsApi } from '@/lib/api';
+import { useState, useEffect } from 'react';
+import { metricsApi, recipientsApi } from '@/lib/api';
 import { BarChart, PieChart, ProgressBar } from '@/components/Charts';
 
 type ReportType = 'tickets' | 'technicians' | 'sla' | 'categories';
@@ -24,6 +24,38 @@ export default function ReportsPage() {
     });
     const [loading, setLoading] = useState(false);
     const [reportData, setReportData] = useState<any>(null);
+    const [recipients, setRecipients] = useState<any[]>([]);
+    const [showForwardModal, setShowForwardModal] = useState(false);
+    const [selectedRecipient, setSelectedRecipient] = useState('');
+    const [sending, setSending] = useState(false);
+
+    useEffect(() => {
+        loadRecipients();
+    }, []);
+
+    async function loadRecipients() {
+        try {
+            const res = await recipientsApi.list();
+            setRecipients(res.data);
+        } catch (e) {
+            console.error('Falha ao buscar destinatários', e);
+        }
+    }
+
+    async function handleSendReport() {
+        if (!selectedRecipient || !reportData) return;
+        setSending(true);
+        try {
+            await recipientsApi.send(selectedRecipient, reportData, config.type);
+            alert('Relatório enviado com sucesso via WhatsApp!');
+            setShowForwardModal(false);
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao enviar relatório.');
+        } finally {
+            setSending(false);
+        }
+    }
 
     const reportTypes = [
         { id: 'tickets', label: '📋 Tickets', description: 'Relatório de todos os chamados' },
@@ -163,12 +195,20 @@ export default function ReportsPage() {
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 md:p-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Resultado do Relatório</h2>
-                        <button
-                            onClick={exportCSV}
-                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition"
-                        >
-                            📥 Exportar CSV
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setShowForwardModal(true)}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition"
+                            >
+                                📲 Encaminhar
+                            </button>
+                            <button
+                                onClick={exportCSV}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition"
+                            >
+                                📥 Exportar CSV
+                            </button>
+                        </div>
                     </div>
 
                     {/* Cards de Resumo */}
@@ -273,6 +313,46 @@ export default function ReportsPage() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+            {/* Modal de Encaminhar */}
+            {showForwardModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full">
+                        <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Encaminhar via WhatsApp</h3>
+                        <p className="text-sm text-gray-500 mb-4">Escolha um gestor para receber o relatório formatado.</p>
+
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium mb-1">Destinatário</label>
+                            <select
+                                value={selectedRecipient}
+                                onChange={e => setSelectedRecipient(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg border dark:bg-gray-700 dark:border-gray-600"
+                            >
+                                <option value="">Selecione...</option>
+                                {recipients.map(r => (
+                                    <option key={r.id} value={r.jid}>{r.name}</option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-400 mt-1">Use !ceo [nome] no bot para cadastrar.</p>
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                            <button
+                                onClick={() => setShowForwardModal(false)}
+                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSendReport}
+                                disabled={!selectedRecipient || sending}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                            >
+                                {sending ? 'Enviando...' : 'Enviar'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -445,3 +445,17 @@ model Purchase {
   @@index([category])
   @@index([purchaseDate])
 }
+
+// ===========================================================================
+// Report Recipients - Destinatários de Relatórios (!ceo)
+// ===========================================================================
+
+model ReportRecipient {
+  id        String   @id @default(uuid())
+  name      String
+  jid       String   @unique // WhatsApp JID
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("report_recipients")
+}

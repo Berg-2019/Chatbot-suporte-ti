@@ -24,6 +24,7 @@ import { MetricsModule } from './presentation/controllers/metrics/metrics.module
 import { ContactsModule } from './presentation/controllers/contacts/contacts.module';
 import { TeamChatModule } from './presentation/controllers/team-chat.module';
 import { PurchasesModule } from './presentation/controllers/purchases/purchases.module';
+import { ReportRecipientsModule } from './presentation/controllers/reports/report-recipients.module';
 // import { PrinterModule } from './presentation/controllers/printers/printer.module';
 import { WebsocketModule } from './presentation/websockets/websocket.module';
 
@@ -57,6 +58,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     ContactsModule,
     TeamChatModule,
     PurchasesModule,
+    ReportRecipientsModule,
     // PrinterModule,
     WebsocketModule,
   ],
