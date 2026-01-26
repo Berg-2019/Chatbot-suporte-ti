@@ -158,6 +158,8 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     description: string;
     category?: string;
     sector?: string;
+    customerName?: string;
+    localTicketId?: string;
   }): Promise<boolean> {
     return this.publish(RabbitMQService.QUEUES.CREATE_TICKET, data);
   }

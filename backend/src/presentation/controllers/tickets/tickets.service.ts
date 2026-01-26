@@ -118,6 +118,8 @@ export class TicketsService {
       description: dto.description,
       category: dto.category,
       sector: dto.sector,
+      customerName: dto.customerName,
+      localTicketId: ticket.id,
     });
 
     // Notificar painel
@@ -140,7 +142,7 @@ export class TicketsService {
       where: { id },
       data: {
         assignedToId: dto.userId,
-        status: 'ASSIGNED',
+        status: 'IN_PROGRESS', // Mudança solicitada: ASSIGNED -> IN_PROGRESS direto
       },
       include: {
         assignedTo: { select: { id: true, name: true, phoneNumber: true } },

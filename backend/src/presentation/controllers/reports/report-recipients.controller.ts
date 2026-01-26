@@ -53,4 +53,9 @@ export class ReportRecipientsController {
 
         return { success: true, sent: sentCount, total: recipients.length };
     }
+
+    @Post('adhoc')
+    async sendAdhocReport(@Body() dto: { jid: string; technician?: string }) {
+        return this.service.sendAdhocReport(dto.jid, dto.technician);
+    }
 }

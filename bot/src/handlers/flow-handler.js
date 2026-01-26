@@ -60,8 +60,55 @@ class FlowHandler {
       return;
     }
 
+    // === Comando !relatorio (Gerar Relatório Sob Demanda) ===
+    const reportMatch = normalizedText.match(/^!relatorio(\s+(.+))?$/);
+    if (reportMatch) {
+      const technicianName = reportMatch[2] ? reportMatch[2].trim() : null;
+      try {
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+
+        // Enviar solicitação ao backend
+        // Se technicianName for nulo, backend entende como "todos"
+        await axios.post(`${backendUrl}/api/reports/recipients/adhoc`, {
+          jid: from,
+          technician: technicianName
+        });
+
+        await this.sendMessage(sock, from, '⏳ Gerando relatório, aguarde um momento...');
+      } catch (error) {
+        console.error('❌ Erro ao solicitar relatório:', error.message);
+        await this.sendMessage(sock, from, '❌ Erro ao solicitar relatório. Verifique se você tem permissão (use !ceo primeiro).');
+      }
+      return;
+    }
+
     // Reset com comandos especiais
     if (['oi', 'olá', 'ola', 'menu', 'inicio', 'iniciar'].includes(normalizedText)) {
+      // Antes de resetar, verificar se já existe um ticket em andamento
+      const lastTicketId = await redisService.getTicketByPhone(phone);
+      if (lastTicketId) {
+        try {
+          const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+          const res = await axios.get(`${backendUrl}/api/tickets/glpi/${lastTicketId}`);
+          const ticket = res.data;
+
+          if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
+            // Usuário tem ticket aberto. Se ele digitou "Menu", talvez queira sair, mas se digitou "Oi", pode ser só "Oi, técnico"
+            // Vamos assumir que "Menu" força a saída, mas "Oi" mantém a conversa se estiver esperando técnico
+            if (!['menu', 'inicio', 'iniciar'].includes(normalizedText)) {
+              // É uma saudação, mantém no fluxo do ticket
+              session = {
+                state: STATES.WAITING_TECHNICIAN,
+                data: { ticketId: ticket.glpiId || ticket.id }
+              };
+              await redisService.setSession(phone, session);
+              await this.handleWaitingTechnician(sock, from, text, session, msg);
+              return;
+            }
+          }
+        } catch (e) { }
+      }
+
       session = { state: STATES.MENU, data: {} };
       await redisService.setSession(phone, session);
       await this.sendMessage(sock, from, config.messages.welcome);
@@ -70,6 +117,33 @@ class FlowHandler {
 
     // Se não tem sessão, iniciar
     if (!session) {
+      // Verificar apenas se tem ticket aberto se NÃO for um comando de saudação
+      // (Se usuário digitou "oi", ele quer o menu mesmo)
+      if (!['oi', 'olá', 'ola', 'menu'].includes(normalizedText)) {
+        const lastTicketId = await redisService.getTicketByPhone(phone);
+        if (lastTicketId) {
+          try {
+            const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+            const res = await axios.get(`${backendUrl}/api/tickets/glpi/${lastTicketId}`);
+            const ticket = res.data;
+
+            if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
+              // Restaurar sessão e encaminhar mensagem
+              session = {
+                state: STATES.WAITING_TECHNICIAN,
+                data: { ticketId: ticket.glpiId || ticket.id } // Garantir ID correto
+              };
+              await redisService.setSession(phone, session);
+              await this.handleWaitingTechnician(sock, from, text, session, msg);
+              return;
+            }
+          } catch (error) {
+            // Ignorar erro e mostrar menu
+            console.log('Erro ao verificar ticket ativo:', error.message);
+          }
+        }
+      }
+
       session = { state: STATES.MENU, data: {} };
       await redisService.setSession(phone, session);
       await this.sendMessage(sock, from, config.messages.welcome);

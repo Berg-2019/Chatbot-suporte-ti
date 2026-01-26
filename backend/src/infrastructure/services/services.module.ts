@@ -9,6 +9,8 @@ import { GlpiSyncService } from './glpi-sync.service';
 import { PrismaModule } from '../database/prisma.module';
 import { RabbitMQModule } from '../messaging/rabbitmq.module';
 import { ExternalModule } from '../external/external.module';
+import { IncomingMessagesConsumer } from './incoming-messages.consumer';
+import { MessagesModule } from '../../presentation/controllers/messages/messages.module';
 
 @Module({
     imports: [
@@ -16,8 +18,9 @@ import { ExternalModule } from '../external/external.module';
         PrismaModule,
         forwardRef(() => RabbitMQModule),
         ExternalModule,
+        MessagesModule, // Adicionar aqui
     ],
-    providers: [AlertService, GlpiSyncService],
+    providers: [AlertService, GlpiSyncService, IncomingMessagesConsumer],
     exports: [AlertService, GlpiSyncService],
 })
 export class ServicesModule { }

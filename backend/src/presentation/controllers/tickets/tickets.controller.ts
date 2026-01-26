@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
   Request,
+  SetMetadata,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TicketsService } from './tickets.service';
@@ -108,6 +109,7 @@ export class TicketsController {
   // === Novos endpoints para bot ===
 
   @Post(':id/rate')
+  @SetMetadata('isPublic', true)
   async rateTicket(
     @Param('id') id: string,
     @Body('rating') rating: number,
@@ -116,11 +118,13 @@ export class TicketsController {
   }
 
   @Get('by-phone/:phone')
+  @SetMetadata('isPublic', true)
   async findByPhone(@Param('phone') phone: string) {
     return this.ticketsService.findByPhone(phone);
   }
 
   @Get('glpi/:glpiId')
+  @SetMetadata('isPublic', true)
   async findByGlpiId(@Param('glpiId') glpiId: string) {
     return this.ticketsService.findByGlpiId(parseInt(glpiId));
   }
