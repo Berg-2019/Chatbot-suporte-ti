@@ -126,7 +126,7 @@ export class AuthService {
 
     // 2. Buscar grupos do usuário no GLPI
     console.log('Step 2: Fetching user groups');
-    const groups = await this.glpi.getUserGroups(authResult.user.id, authResult.sessionToken);
+    const groups = await this.glpi.getUserGroups(authResult.user.id);
     console.log(`Step 2 success: Found ${groups.length} groups`);
     const groupNames = groups.map(g => g.name.toLowerCase());
 
