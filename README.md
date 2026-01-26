@@ -170,16 +170,25 @@ Chatbot-suporte-ti/
 
 ---
 
-## 🌐 Portas
+## 🌐 Portas e Acesso
 
-| Serviço | Desenvolvimento | Produção (Docker) |
-|---------|-----------------|-------------------|
-| Backend | 3000 | 4000 |
-| Frontend | 3001 | 4001 |
-| GLPI | 8080 | 8080 |
-| PostgreSQL | 5432 | 5432 |
-| Redis | 6379 | 6379 |
-| RabbitMQ | 5672 / 15672 | 5672 / 15672 |
+| Serviço | Desenvolvimento | Docker (Interno) | Produção (Externo via Proxy) |
+|---------|-----------------|------------------|------------------------------|
+| **Frontend** | 3001 | 3000 | https://helpdeskmsm.com.br |
+| **Backend** | 3000 | 3000 | https://helpdeskmsm.com.br/api |
+| **GLPI** | 8080 | 80 | https://glpi.helpdeskmsm.com.br |
+| **PostgreSQL** | 5432 | 5432 | 5432 (se exposto) |
+| **Redis** | 6379 | 6379 | 6379 (se exposto) |
+| **RabbitMQ** | 5672 / 15672 | 5672 / 15672 | 15672 |
+
+### 🔒 Nginx Proxy
+Em produção, o acesso é gerenciado pelo container `helpdesk_proxy` que redireciona o tráfego:
+- Porta 80 -> Redireciona para 443 (HTTPS)
+- Porta 443 -> Redireciona para os serviços corretos baseados na rota ou subdomínio.
+
+### ⚠️ Notas Importantes de Configuração
+- **BACKEND_URL**: No `docker-compose.yml`, o frontend deve ter `BACKEND_URL: http://backend:3000` para comunicação interna via Docker Network.
+- **Rate Limit**: O Nginx possui proteção contra DDoS. Se o dashboard der erro 503, verifique os logs do proxy e ajuste `rate` e `burst` em `proxy/nginx/conf.d/helpdesk.conf`.
 
 ---
 
