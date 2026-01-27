@@ -29,7 +29,7 @@ interface RegisterDto {
 
 // Grupos do GLPI que definem o role ADMIN
 // Usuários em qualquer destes grupos terão acesso administrativo completo
-const ADMIN_GROUPS = ['admin', 'administradores', 'administrators', 'gestores', 'ti', 'estoque'];
+const ADMIN_GROUPS = ['admin', 'administradores', 'administrators', 'gestores', 'super-admin'];
 
 // Grupos de técnicos (qualquer usuário técnico)
 const TECH_GROUPS = ['tecnico', 'tecnicos', 'técnicos', 'suporte', 'support', 'l1', 'l2', 'l3', 'n1', 'n2', 'n3'];
@@ -130,33 +130,45 @@ export class AuthService {
     console.log(`Step 2 success: Found ${groups.length} groups`);
     const groupNames = groups.map(g => g.name.toLowerCase());
 
-    // 3. Determinar role baseado nos grupos, login ou nome
-    console.log('Step 3: Determining role');
-    let role: 'ADMIN' | 'AGENT' = 'AGENT';
+    // 3. Determinar role e nível baseado ESTRITAMENTE nos grupos
+    console.log('Step 3: Determining role and level (Strict Mode)');
+
+    // Listas estritas de grupos
+    const STRICT_ADMIN_GROUPS = ['admin', 'administradores', 'administrador', 'super-admin', 'gestores', 'gestão'];
+    const STRICT_TECH_GROUPS = ['tecnico', 'tecnicos', 'técnicos', 'suporte', 'support', 'helpdesk', 'ti', 'n1', 'n2', 'n3', 'l1', 'l2', 'l3'];
+
+    // Normalizar nomes dos grupos do usuário
+    const userGroupsLower = groupNames; // Já estão em lower (line 131)
+
+    // Verificar pertinência aos grupos
+    const isAdmin = userGroupsLower.some(g => STRICT_ADMIN_GROUPS.some(ag => g.includes(ag)));
+    const isTech = userGroupsLower.some(g => STRICT_TECH_GROUPS.some(tg => g.includes(tg)));
+
+    // Se não for nem Admin nem Técnico, NEGAR ACESSO
+    if (!isAdmin && !isTech) {
+      console.log(`❌ Login negado: Usuário '${dto.login}' não pertence a grupos autorizados (Grupos: ${userGroupsLower.join(', ')})`);
+      throw new UnauthorizedException('Acesso negado: Usuário não pertence a grupos de TI ou Administração.');
+    }
+
+    let role: 'ADMIN' | 'AGENT' = isAdmin ? 'ADMIN' : 'AGENT';
     let technicianLevel: TechnicianLevel = TechnicianLevel.N1;
 
-    const userLogin = dto.login.toLowerCase();
-    const userName = authResult.user.name?.toLowerCase() || '';
-
-    // Verifica se é ADMIN por grupos, login ou nome
-    const isAdminByGroups = groupNames.some(g => ADMIN_GROUPS.some(ag => g.includes(ag)));
-    const isAdminByLogin = ADMIN_GROUPS.some(ag => userLogin.includes(ag));
-    const isAdminByName = ADMIN_GROUPS.some(ag => userName.includes(ag));
-
-    if (isAdminByGroups || isAdminByLogin || isAdminByName) {
-      role = 'ADMIN';
-    }
-
-    // Determinar nível técnico usando LEVEL_MAPPING
-    // Verifica L3 primeiro (maior prioridade), depois L2, senão L1
-    if (groupNames.some(g => LEVEL_MAPPING.L3.some(l => g.includes(l)))) {
-      technicianLevel = TechnicianLevel.N3;
-    } else if (groupNames.some(g => LEVEL_MAPPING.L2.some(l => g.includes(l)))) {
-      technicianLevel = TechnicianLevel.N2;
+    if (role === 'AGENT') {
+      // Definir nível técnico com prioridade N3 > N2 > N1
+      if (userGroupsLower.some(g => g.includes('n3') || g.includes('l3') || g.includes('nivel 3'))) {
+        technicianLevel = TechnicianLevel.N3;
+      } else if (userGroupsLower.some(g => g.includes('n2') || g.includes('l2') || g.includes('nivel 2'))) {
+        technicianLevel = TechnicianLevel.N2;
+      } else {
+        technicianLevel = TechnicianLevel.N1; // Default p/ técnicos genéricos
+      }
     } else {
-      technicianLevel = TechnicianLevel.N1;
+      // Admins são considerados N3 para fins de permissão técnica
+      technicianLevel = TechnicianLevel.N3;
     }
+
     console.log(`Step 3 success: Role=${role}, Level=${technicianLevel}`);
+    console.log(`Groups matched: Admin=${isAdmin}, Tech=${isTech}`);
 
     // 4. Buscar ou criar usuário local
     console.log('Step 4: Syncing local user');

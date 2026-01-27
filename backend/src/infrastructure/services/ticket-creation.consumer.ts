@@ -87,9 +87,16 @@ export class TicketCreationConsumer implements OnModuleInit {
                 this.logger.log(`✅ Ticket criado no GLPI: #${glpiId}`);
 
                 // 3. Atualizar ticket local com e ID do GLPI
-                await this.prisma.ticket.update({
+                const updatedTicket = await this.prisma.ticket.update({
                     where: { id: ticketId },
                     data: { glpiId },
+                });
+
+                // Notificar painel (novamente) para atualizar o ID do GLPI na tela
+                await this.rabbitmq.publishNotification({
+                    type: 'ticket_updated',
+                    ticketId: updatedTicket.id,
+                    payload: updatedTicket,
                 });
 
                 // 4. Se tiver ID do GLPI, tentar atribuir técnico ou grupo default?

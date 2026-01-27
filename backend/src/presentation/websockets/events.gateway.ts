@@ -10,6 +10,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
+import { OnModuleInit } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { RabbitMQService } from '../../infrastructure/messaging/rabbitmq.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
@@ -20,22 +21,25 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
   },
 })
 export class EventsGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+  implements OnModuleInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   constructor(
     private rabbitmq: RabbitMQService,
     private prisma: PrismaService,
-  ) { }
+  ) {
+    console.log('🏗️ EventsGateway Constructor called');
+  }
 
-  afterInit() {
-    console.log('✅ WebSocket Gateway inicializado');
+  async onModuleInit() {
+    console.log('✅ EventsGateway onModuleInit - Inicializando consumidor');
 
     // Consumir notificações do RabbitMQ e repassar via Socket.IO
-    this.rabbitmq.consume(
+    await this.rabbitmq.consume(
       RabbitMQService.QUEUES.NOTIFICATIONS,
       async (data) => {
+        console.log(`📨 WebSocket Evento Recebido: ${data.type} para ticket ${data.ticketId}`);
         switch (data.type) {
           case 'ticket_created':
             this.server.emit('ticket:created', data.payload);
@@ -47,6 +51,7 @@ export class EventsGateway
             this.server.emit('ticket:updated', data.payload);
             break;
           case 'new_message':
+            console.log(`📤 Emitindo message:new para sala ticket:${data.ticketId}`);
             this.server.to(`ticket:${data.ticketId}`).emit('message:new', data.payload);
             break;
           case 'human_requested':

@@ -44,8 +44,8 @@ export class TicketsController {
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string) {
-    return this.ticketsService.findById(id);
+  async findById(@Param('id') id: string, @Request() req: any) {
+    return this.ticketsService.findById(id, req.user);
   }
 
   @Post()

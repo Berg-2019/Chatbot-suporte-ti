@@ -10,6 +10,7 @@ import { PrismaModule } from '../database/prisma.module';
 import { RabbitMQModule } from '../messaging/rabbitmq.module';
 import { ExternalModule } from '../external/external.module';
 import { IncomingMessagesConsumer } from './incoming-messages.consumer';
+import { TicketCreationConsumer } from './ticket-creation.consumer';
 import { MessagesModule } from '../../presentation/controllers/messages/messages.module';
 
 @Module({
@@ -20,7 +21,7 @@ import { MessagesModule } from '../../presentation/controllers/messages/messages
         ExternalModule,
         MessagesModule, // Adicionar aqui
     ],
-    providers: [AlertService, GlpiSyncService, IncomingMessagesConsumer],
+    providers: [AlertService, GlpiSyncService, IncomingMessagesConsumer, TicketCreationConsumer],
     exports: [AlertService, GlpiSyncService],
 })
 export class ServicesModule { }

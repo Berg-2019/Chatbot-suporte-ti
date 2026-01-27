@@ -23,7 +23,7 @@ export class MessagesService {
     private prisma: PrismaService,
     private glpi: GlpiService,
     private rabbitmq: RabbitMQService,
-  ) {}
+  ) { }
 
   async findByTicket(ticketId: string) {
     return this.prisma.message.findMany({
@@ -96,12 +96,26 @@ export class MessagesService {
     content: string,
     waMessageId: string,
   ) {
-    return this.create({
+    // Evitar duplicações se tiver ID válido
+    if (waMessageId && waMessageId !== 'UNKNOWN_WA_ID') {
+      const existing = await this.prisma.message.findFirst({
+        where: { waMessageId },
+      });
+
+      if (existing) {
+        console.log(`⚠️ Mensagem duplicada ignorada: ${waMessageId}`);
+        return { message: existing, isNew: false };
+      }
+    }
+
+    const message = await this.create({
       ticketId,
       content,
       direction: 'INCOMING',
       waMessageId,
     });
+
+    return { message, isNew: true };
   }
 
   async createFromTechnician(

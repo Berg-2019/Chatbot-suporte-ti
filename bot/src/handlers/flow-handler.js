@@ -85,7 +85,25 @@ class FlowHandler {
     // Reset com comandos especiais
     if (['oi', 'olá', 'ola', 'menu', 'inicio', 'iniciar'].includes(normalizedText)) {
       // Antes de resetar, verificar se já existe um ticket em andamento
-      const lastTicketId = await redisService.getTicketByPhone(phone);
+      let lastTicketId = await redisService.getTicketByPhone(phone);
+
+      // Se não encontrou no Redis, tentar buscar no backend
+      if (!lastTicketId) {
+        try {
+          const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+          const res = await axios.get(`${backendUrl}/api/tickets/by-phone/${phone}`, { timeout: 3000 });
+          const ticket = res.data;
+
+          if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
+            lastTicketId = ticket.glpiId || ticket.id;
+            // Sincronizar Redis
+            await redisService.linkTicketToPhone(phone, lastTicketId);
+          }
+        } catch (e) {
+          // Silencioso aqui, continua para o menu
+        }
+      }
+
       if (lastTicketId) {
         try {
           const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
@@ -105,6 +123,9 @@ class FlowHandler {
               await this.handleWaitingTechnician(sock, from, text, session, msg);
               return;
             }
+          } else {
+            // Ticket fechado, limpar Redis para garantir
+            await redisService.linkTicketToPhone(phone, null);
           }
         } catch (e) { }
       }
@@ -119,8 +140,28 @@ class FlowHandler {
     if (!session) {
       // Verificar apenas se tem ticket aberto se NÃO for um comando de saudação
       // (Se usuário digitou "oi", ele quer o menu mesmo)
-      if (!['oi', 'olá', 'ola', 'menu'].includes(normalizedText)) {
-        const lastTicketId = await redisService.getTicketByPhone(phone);
+      if (!['oi', 'olá', 'ola', 'menu', 'inicio', 'iniciar'].includes(normalizedText)) {
+        let lastTicketId = await redisService.getTicketByPhone(phone);
+
+        // Se não encontrou no Redis, tentar buscar no backend
+        if (!lastTicketId) {
+          try {
+            const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+            // IMPORTANTE: encodeURIComponent pois o phone pode ter caracteres especiais se não for só números
+            const res = await axios.get(`${backendUrl}/api/tickets/by-phone/${encodeURIComponent(phone)}`, { timeout: 3000 });
+            const ticket = res.data;
+
+            if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
+              lastTicketId = ticket.glpiId || ticket.id;
+              // Sincronizar Redis
+              await redisService.linkTicketToPhone(phone, lastTicketId);
+              console.log(`🔄 Sincronizado ticket #${lastTicketId} do backend para Redis`);
+            }
+          } catch (e) {
+            console.warn('⚠️ Falha ao verificar ticket no backend (Init):', e.message);
+          }
+        }
+
         if (lastTicketId) {
           try {
             const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
@@ -136,10 +177,13 @@ class FlowHandler {
               await redisService.setSession(phone, session);
               await this.handleWaitingTechnician(sock, from, text, session, msg);
               return;
+            } else {
+              // Ticket fechado, limpar Redis
+              await redisService.linkTicketToPhone(phone, null);
             }
           } catch (error) {
             // Ignorar erro e mostrar menu
-            console.log('Erro ao verificar ticket ativo:', error.message);
+            console.log('Erro ao verificar ticket ativo (Redis hit):', error.message);
           }
         }
       }
@@ -415,10 +459,8 @@ class FlowHandler {
       // IMPORTANTE: usar 'from' completo (com @s.whatsapp.net) para envio funcionar
       const ticketData = {
         phoneNumber: from,  // JID completo para envio funcionar
-        title: `[${session.data.sector}] Chamado via WhatsApp`,
+        title: `[${session.data.sector}] ${session.data.contactName} - ${session.data.problem.substring(0, 30)}${session.data.problem.length > 30 ? '...' : ''}`,
         description: session.data.problem,
-        sector: session.data.sector,
-        location: session.data.location,
         sector: session.data.sector,
         location: session.data.location,
         category: session.data.sector,
@@ -455,7 +497,7 @@ class FlowHandler {
       return;
     }
 
-    await rabbitmqService.publishIncomingMessage(from, text);
+    await rabbitmqService.publishIncomingMessage(from, text, msg.key?.id);
     // Não responder automaticamente, técnico vai responder
   }
 

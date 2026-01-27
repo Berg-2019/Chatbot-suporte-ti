@@ -520,12 +520,21 @@ export class GlpiService implements OnModuleInit {
       });
 
       const groups = response.data || [];
-      return groups.map((g: any) => ({
-        id: g.groups_id || g.id,
-        name: g.groups_id_name || g.name || 'Grupo',
-        completename: g.groups_id_completename || g.completename || '',
-        is_manager: g.is_manager === 1,
-      }));
+      if (groups.length > 0) {
+        console.log('🔍 Raw GLPI Group Data (First Item):', JSON.stringify(groups[0], null, 2));
+      }
+      return groups.map((g: any) => {
+        // Quando expand_dropdowns=true, groups_id pode vir como o NOME do grupo (string)
+        // Se for string, usamos como nome. Se for número ou undefined, tentamos groups_id_name ou g.name
+        const groupName = typeof g.groups_id === 'string' ? g.groups_id : (g.groups_id_name || g.name || 'Grupo');
+
+        return {
+          id: typeof g.groups_id === 'number' ? g.groups_id : (g.id || 0),
+          name: groupName,
+          completename: g.groups_id_completename || g.completename || groupName,
+          is_manager: g.is_manager === 1,
+        };
+      });
     } catch (error: any) {
       console.error('❌ Erro ao buscar grupos do usuário:', error.response?.data || error.message);
       return [];

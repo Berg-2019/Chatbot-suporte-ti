@@ -10,12 +10,12 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 
 const menuItems = [
-    { href: '/admin', icon: '🏠', label: 'Dashboard', adminOnly: false },
+    { href: '/admin', icon: '🏠', label: 'Dashboard', adminOnly: true },
     { href: '/admin/metrics', icon: '📊', label: 'Métricas', adminOnly: false },
     { href: '/admin/bot', icon: '🤖', label: 'Configurar Bot', adminOnly: true },
     { href: '/admin/reports', icon: '📈', label: 'Relatórios', adminOnly: true },
-    { href: '/admin/faq', icon: '📚', label: 'FAQ', adminOnly: true },
-    { href: '/admin/estoque', icon: '📦', label: 'Estoque', adminOnly: true },
+    { href: '/admin/faq', icon: '📚', label: 'FAQ', adminOnly: false },
+    { href: '/admin/estoque', icon: '📦', label: 'Estoque', adminOnly: false },
     { href: '/admin/users', icon: '👥', label: 'Usuários', adminOnly: true },
     { href: '/dashboard/chat', icon: '💬', label: 'Chat Equipe', adminOnly: false },
 ];
@@ -33,11 +33,24 @@ export default function AdminLayout({
         if (!loading && !user) {
             router.push('/login');
         }
-        // Técnicos (AGENT) não podem acessar área admin - redireciona para atendimento
+        // Agora AGENT pode acessar algumas rotas do admin
+        // Vamos bloquear apenas se for uma rota Restrita e o usuario nao for ADMIN
+        // Mas como este layout cobre /admin/*, vamos permitir o acesso
+        // e confiar que as paginas individuais ou o sidebar protegem o resto?
+        // Melhor: Se for AGENT e tentar acessar /admin (dashboard), redirecionar.
+        // Se acessar /admin/metrics, permitir.
+
         if (!loading && user && user.role !== 'ADMIN') {
-            router.push('/dashboard');
+            // Lista de rotas permitidas para técnicos
+            const allowedRoutes = ['/admin/metrics', '/admin/faq', '/admin/estoque'];
+            const isAllowed = allowedRoutes.some(route => pathname?.startsWith(route));
+
+            if (!isAllowed) {
+                // Se tentar acessar rota bloqueada, manda pro dashboard
+                router.push('/dashboard');
+            }
         }
-    }, [user, loading, router]);
+    }, [user, loading, router, pathname]);
 
     if (loading || !user) {
         return (
@@ -47,8 +60,11 @@ export default function AdminLayout({
         );
     }
 
-    // Só mostra para ADMIN
-    if (user.role !== 'ADMIN') {
+    // Permitir renderizar se for ADMIN ou se estiver em rota permitida
+    const allowedRoutes = ['/admin/metrics', '/admin/faq', '/admin/estoque'];
+    const isAllowed = user.role === 'ADMIN' || allowedRoutes.some(route => pathname?.startsWith(route));
+
+    if (!isAllowed) {
         return null;
     }
 

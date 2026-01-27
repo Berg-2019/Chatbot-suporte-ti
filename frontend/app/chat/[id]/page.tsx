@@ -44,7 +44,7 @@ export default function ChatPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const { subscribeToTicket, unsubscribeFromTicket, on } = useSocket();
-  
+
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -67,7 +67,7 @@ export default function ChatPage() {
       loadTicket();
       subscribeToTicket(ticketId);
     }
-    
+
     return () => {
       if (ticketId) unsubscribeFromTicket(ticketId);
     };
@@ -88,8 +88,21 @@ export default function ChatPage() {
   async function loadTicket() {
     try {
       const response = await ticketsApi.get(ticketId);
-      setTicket(response.data);
-      setMessages(response.data.messages || []);
+      const ticketData = response.data;
+      setTicket(ticketData);
+      setMessages(ticketData.messages || []);
+
+      // Access Control Check
+      if (
+        user &&
+        user.role !== 'ADMIN' &&
+        ticketData.assignedTo &&
+        ticketData.assignedTo.id !== user.id
+      ) {
+        alert('⛔ Acesso Negado: Este chamado está em atendimento por outro técnico.');
+        router.push('/dashboard');
+      }
+
     } catch (error) {
       console.error('Erro ao carregar ticket:', error);
       router.push('/dashboard');
@@ -99,7 +112,7 @@ export default function ChatPage() {
   async function loadTechnicians() {
     try {
       const response = await usersApi.technicians();
-      // Filtrar o técnico atual se já tiver assignedTo
+      // Filtrar o técnico atual
       const filtered = response.data.filter((t: User) => t.id !== ticket?.assignedTo?.id);
       setTechnicians(filtered);
     } catch (error) {
@@ -151,7 +164,7 @@ export default function ChatPage() {
 
   async function handleTransfer() {
     if (!selectedTechnician) return;
-    
+
     setTransferring(true);
     try {
       await ticketsApi.transfer(ticketId, selectedTechnician);
@@ -184,41 +197,46 @@ export default function ChatPage() {
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-gray-500 hover:text-gray-700">
-            ← Voltar
+          <Link href="/dashboard" className="text-gray-500 hover:text-gray-700 flex items-center gap-1">
+            <span className="text-xl">←</span>
+            <span className="hidden sm:inline">Voltar</span>
           </Link>
           <div>
             <h1 className="font-semibold text-gray-900 dark:text-white">{ticket.title}</h1>
             <p className="text-sm text-gray-500">
-              📱 {ticket.phoneNumber} • 📍 {ticket.sector || 'N/A'}
-              {ticket.assignedTo && <span> • 👤 {ticket.assignedTo.name}</span>}
+              📱 {ticket.phoneNumber}
+              <span className="hidden sm:inline"> • 📍 {ticket.sector || 'N/A'}</span>
+              {ticket.assignedTo && <span className="hidden sm:inline"> • 👤 {ticket.assignedTo.name}</span>}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`px-3 py-1 text-sm rounded-full ${
-            ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+          <span className={`px-3 py-1 text-sm rounded-full ${ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
             ticket.status === 'CLOSED' ? 'bg-gray-100 text-gray-700' :
-            ticket.status === 'ASSIGNED' ? 'bg-green-100 text-green-700' :
-            'bg-yellow-100 text-yellow-700'
-          }`}>
-            {ticket.status === 'IN_PROGRESS' ? 'Em atendimento' : 
-             ticket.status === 'CLOSED' ? 'Fechado' : 
-             ticket.status === 'ASSIGNED' ? 'Atribuído' : ticket.status}
+              ticket.status === 'ASSIGNED' ? 'bg-green-100 text-green-700' :
+                'bg-yellow-100 text-yellow-700'
+            }`}>
+            {ticket.status === 'IN_PROGRESS' ? 'Em atendimento' :
+              ticket.status === 'CLOSED' ? 'Fechado' :
+                ticket.status === 'ASSIGNED' ? 'Atribuído' : ticket.status}
           </span>
           {ticket.status !== 'CLOSED' && (
             <>
               <button
                 onClick={openTransferModal}
+                title="Transferir"
                 className="px-3 py-1 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 rounded-lg text-sm transition"
               >
-                🔄 Transferir
+                <span className="hidden sm:inline">🔄 Transferir</span>
+                <span className="sm:hidden">🔄</span>
               </button>
               <button
                 onClick={() => setShowCloseModal(true)}
+                title="Fechar"
                 className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm transition"
               >
-                Fechar
+                <span className="hidden sm:inline">Fechar</span>
+                <span className="sm:hidden">✖</span>
               </button>
             </>
           )}
@@ -228,10 +246,21 @@ export default function ChatPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Ticket info */}
-        <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-sm">
-          <p className="font-medium text-blue-800 dark:text-blue-300">📋 Descrição do chamado:</p>
-          <p className="text-blue-700 dark:text-blue-400 mt-1">{ticket.description}</p>
-          <p className="text-blue-600 dark:text-blue-500 text-xs mt-2">
+        <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-sm space-y-2">
+          <div>
+            <p className="font-medium text-blue-800 dark:text-blue-300">👤 Cliente:</p>
+            <p className="text-blue-700 dark:text-blue-400">
+              {ticket.customerName || 'Não identificado'}
+              {ticket.sector && <span className="text-blue-600 dark:text-blue-500"> • {ticket.sector}</span>}
+            </p>
+          </div>
+
+          <div>
+            <p className="font-medium text-blue-800 dark:text-blue-300">📋 Descrição:</p>
+            <p className="text-blue-700 dark:text-blue-400">{ticket.description}</p>
+          </div>
+
+          <p className="text-blue-600 dark:text-blue-500 text-xs pt-2 border-t border-blue-200 dark:border-blue-800">
             Aberto em: {new Date(ticket.createdAt).toLocaleString('pt-BR')}
           </p>
         </div>
@@ -243,11 +272,10 @@ export default function ChatPage() {
             className={`flex ${msg.direction === 'OUTGOING' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-2xl ${
-                msg.direction === 'OUTGOING'
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none shadow'
-              }`}
+              className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-2xl ${msg.direction === 'OUTGOING'
+                ? 'bg-blue-600 text-white rounded-br-none'
+                : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none shadow'
+                }`}
             >
               {msg.direction === 'OUTGOING' && msg.sender && (
                 <p className="text-xs text-blue-200 mb-1">{msg.sender.name}</p>
@@ -256,9 +284,8 @@ export default function ChatPage() {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">👤 Cliente</p>
               )}
               <p className="whitespace-pre-wrap">{msg.content}</p>
-              <p className={`text-xs mt-1 ${
-                msg.direction === 'OUTGOING' ? 'text-blue-200' : 'text-gray-400'
-              }`}>
+              <p className={`text-xs mt-1 ${msg.direction === 'OUTGOING' ? 'text-blue-200' : 'text-gray-400'
+                }`}>
                 {new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
@@ -287,57 +314,60 @@ export default function ChatPage() {
                 <span className="animate-spin">⏳</span>
               ) : (
                 <>
-                  <span>Enviar</span>
+                  <span className="hidden sm:inline">Enviar</span>
                   <span>→</span>
                 </>
               )}
             </button>
           </div>
         </form>
-      )}
+      )
+      }
 
       {/* Transfer Modal */}
-      {showTransferModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-              🔄 Transferir Chamado
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-              Selecione o técnico para quem deseja transferir este chamado:
-            </p>
-            
-            <select
-              value={selectedTechnician}
-              onChange={(e) => setSelectedTechnician(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white mb-4"
-            >
-              <option value="">Selecione um técnico...</option>
-              {technicians.map((tech) => (
-                <option key={tech.id} value={tech.id}>
-                  {tech.name} ({tech.email})
-                </option>
-              ))}
-            </select>
+      {
+        showTransferModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md mx-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                🔄 Transferir Chamado
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                Selecione o técnico para quem deseja transferir este chamado:
+              </p>
 
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowTransferModal(false)}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+              <select
+                value={selectedTechnician}
+                onChange={(e) => setSelectedTechnician(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white mb-4"
               >
-                Cancelar
-              </button>
-              <button
-                onClick={handleTransfer}
-                disabled={!selectedTechnician || transferring}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition"
-              >
-                {transferring ? 'Transferindo...' : 'Transferir'}
-              </button>
+                <option value="">Selecione um técnico...</option>
+                {technicians.map((tech) => (
+                  <option key={tech.id} value={tech.id}>
+                    {tech.name} ({tech.email})
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowTransferModal(false)}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleTransfer}
+                  disabled={!selectedTechnician || transferring}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition"
+                >
+                  {transferring ? 'Transferindo...' : 'Transferir'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Close Ticket Modal */}
       <CloseTicketModal
@@ -345,7 +375,7 @@ export default function ChatPage() {
         onClose={() => setShowCloseModal(false)}
         onSubmit={handleClose}
       />
-    </div>
+    </div >
   );
 }
 

@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/hooks/useSocket';
 import { ticketsApi } from '@/lib/api';
 import Link from 'next/link';
+import Header from '@/components/Header';
 
 interface Ticket {
   id: string;
@@ -25,8 +26,8 @@ interface Ticket {
 }
 
 export default function DashboardPage() {
-  const { user, loading, logout } = useAuth();
-  const { on, isConnected } = useSocket();
+  const { user, loading } = useAuth();
+  const { on } = useSocket();
   const router = useRouter();
   const [pendingTickets, setPendingTickets] = useState<Ticket[]>([]);
   const [myTickets, setMyTickets] = useState<Ticket[]>([]);
@@ -83,7 +84,10 @@ export default function DashboardPage() {
 
       // Meus atendimentos ativos
       const activeTickets = all.data.tickets.filter((t: Ticket) =>
-        t.assignedTo && ['ASSIGNED', 'IN_PROGRESS', 'WAITING_CLIENT'].includes(t.status)
+        t.assignedTo &&
+        ['ASSIGNED', 'IN_PROGRESS', 'WAITING_CLIENT'].includes(t.status) &&
+        // @ts-expect-error - user.id exists in runtime
+        (user && t.assignedTo.id === user.id)
       );
       setMyTickets(activeTickets);
 
@@ -106,8 +110,11 @@ export default function DashboardPage() {
       await ticketsApi.assign(ticketId);
       loadData();
       router.push(`/chat/${ticketId}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao assumir ticket:', error);
+      const msg = error.response?.data?.message || 'Erro ao assumir ticket. Talvez já tenha sido assumido por outro técnico.';
+      alert(`⚠️ ${msg}`);
+      loadData(); // Recarregar para atualizar status
     }
   }
 
@@ -122,52 +129,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🎫</span>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Helpdesk</h1>
-            <span className={`px-2 py-1 text-xs rounded-full ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {isConnected ? '● Online' : '○ Offline'}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/admin/estoque"
-              className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm transition"
-            >
-              📦 Estoque
-            </Link>
-            <Link
-              href="/admin/faq"
-              className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm transition"
-            >
-              📚 FAQ
-            </Link>
-            <Link
-              href="/admin/metrics"
-              className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-lg text-sm transition"
-            >
-              📊 Métricas
-            </Link>
-            <Link
-              href="/dashboard/chat"
-              className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-lg text-sm transition font-medium flex items-center gap-2"
-            >
-              💬 Chat Equipe
-            </Link>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              {user.name} ({user.role})
-            </span>
-            <button
-              onClick={logout}
-              className="text-sm text-red-600 hover:text-red-700"
-            >
-              Sair
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Stats */}

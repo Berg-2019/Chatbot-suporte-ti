@@ -24,7 +24,7 @@ export class IncomingMessagesConsumer implements OnModuleInit {
     }
 
     private async processMessage(data: any) {
-        const { from, text } = data;
+        const { from, text, messageId } = data;
         const phoneNumber = from.split('@')[0];
 
         // Verificar se existe um ticket ATIVO para este número
@@ -45,31 +45,31 @@ export class IncomingMessagesConsumer implements OnModuleInit {
             console.log(`✅ Mensagem vinculada ao Ticket #${ticket.id} (GLPI #${ticket.glpiId})`);
 
             // 1. Salvar mensagem no banco local
-            await this.messagesService.createFromWhatsApp(
+            // O serviço de mensagens já envia a notificação via Socket.IO
+            const { message: savedMsg, isNew } = await this.messagesService.createFromWhatsApp(
                 ticket.id,
                 text,
-                'UNKNOWN_WA_ID' // O bot não mandou o ID da mensagem, ideal seria mandar
+                messageId || 'UNKNOWN_WA_ID'
             );
 
-            // 2. Enviar para GLPI como followup
-            if (ticket.glpiId) {
-                try {
-                    await this.glpi.addFollowup(ticket.glpiId, {
-                        content: `[Cliente] ${text}`
-                    });
-                } catch (e) {
-                    console.error('Erro ao enviar followup para GLPI:', e.message);
+            if (isNew) {
+                console.log(`💾 Mensagem salva: ${savedMsg.id}. Notificação deve ter sido enviada.`);
+
+                // 2. Enviar para GLPI como followup (APENAS SE FOR NOVA)
+                if (ticket.glpiId) {
+                    try {
+                        await this.glpi.addFollowup(ticket.glpiId, {
+                            content: `[Cliente] ${text}`
+                        });
+                    } catch (e) {
+                        console.error('Erro ao enviar followup para GLPI:', e.message);
+                    }
                 }
+            } else {
+                console.log(`♻️ Mensagem duplicada ignorada para GLPI: ${messageId}`);
             }
 
-            // 3. Notificar via Socket (já feito pelo messagesService, mas garantindo)
-            /* 
-            await this.rabbitmq.publishNotification({
-                type: 'new_message',
-                ticketId: ticket.id,
-                payload: { text, from: 'client' }
-            });
-            */
+            // 3. Notificação via Socket é feita automaticamente pelo MessagesService
 
         } else {
             console.warn(`⚠️ Mensagem recebida de ${phoneNumber} sem ticket ativo. Ignorando ou deveria abrir menu?`);
