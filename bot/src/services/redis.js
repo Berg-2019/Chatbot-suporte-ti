@@ -47,11 +47,17 @@ class RedisService {
    * Salva sessão de um usuário
    * @param {string} phoneNumber 
    * @param {object} data 
-   * @param {number} ttl - TTL em segundos
+   * @param {number} ttl - TTL em segundos (opcional, calculado automaticamente baseado no estado)
    */
-  async setSession(phoneNumber, data, ttl = config.timeouts.sessionTTL) {
+  async setSession(phoneNumber, data, ttl = null) {
+    // TTL dinâmico: 24h para conversas com técnico, 2h para demais estados
+    const effectiveTtl = ttl || (
+      data.state === 'waiting_technician'
+        ? config.timeouts.sessionTTLWaitingTechnician
+        : config.timeouts.sessionTTL
+    );
     const key = `session:${phoneNumber}`;
-    await this.client.setex(key, ttl, JSON.stringify(data));
+    await this.client.setex(key, effectiveTtl, JSON.stringify(data));
   }
 
   /**

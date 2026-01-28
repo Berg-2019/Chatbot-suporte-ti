@@ -33,7 +33,8 @@ export const config = {
 
   // Timeouts (em segundos)
   timeouts: {
-    sessionTTL: 300, // 5 minutos para expirar sessão de conversa
+    sessionTTL: 7200, // 2 horas para sessão normal (era 5 minutos)
+    sessionTTLWaitingTechnician: 86400, // 24 horas quando aguardando técnico
     glpiSessionTTL: 3600, // 1 hora para token GLPI
   },
 

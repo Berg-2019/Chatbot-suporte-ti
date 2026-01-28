@@ -23,6 +23,30 @@ const STATES = {
 
 class FlowHandler {
   /**
+   * Verifica se existe ticket ativo no backend para este telefone
+   * @param {string} phone - Número do telefone
+   * @returns {Promise<object|null>} - Ticket ativo ou null
+   */
+  async checkActiveTicketInBackend(phone) {
+    try {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+      const res = await axios.get(
+        `${backendUrl}/api/bot/tickets/by-phone/${encodeURIComponent(phone)}`,
+        { timeout: 3000 }
+      );
+      const ticket = res.data;
+
+      if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
+        return ticket;
+      }
+      return null;
+    } catch (e) {
+      console.warn('⚠️ Falha ao verificar ticket no backend:', e.message);
+      return null;
+    }
+  }
+
+  /**
    * Processa mensagem recebida
    * @param {object} sock - Socket do WhatsApp
    * @param {string} from - JID do remetente
@@ -33,7 +57,31 @@ class FlowHandler {
     const phone = from.split('@')[0];
     const normalizedText = text.trim().toLowerCase();
 
-    // Obter sessão atual
+    // === VERIFICAÇÃO ROBUSTA DE TICKET ATIVO ===
+    // SEMPRE verificar no backend primeiro se NÃO for comando de menu
+    const isMenuCommand = ['menu', 'inicio', 'iniciar'].includes(normalizedText);
+
+    if (!isMenuCommand) {
+      const activeTicket = await this.checkActiveTicketInBackend(phone);
+
+      if (activeTicket) {
+        console.log(`🔒 Ticket ativo #${activeTicket.glpiId || activeTicket.id} encontrado para ${phone}`);
+
+        // Restaurar/atualizar sessão e encaminhar mensagem ao técnico
+        const session = {
+          state: STATES.WAITING_TECHNICIAN,
+          data: { ticketId: activeTicket.glpiId || activeTicket.id }
+        };
+        await redisService.setSession(phone, session);
+        await redisService.linkTicketToPhone(phone, activeTicket.glpiId || activeTicket.id);
+
+        // Encaminhar mensagem (não é saudação então vai direto pro técnico)
+        await this.handleWaitingTechnician(sock, from, text, session, msg);
+        return;
+      }
+    }
+
+    // Obter sessão atual (agora só chega aqui se não tem ticket ativo)
     let session = await redisService.getSession(phone);
 
     // === Comando STATUS ===
@@ -91,7 +139,7 @@ class FlowHandler {
       if (!lastTicketId) {
         try {
           const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-          const res = await axios.get(`${backendUrl}/api/tickets/by-phone/${phone}`, { timeout: 3000 });
+          const res = await axios.get(`${backendUrl}/api/bot/tickets/by-phone/${phone}`, { timeout: 3000 });
           const ticket = res.data;
 
           if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
@@ -107,7 +155,7 @@ class FlowHandler {
       if (lastTicketId) {
         try {
           const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-          const res = await axios.get(`${backendUrl}/api/tickets/glpi/${lastTicketId}`);
+          const res = await axios.get(`${backendUrl}/api/bot/tickets/glpi/${lastTicketId}`);
           const ticket = res.data;
 
           if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
@@ -136,58 +184,8 @@ class FlowHandler {
       return;
     }
 
-    // Se não tem sessão, iniciar
+    // Se não tem sessão, iniciar com menu (verificação de ticket ativo já foi feita acima)
     if (!session) {
-      // Verificar apenas se tem ticket aberto se NÃO for um comando de saudação
-      // (Se usuário digitou "oi", ele quer o menu mesmo)
-      if (!['oi', 'olá', 'ola', 'menu', 'inicio', 'iniciar'].includes(normalizedText)) {
-        let lastTicketId = await redisService.getTicketByPhone(phone);
-
-        // Se não encontrou no Redis, tentar buscar no backend
-        if (!lastTicketId) {
-          try {
-            const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-            // IMPORTANTE: encodeURIComponent pois o phone pode ter caracteres especiais se não for só números
-            const res = await axios.get(`${backendUrl}/api/tickets/by-phone/${encodeURIComponent(phone)}`, { timeout: 3000 });
-            const ticket = res.data;
-
-            if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
-              lastTicketId = ticket.glpiId || ticket.id;
-              // Sincronizar Redis
-              await redisService.linkTicketToPhone(phone, lastTicketId);
-              console.log(`🔄 Sincronizado ticket #${lastTicketId} do backend para Redis`);
-            }
-          } catch (e) {
-            console.warn('⚠️ Falha ao verificar ticket no backend (Init):', e.message);
-          }
-        }
-
-        if (lastTicketId) {
-          try {
-            const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-            const res = await axios.get(`${backendUrl}/api/tickets/glpi/${lastTicketId}`);
-            const ticket = res.data;
-
-            if (ticket && !['CLOSED', 'RESOLVED'].includes(ticket.status)) {
-              // Restaurar sessão e encaminhar mensagem
-              session = {
-                state: STATES.WAITING_TECHNICIAN,
-                data: { ticketId: ticket.glpiId || ticket.id } // Garantir ID correto
-              };
-              await redisService.setSession(phone, session);
-              await this.handleWaitingTechnician(sock, from, text, session, msg);
-              return;
-            } else {
-              // Ticket fechado, limpar Redis
-              await redisService.linkTicketToPhone(phone, null);
-            }
-          } catch (error) {
-            // Ignorar erro e mostrar menu
-            console.log('Erro ao verificar ticket ativo (Redis hit):', error.message);
-          }
-        }
-      }
-
       session = { state: STATES.MENU, data: {} };
       await redisService.setSession(phone, session);
       await this.sendMessage(sock, from, config.messages.welcome);
@@ -511,10 +509,10 @@ class FlowHandler {
       let url;
       if (ticketId) {
         // Buscar por ID específico
-        url = `${backendUrl}/api/tickets/glpi/${ticketId}`;
+        url = `${backendUrl}/api/bot/tickets/glpi/${ticketId}`;
       } else {
         // Buscar último ticket do telefone
-        url = `${backendUrl}/api/tickets/by-phone/${phone}`;
+        url = `${backendUrl}/api/bot/tickets/by-phone/${phone}`;
       }
 
       const response = await axios.get(url, { timeout: 5000 });
@@ -566,7 +564,7 @@ class FlowHandler {
       const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
       const ticketId = session.data.ticketId;
 
-      await axios.post(`${backendUrl}/api/tickets/${ticketId}/rate`, { rating }, { timeout: 5000 });
+      await axios.post(`${backendUrl}/api/bot/tickets/${ticketId}/rate`, { rating }, { timeout: 5000 });
 
       const stars = '⭐'.repeat(rating);
       await this.sendMessage(sock, from, `${stars}\n\n🙏 Obrigado pela sua avaliação!\n\nSe precisar de ajuda novamente, é só enviar *oi*. 😊`);
