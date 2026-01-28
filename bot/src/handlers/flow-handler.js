@@ -6,12 +6,15 @@ import axios from 'axios';
 import { config } from '../config/index.js';
 import { redisService } from '../services/redis.js';
 import { rabbitmqService } from '../services/rabbitmq.js';
+import { intentService } from '../services/intent.js';
 
 // Estados do fluxo
 const STATES = {
   IDLE: 'idle',
   MENU: 'menu',
-  SELECT_SECTOR: 'select_sector',
+  SELECT_AREA: 'select_area', // TI ou Elétrica
+  SELECT_SECTOR_TI: 'select_sector_ti',
+  SELECT_SECTOR_ELECTRIC: 'select_sector_electric',
   ASK_NAME: 'ask_name',
   DESCRIBE_PROBLEM: 'describe_problem',
   CHECK_FAQ: 'check_faq',
@@ -57,31 +60,37 @@ class FlowHandler {
     const phone = from.split('@')[0];
     const normalizedText = text.trim().toLowerCase();
 
-    // === VERIFICAÇÃO ROBUSTA DE TICKET ATIVO ===
-    // SEMPRE verificar no backend primeiro se NÃO for comando de menu
+    // === VERIFICAÇÃO ROBUSTA COM CLASSIFICAÇÃO DE INTENÇÃO ===
     const isMenuCommand = ['menu', 'inicio', 'iniciar'].includes(normalizedText);
 
     if (!isMenuCommand) {
       const activeTicket = await this.checkActiveTicketInBackend(phone);
 
       if (activeTicket) {
-        console.log(`🔒 Ticket ativo #${activeTicket.glpiId || activeTicket.id} encontrado para ${phone}`);
+        // Usar serviço de classificação de intenção para decidir
+        const intent = await intentService.classify(text, true);
+        console.log(`🧠 Intenção classificada: ${intent.intent} (${(intent.confidence * 100).toFixed(0)}%) - Encaminhar: ${intent.shouldRouteToTech}`);
 
-        // Restaurar/atualizar sessão e encaminhar mensagem ao técnico
-        const session = {
-          state: STATES.WAITING_TECHNICIAN,
-          data: { ticketId: activeTicket.glpiId || activeTicket.id }
-        };
-        await redisService.setSession(phone, session);
-        await redisService.linkTicketToPhone(phone, activeTicket.glpiId || activeTicket.id);
+        if (intent.shouldRouteToTech || intent.intent === 'chat_with_tech') {
+          console.log(`🔒 Ticket ativo #${activeTicket.glpiId || activeTicket.id} - Encaminhando mensagem ao técnico`);
 
-        // Encaminhar mensagem (não é saudação então vai direto pro técnico)
-        await this.handleWaitingTechnician(sock, from, text, session, msg);
-        return;
+          const session = {
+            state: STATES.WAITING_TECHNICIAN,
+            data: { ticketId: activeTicket.glpiId || activeTicket.id }
+          };
+          await redisService.setSession(phone, session);
+          await redisService.linkTicketToPhone(phone, activeTicket.glpiId || activeTicket.id);
+
+          await this.handleWaitingTechnician(sock, from, text, session, msg);
+          return;
+        } else {
+          console.log(`🆕 Intent '${intent.intent}' com ticket ativo - mostrando menu`);
+          // Usuário quer novo chamado ou consultar status, continuar para menu
+        }
       }
     }
 
-    // Obter sessão atual (agora só chega aqui se não tem ticket ativo)
+    // Obter sessão atual (agora só chega aqui se não tem ticket ativo ou quer ação diferente)
     let session = await redisService.getSession(phone);
 
     // === Comando STATUS ===
@@ -202,8 +211,12 @@ class FlowHandler {
         await this.handleAskName(sock, from, text, session);
         break;
 
-      case STATES.SELECT_SECTOR:
-        await this.handleSelectSector(sock, from, normalizedText, session);
+      case STATES.SELECT_SECTOR_TI:
+        await this.handleSelectSectorTI(sock, from, normalizedText, session);
+        break;
+
+      case STATES.SELECT_SECTOR_ELECTRIC:
+        await this.handleSelectSectorElectric(sock, from, normalizedText, session);
         break;
 
       case STATES.DESCRIBE_PROBLEM:
@@ -264,21 +277,14 @@ class FlowHandler {
         }
 
 
+        session.data.ticketType = 'ti';
         session.state = STATES.ASK_NAME;
         await redisService.setSession(phone, session);
         await this.sendMessage(sock, from, 'Olá! Antes de começarmos, qual é o seu *nome*?');
         break;
 
-      case '2': // Consultar status
-        const ticketId = await redisService.getTicketByPhone(phone);
-        if (ticketId) {
-          await this.sendMessage(sock, from, `🎫 Seu último chamado é o **#${ticketId}**.\n\nPara mais detalhes, aguarde contato do técnico.`);
-        } else {
-          await this.sendMessage(sock, from, '❓ Não encontrei chamados recentes para seu número.');
-        }
-        break;
 
-      case '3': // Falar com técnico
+      case '4': // Falar com técnico (era 3)
         session.state = STATES.WAITING_TECHNICIAN;
         session.data.requestedHuman = true;
         await redisService.setSession(phone, session);
@@ -303,6 +309,33 @@ class FlowHandler {
         );
         break;
 
+      case '2': // Abrir chamado de Elétrica (NOVA OPÇÃO)
+        // Verificar contato existente
+        try {
+          const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+          const contactRes = await axios.get(`${backendUrl}/api/contacts/by-jid/${encodeURIComponent(from)}`, {
+            timeout: 3000,
+          }).catch(() => null);
+
+          if (contactRes?.data) {
+            const contact = contactRes.data;
+            session.data.contactName = contact.name;
+            session.data.ticketType = 'electric';
+            session.state = STATES.SELECT_SECTOR_ELECTRIC;
+            await redisService.setSession(phone, session);
+            await this.sendMessage(sock, from, `👋 Olá *${contact.name}*!\n\n${config.messages.askSectorElectric}`);
+            break;
+          }
+        } catch (e) {
+          // Contato não encontrado
+        }
+
+        session.data.ticketType = 'electric';
+        session.state = STATES.ASK_NAME;
+        await redisService.setSession(phone, session);
+        await this.sendMessage(sock, from, 'Olá! Antes de começarmos, qual é o seu *nome*?');
+        break;
+
       default:
         await this.sendMessage(sock, from, config.messages.invalidOption);
     }
@@ -318,22 +351,46 @@ class FlowHandler {
     }
 
     session.data.contactName = name;
-    session.state = STATES.SELECT_SECTOR;
-    await redisService.setSession(phone, session);
-    await this.sendMessage(sock, from, `Obrigado, ${name}!\n\n${config.messages.askSector}`);
+
+    // Decidir próximo estado baseado no tipo de chamado
+    if (session.data.ticketType === 'electric') {
+      session.state = STATES.SELECT_SECTOR_ELECTRIC;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, `Obrigado, ${name}!\n\n${config.messages.askSectorElectric}`);
+    } else {
+      session.state = STATES.SELECT_SECTOR_TI;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, `Obrigado, ${name}!\n\n${config.messages.askSectorTI}`);
+    }
   }
 
-  async handleSelectSector(sock, from, text, session) {
+  async handleSelectSectorTI(sock, from, text, session) {
     const phone = from.split('@')[0];
     const sectorIndex = parseInt(text) - 1;
 
-    if (isNaN(sectorIndex) || sectorIndex < 0 || sectorIndex >= config.sectors.length) {
+    if (isNaN(sectorIndex) || sectorIndex < 0 || sectorIndex >= config.sectorsTI.length) {
       await this.sendMessage(sock, from, config.messages.invalidOption);
       return;
     }
 
-    session.data.sector = config.sectors[sectorIndex].name;
-    session.data.sectorId = config.sectors[sectorIndex].id;
+    session.data.sector = config.sectorsTI[sectorIndex].name;
+    session.data.sectorId = config.sectorsTI[sectorIndex].id;
+    session.state = STATES.DESCRIBE_PROBLEM;
+    await redisService.setSession(phone, session);
+    await this.sendMessage(sock, from, config.messages.askProblem);
+  }
+
+  async handleSelectSectorElectric(sock, from, text, session) {
+    const phone = from.split('@')[0];
+    const sectorIndex = parseInt(text) - 1;
+
+    if (isNaN(sectorIndex) || sectorIndex < 0 || sectorIndex >= config.sectorsElectric.length) {
+      await this.sendMessage(sock, from, config.messages.invalidOption);
+      return;
+    }
+
+    session.data.sector = config.sectorsElectric[sectorIndex].name;
+    session.data.sectorId = config.sectorsElectric[sectorIndex].id;
     session.state = STATES.DESCRIBE_PROBLEM;
     await redisService.setSession(phone, session);
     await this.sendMessage(sock, from, config.messages.askProblem);

@@ -47,32 +47,52 @@ export const config = {
     NOTIFICATIONS: 'notifications',
   },
 
-  // Setores disponíveis
-  sectors: [
-    { id: 1, name: 'TI - Infraestrutura', keywords: ['rede', 'internet', 'vpn', 'wifi'] },
-    { id: 2, name: 'TI - Sistemas', keywords: ['sistema', 'lotus', 'movtrans', 'erro'] },
-    { id: 3, name: 'TI - Hardware', keywords: ['computador', 'impressora', 'teclado', 'mouse'] },
-    { id: 4, name: 'Administrativo', keywords: ['documento', 'acesso', 'usuario'] },
+  // Setores disponíveis - TI
+  sectorsTI: [
+    { id: 1, name: 'TI - Infraestrutura', keywords: ['rede', 'internet', 'vpn', 'wifi', 'servidor'] },
+    { id: 2, name: 'TI - Sistemas', keywords: ['sistema', 'lotus', 'movtrans', 'erro', 'software'] },
+    { id: 3, name: 'TI - Hardware', keywords: ['computador', 'impressora', 'teclado', 'mouse', 'monitor'] },
+    { id: 4, name: 'TI - Administrativo', keywords: ['documento', 'acesso', 'usuario', 'email'] },
+  ],
+
+  // Setores disponíveis - Elétrica
+  sectorsElectric: [
+    { id: 10, name: 'Elétrica - Iluminação', keywords: ['luz', 'lâmpada', 'lampada', 'fluorescente', 'led'] },
+    { id: 11, name: 'Elétrica - Tomadas', keywords: ['tomada', 'extensão', 'filtro', 'energia'] },
+    { id: 12, name: 'Elétrica - Disjuntores', keywords: ['disjuntor', 'queda', 'curto', 'desarme'] },
+    { id: 13, name: 'Elétrica - Ar Condicionado', keywords: ['ar', 'refrigeração', 'climatização', 'split'] },
+    { id: 14, name: 'Elétrica - Manutenção Geral', keywords: ['fiação', 'eletrica', 'elétrica', 'instalação'] },
   ],
 
   // Mensagens do bot
   messages: {
-    welcome: `👋 Olá! Sou o assistente de suporte técnico.
+    welcome: `👋 Olá! Sou o assistente de suporte.
 
 Como posso ajudar você hoje?
 
 1️⃣ Abrir chamado de TI
-2️⃣ Consultar status de chamado
-3️⃣ Falar com um técnico
+2️⃣ Abrir chamado de Elétrica
+3️⃣ Consultar status de chamado
+4️⃣ Falar com um técnico
 
 Digite o número da opção desejada:`,
 
-    askSector: `📋 Qual setor você precisa de suporte?
+    askSectorTI: `📋 Qual área de TI você precisa de suporte?
 
-1️⃣ TI - Infraestrutura (rede, internet, VPN)
-2️⃣ TI - Sistemas (Lotus, Movtrans, sistemas)
-3️⃣ TI - Hardware (computador, impressora)
-4️⃣ Administrativo
+1️⃣ Infraestrutura (rede, internet, VPN)
+2️⃣ Sistemas (Lotus, Movtrans, softwares)
+3️⃣ Hardware (computador, impressora)
+4️⃣ Administrativo (acesso, email, usuário)
+
+Digite o número:`,
+
+    askSectorElectric: `⚡ Qual tipo de serviço elétrico você precisa?
+
+1️⃣ Iluminação (lâmpadas, luminárias)
+2️⃣ Tomadas (instalação, conserto)
+3️⃣ Disjuntores (queda de energia, curto)
+4️⃣ Ar Condicionado (manutenção, instalação)
+5️⃣ Manutenção Geral (fiação, instalação)
 
 Digite o número:`,
 
@@ -82,7 +102,7 @@ Digite o número:`,
 
     confirmTicket: (data) => `✅ Vou criar seu chamado com os dados:
 
-📋 **Setor:** ${data.sector}
+📋 **Área:** ${data.sector}
 📝 **Problema:** ${data.problem}
 📍 **Local:** ${data.location}
 

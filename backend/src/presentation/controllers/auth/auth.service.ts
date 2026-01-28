@@ -34,13 +34,49 @@ const ADMIN_GROUPS = ['admin', 'administradores', 'administrators', 'gestores', 
 // Grupos de técnicos (qualquer usuário técnico)
 const TECH_GROUPS = ['tecnico', 'tecnicos', 'técnicos', 'suporte', 'support', 'l1', 'l2', 'l3', 'n1', 'n2', 'n3'];
 
-// Mapeamento de nível técnico baseado em subgrupos do GLPI
-// Estrutura: Tecnicos > Tecnico L1, Tecnicos > Tecnico L2, Tecnicos > Tecnico L3
+// Mapeamento de nível técnico baseado em subgrupos do GLPI (legado - não usado para escalonamento)
 const LEVEL_MAPPING = {
   L3: ['l3', 'n3', 'tecnico l3', 'nivel 3', 'nível 3'],
   L2: ['l2', 'n2', 'tecnico l2', 'nivel 2', 'nível 2'],
   L1: ['l1', 'n1', 'tecnico l1', 'nivel 1', 'nível 1', 'tecnico', 'tecnicos', 'técnicos'],
 };
+
+// Mapeamento de perfis baseado em grupos GLPI
+// Define qual tela/dashboard o usuário verá após login
+const PROFILE_GROUPS = {
+  admin: ['admin', 'administradores', 'administrators', 'super-admin'],
+  manager: ['gestores', 'gestão', 'gerentes', 'coordenadores', 'diretoria'],
+  tech_elect: ['eletrica', 'elétrica', 'eletricista', 'manutencao eletrica', 'manutenção elétrica'],
+  stock: ['almoxarifado', 'estoque', 'almoxarife', 'suprimentos'],
+  tech_ti: ['ti', 'tecnico', 'tecnicos', 'técnicos', 'suporte', 'helpdesk', 'infraestrutura', 'support', 'n1', 'n2', 'n3', 'l1', 'l2', 'l3'],
+};
+
+// Tipos de perfil disponíveis
+type UserProfile = 'admin' | 'manager' | 'tech_elect' | 'stock' | 'tech_ti';
+
+/**
+ * Determina o perfil do usuário baseado nos grupos GLPI
+ * Ordem de prioridade: admin > manager > tech_elect > stock > tech_ti
+ */
+function determineProfile(groups: string[]): UserProfile {
+  const groupsLower = groups.map(g => g.toLowerCase());
+
+  // Verificar cada perfil em ordem de prioridade
+  if (groupsLower.some(g => PROFILE_GROUPS.admin.some(pg => g.includes(pg)))) {
+    return 'admin';
+  }
+  if (groupsLower.some(g => PROFILE_GROUPS.manager.some(pg => g.includes(pg)))) {
+    return 'manager';
+  }
+  if (groupsLower.some(g => PROFILE_GROUPS.tech_elect.some(pg => g.includes(pg)))) {
+    return 'tech_elect';
+  }
+  if (groupsLower.some(g => PROFILE_GROUPS.stock.some(pg => g.includes(pg)))) {
+    return 'stock';
+  }
+  // Default: técnico TI
+  return 'tech_ti';
+}
 
 @Injectable()
 export class AuthService {
@@ -229,6 +265,10 @@ export class AuthService {
     });
     console.log('Step 6 success: Token generated');
 
+    // 7. Determinar perfil para redirecionamento no frontend
+    const profile = determineProfile(groupNames);
+    console.log(`Step 7: Profile determined: ${profile}`);
+
     return {
       token,
       user: {
@@ -238,6 +278,7 @@ export class AuthService {
         role: user.role,
         technicianLevel: user.technicianLevel,
         groups: groupNames,
+        profile, // Perfil para redirecionamento: admin, manager, tech_elect, stock, tech_ti
       },
     };
   }
