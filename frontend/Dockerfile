@@ -1,43 +1,30 @@
-# Frontend Dockerfile
-FROM node:22-alpine AS builder
+# Dockerfile for Vite Frontend (Production Build)
+
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Argumento de build para URL da API (Next.js precisa em tempo de build)
-ARG NEXT_PUBLIC_API_URL=https://bk.shautomacao.com.br
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-
-# Copiar package.json
+# Copy package files
 COPY package*.json ./
 
-# Instalar deps
+# Install dependencies
 RUN npm ci
 
-# Copiar código
+# Copy source files
 COPY . .
 
-# Configurar output standalone
-RUN echo 'module.exports = { output: "standalone" }' > next.config.ts || true
-
-# Build
+# Build the app
 RUN npm run build
 
-# Produção
-FROM node:22-alpine AS runner
+# Production stage
+FROM nginx:alpine
 
-WORKDIR /app
+# Copy built files to nginx
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-ENV NODE_ENV=production
+# Copy custom nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Argumento de runtime
-ARG NEXT_PUBLIC_API_URL=https://bk.shautomacao.com.br
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+EXPOSE 80
 
-# Copiar build
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-
-EXPOSE 3000
-
-CMD ["node", "server.js"]
+CMD ["nginx", "-g", "daemon off;"]
