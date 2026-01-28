@@ -5,10 +5,10 @@ import MetricCard from '@/app/components/MetricCard';
 import TicketItem from '@/app/components/TicketItem';
 import ReservationChat from '@/app/components/ReservationChat';
 import MobileFloatingMenu from '@/app/components/MobileFloatingMenu';
-import { 
-  FolderOpen, 
-  Calendar, 
-  Clock, 
+import {
+  FolderOpen,
+  Calendar,
+  Clock,
   Timer,
   Headphones,
   Printer,
@@ -27,8 +27,11 @@ import {
 import { useAuth } from '@/app/context/AuthContext';
 import { useBadges } from '@/app/hooks/useBadges';
 import { toast } from 'sonner';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
+import { reservationApi, type Reservation as ApiReservation } from '@/app/services/api';
+import { parseISO, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // Interface para os dados vindos da API
 interface Ticket {
@@ -63,18 +66,15 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeReservationChat, setActiveReservationChat] = useState<{ requester: string, assetName: string, id: number } | null>(null);
-  
+
   // Mobile Tab State
   const [mobileTab, setMobileTab] = useState('home');
-  
+
   const isTechnician = profile === 'tech_elect'; // NOTE: Assuming this matches existing logic, but usually tech_ti would also be technician.
 
-  // Mock de Reservas para o Admin
-  const [reservations, setReservations] = useState<Reservation[]>([
-    { id: 1, assetName: 'Projetor Epson PowerLite', requester: 'João Silva (RH)', dateStart: '28/01/2026 14:00', dateEnd: '28/01/2026 16:00', status: 'pending' },
-    { id: 4, assetName: 'Microfone Sem Fio', requester: 'Ana Marketing', dateStart: '30/01/2026 14:00', dateEnd: '30/01/2026 15:00', status: 'pending' },
-    { id: 2, assetName: 'Notebook Dell Latitude', requester: 'Maria Souza (Financeiro)', dateStart: '29/01/2026 09:00', dateEnd: '30/01/2026 18:00', status: 'approved' },
-  ]);
+  // Reservations from API
+  const [reservations, setReservations] = useState<ApiReservation[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
 
   const metrics = [
     { icon: FolderOpen, value: tickets.filter(t => t.status !== 'CLOSED').length, label: 'Tickets', sublabel: 'Abertos', iconColor: 'bg-yellow-600' },
@@ -90,21 +90,52 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
     { name: 'Impressora RH', status: 'offline', ink: 72 },
   ];
 
-  const handleApproveReservation = (id: number) => {
-    toast.success('Reserva aprovada com sucesso!');
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'approved' } : r));
+  // Fetch Reservations from API
+  const fetchReservations = useCallback(async () => {
+    setReservationsLoading(true);
+    try {
+      const data = await reservationApi.getAll({ status: 'PENDING' });
+      // Also get approved ones
+      const approved = await reservationApi.getAll({ status: 'APPROVED' });
+      setReservations([...data, ...approved.slice(0, 5)]);
+    } catch (err) {
+      console.error('Error fetching reservations:', err);
+    } finally {
+      setReservationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (profile === 'admin') {
+      fetchReservations();
+    }
+  }, [profile, fetchReservations]);
+
+  const handleApproveReservation = async (id: string) => {
+    try {
+      await reservationApi.approve(id);
+      toast.success('Reserva aprovada com sucesso!');
+      fetchReservations();
+    } catch (err) {
+      toast.error('Erro ao aprovar reserva');
+    }
   };
 
-  const handleRejectReservation = (id: number) => {
-    toast.error('Reserva rejeitada/cancelada.');
-    setReservations(prev => prev.filter(r => r.id !== id));
+  const handleRejectReservation = async (id: string) => {
+    try {
+      await reservationApi.reject(id);
+      toast.error('Reserva rejeitada/cancelada.');
+      fetchReservations();
+    } catch (err) {
+      toast.error('Erro ao rejeitar reserva');
+    }
   };
 
-  const handleOpenChat = (reservation: Reservation) => {
-    setActiveReservationChat({ 
-      requester: reservation.requester, 
-      assetName: reservation.assetName, 
-      id: reservation.id 
+  const handleOpenChat = (reservation: ApiReservation) => {
+    setActiveReservationChat({
+      requester: reservation.userName,
+      assetName: reservation.stockItem?.name || 'Item',
+      id: parseInt(reservation.id) || 0
     });
   };
 
@@ -114,67 +145,67 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
 
     try {
       await new Promise(resolve => setTimeout(resolve, 800));
-      
+
       const mockData: Ticket[] = [
-        { 
+        {
           id: 1,
-          category: 'TI - Infraestrutura', 
-          title: 'Gustavo César Silva do Valle', 
+          category: 'TI - Infraestrutura',
+          title: 'Gustavo César Silva do Valle',
           date: '27/01/2026, 11:13:33',
           status: 'CLOSED',
           ticketNumber: '854571532858',
           client: 'Gustavo César',
           description: 'Falta de rede no computador principal da recepção.',
-          technician: 'admin' 
+          technician: 'admin'
         },
-        { 
+        {
           id: 2,
-          category: 'TI - Infraestrutura', 
-          title: 'Gustavo cesar silva', 
+          category: 'TI - Infraestrutura',
+          title: 'Gustavo cesar silva',
           date: '27/01/2026, 11:10:29',
           status: 'WAITING',
           ticketNumber: '854571532859',
           client: 'Gustavo C.',
           description: 'Problema de conexão intermitente no setor financeiro.',
-          technician: user?.email 
+          technician: user?.email
         },
-        { 
+        {
           id: 3,
-          category: 'TI - Hardware', 
-          title: 'Maria Souza', 
+          category: 'TI - Hardware',
+          title: 'Maria Souza',
           date: '27/01/2026, 10:59:49',
           status: 'OPEN',
           ticketNumber: '854571532860',
           client: 'Maria Souza',
           description: 'Mouse não funciona, testado em outra porta USB.',
-          technician: undefined 
+          technician: undefined
         },
-        { 
+        {
           id: 4,
-          category: 'TI - Infraestrutura', 
-          title: 'Chamado via WhatsApp', 
+          category: 'TI - Infraestrutura',
+          title: 'Chamado via WhatsApp',
           date: '27/01/2026, 09:33:50',
           status: 'IN_PROGRESS',
           ticketNumber: '854571532861',
           client: 'Cliente WhatsApp',
           description: 'Problema na rede wi-fi de visitantes.',
-          technician: user?.email 
+          technician: user?.email
         },
-        { 
+        {
           id: 5,
-          category: 'TI - Software', 
-          title: 'Roberto Alves', 
+          category: 'TI - Software',
+          title: 'Roberto Alves',
           date: '27/01/2026, 08:27:53',
           status: 'OPEN',
           ticketNumber: '854571532862',
           client: 'Roberto A.',
           description: 'Outlook pedindo senha repetidamente.',
-          technician: undefined 
+          technician: undefined
         },
       ];
-      
+
       setTickets(mockData);
-      
+
     } catch (error) {
       console.error('Erro ao buscar tickets:', error);
       toast.error('Erro ao atualizar tickets');
@@ -188,7 +219,7 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
     fetchTickets();
     const intervalId = setInterval(() => {
       fetchTickets(true);
-    }, 30000); 
+    }, 30000);
     return () => clearInterval(intervalId);
   }, []);
 
@@ -204,31 +235,31 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
             <MetricCard key={index} {...metric} />
           ))}
           {profile === 'admin' && (
-             <MetricCard 
-               icon={Zap} 
-               value="4" 
-               label="Elétrica" 
-               sublabel="Atenção" 
-               iconColor="bg-yellow-500" 
-               trend="+1" 
-               trendUp={false} 
-             />
+            <MetricCard
+              icon={Zap}
+              value="4"
+              label="Elétrica"
+              sublabel="Atenção"
+              iconColor="bg-yellow-500"
+              trend="+1"
+              trendUp={false}
+            />
           )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-           <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
-              <div className="bg-blue-600/20 p-3 rounded-lg text-blue-500"><Headphones size={24} /></div>
-              <div><div className="text-2xl font-bold text-white">{myTickets.length}</div><div className="text-sm text-slate-400">Em Atendimento</div></div>
-           </div>
-           <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
-              <div className="bg-orange-600/20 p-3 rounded-lg text-orange-500"><ListVideo size={24} /></div>
-              <div><div className="text-2xl font-bold text-white">{queueTickets.length}</div><div className="text-sm text-slate-400">Na Fila</div></div>
-           </div>
-           <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
-              <div className="bg-green-600/20 p-3 rounded-lg text-green-500"><CheckCircle2 size={24} /></div>
-              <div><div className="text-2xl font-bold text-white">5</div><div className="text-sm text-slate-400">Finalizados Hoje</div></div>
-           </div>
+          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+            <div className="bg-blue-600/20 p-3 rounded-lg text-blue-500"><Headphones size={24} /></div>
+            <div><div className="text-2xl font-bold text-white">{myTickets.length}</div><div className="text-sm text-slate-400">Em Atendimento</div></div>
+          </div>
+          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+            <div className="bg-orange-600/20 p-3 rounded-lg text-orange-500"><ListVideo size={24} /></div>
+            <div><div className="text-2xl font-bold text-white">{queueTickets.length}</div><div className="text-sm text-slate-400">Na Fila</div></div>
+          </div>
+          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+            <div className="bg-green-600/20 p-3 rounded-lg text-green-500"><CheckCircle2 size={24} /></div>
+            <div><div className="text-2xl font-bold text-white">5</div><div className="text-sm text-slate-400">Finalizados Hoje</div></div>
+          </div>
         </div>
       )}
     </>
@@ -236,33 +267,33 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
 
   const renderPrinters = () => (
     !isTechnician && (
-        <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-white">Status das Impressoras</h2>
-            <button className="text-blue-400 hover:text-blue-300 text-sm">Ver todas</button>
-          </div>
-          <div className="mx-[-0.5rem] px-2">
-            <Slider {...{ dots: false, infinite: false, speed: 500, slidesToShow: 4, slidesToScroll: 1, arrows: true, responsive: [{ breakpoint: 1280, settings: { slidesToShow: 3 } }, { breakpoint: 1024, settings: { slidesToShow: 2 } }, { breakpoint: 640, settings: { slidesToShow: 1 } }] }}>
-              {printers.map((printer, index) => (
-                <div key={index} className="px-2">
-                  <div className="bg-slate-800/30 rounded-lg p-3 border border-slate-700/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Printer className={`${printer.status === 'online' ? 'text-green-500' : printer.status === 'offline' ? 'text-red-500' : 'text-yellow-500'}`} size={20} />
-                        <h3 className="text-white font-medium text-xs truncate max-w-[120px]" title={printer.name}>{printer.name}</h3>
-                      </div>
-                      <div className={`w-2 h-2 rounded-full ${printer.status === 'online' ? 'bg-green-500' : printer.status === 'offline' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500'}`} />
+      <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-white">Status das Impressoras</h2>
+          <button className="text-blue-400 hover:text-blue-300 text-sm">Ver todas</button>
+        </div>
+        <div className="mx-[-0.5rem] px-2">
+          <Slider {...{ dots: false, infinite: false, speed: 500, slidesToShow: 4, slidesToScroll: 1, arrows: true, responsive: [{ breakpoint: 1280, settings: { slidesToShow: 3 } }, { breakpoint: 1024, settings: { slidesToShow: 2 } }, { breakpoint: 640, settings: { slidesToShow: 1 } }] }}>
+            {printers.map((printer, index) => (
+              <div key={index} className="px-2">
+                <div className="bg-slate-800/30 rounded-lg p-3 border border-slate-700/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Printer className={`${printer.status === 'online' ? 'text-green-500' : printer.status === 'offline' ? 'text-red-500' : 'text-yellow-500'}`} size={20} />
+                      <h3 className="text-white font-medium text-xs truncate max-w-[120px]" title={printer.name}>{printer.name}</h3>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 space-y-1"><div className="h-1.5 bg-slate-700 rounded-full overflow-hidden w-full"><div className={`h-full ${printer.ink < 20 ? 'bg-red-500' : printer.ink < 40 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${printer.ink}%` }} /></div></div>
-                      <span className={`text-xs font-semibold ${printer.ink < 20 ? 'text-red-400' : printer.ink < 40 ? 'text-yellow-400' : 'text-green-400'}`}>{printer.ink}%</span>
-                    </div>
+                    <div className={`w-2 h-2 rounded-full ${printer.status === 'online' ? 'bg-green-500' : printer.status === 'offline' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500'}`} />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 space-y-1"><div className="h-1.5 bg-slate-700 rounded-full overflow-hidden w-full"><div className={`h-full ${printer.ink < 20 ? 'bg-red-500' : printer.ink < 40 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${printer.ink}%` }} /></div></div>
+                    <span className={`text-xs font-semibold ${printer.ink < 20 ? 'text-red-400' : printer.ink < 40 ? 'text-yellow-400' : 'text-green-400'}`}>{printer.ink}%</span>
                   </div>
                 </div>
-              ))}
-            </Slider>
-          </div>
+              </div>
+            ))}
+          </Slider>
         </div>
+      </div>
     )
   );
 
@@ -288,56 +319,71 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
   );
 
   const renderQueueList = () => (
-     <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 h-full flex flex-col">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-white flex items-center gap-2"><ListVideo size={20} className="text-slate-400" /> Fila de Espera</h2>
-          <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded-full">{queueTickets.length}</span>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-           {queueTickets.length > 0 ? queueTickets.map(ticket => (
-               <TicketItem key={ticket.id} {...ticket} onClick={() => onTicketClick(ticket)} showAssignButton />
-           )) : <div className="text-center py-10 text-slate-500">Fila limpa!</div>}
-        </div>
-     </div>
+    <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-white flex items-center gap-2"><ListVideo size={20} className="text-slate-400" /> Fila de Espera</h2>
+        <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded-full">{queueTickets.length}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+        {queueTickets.length > 0 ? queueTickets.map(ticket => (
+          <TicketItem key={ticket.id} {...ticket} onClick={() => onTicketClick(ticket)} showAssignButton />
+        )) : <div className="text-center py-10 text-slate-500">Fila limpa!</div>}
+      </div>
+    </div>
   );
 
   const renderMyTicketsList = () => (
-     <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6 h-full flex flex-col relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600" />
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-white flex items-center gap-2"><UserCheck size={20} className="text-blue-400" /> Meus Atendimentos</h2>
-          <span className="text-xs bg-blue-900/50 text-blue-200 border border-blue-800 px-2 py-1 rounded-full">{myTickets.length}</span>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-           {myTickets.length > 0 ? myTickets.map(ticket => (
-               <TicketItem key={ticket.id} {...ticket} onClick={() => onTicketClick(ticket)} isActive />
-           )) : <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-4"><Headphones size={48} className="text-slate-700" /><p>Você não tem atendimentos ativos.</p></div>}
-        </div>
-     </div>
+    <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6 h-full flex flex-col relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600" />
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-white flex items-center gap-2"><UserCheck size={20} className="text-blue-400" /> Meus Atendimentos</h2>
+        <span className="text-xs bg-blue-900/50 text-blue-200 border border-blue-800 px-2 py-1 rounded-full">{myTickets.length}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+        {myTickets.length > 0 ? myTickets.map(ticket => (
+          <TicketItem key={ticket.id} {...ticket} onClick={() => onTicketClick(ticket)} isActive />
+        )) : <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-4"><Headphones size={48} className="text-slate-700" /><p>Você não tem atendimentos ativos.</p></div>}
+      </div>
+    </div>
   );
 
   const renderReservationsList = () => (
     <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-white flex items-center gap-2"><CalendarClock className="text-blue-500" size={24} /> Solicitações</h2>
-        <div className="flex gap-2"><span className="px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded text-xs border border-yellow-500/20">{reservations.filter(r => r.status === 'pending').length} Pendentes</span></div>
+        <div className="flex gap-2"><span className="px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded text-xs border border-yellow-500/20">{reservations.filter(r => r.status === 'PENDING').length} Pendentes</span></div>
       </div>
       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
-        {reservations.length > 0 ? (
+        {reservationsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : reservations.length > 0 ? (
           reservations.map((reservation) => (
             <div key={reservation.id} className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-4 transition-colors hover:border-slate-600/50">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${reservation.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' : reservation.status === 'approved' ? 'bg-green-500/10 text-green-500' : 'bg-slate-700 text-slate-400'}`}><CalendarClock size={20} /></div>
-                  <div><h3 className="text-white font-medium">{reservation.assetName}</h3><p className="text-slate-400 text-sm">{reservation.requester}</p></div>
+                  <div className={`p-2 rounded-lg ${reservation.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-500' : reservation.status === 'APPROVED' ? 'bg-green-500/10 text-green-500' : 'bg-slate-700 text-slate-400'}`}><CalendarClock size={20} /></div>
+                  <div>
+                    <h3 className="text-white font-medium">{reservation.stockItem?.name || 'Item'}</h3>
+                    <p className="text-slate-400 text-sm">{reservation.userName} {reservation.userSector ? `(${reservation.userSector})` : ''}</p>
+                  </div>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full border ${reservation.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : reservation.status === 'approved' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-slate-700 text-slate-400 border-slate-600'}`}>{reservation.status === 'pending' ? 'Pendente' : reservation.status === 'approved' ? 'Aprovado' : 'Concluído'}</span>
+                <span className={`text-xs px-2 py-1 rounded-full border ${reservation.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : reservation.status === 'APPROVED' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-slate-700 text-slate-400 border-slate-600'}`}>
+                  {reservation.status === 'PENDING' ? 'Pendente' : reservation.status === 'APPROVED' ? 'Aprovado' : reservation.status === 'IN_USE' ? 'Em Uso' : 'Concluído'}
+                </span>
+              </div>
+              <div className="text-xs text-slate-500 mb-3">
+                {format(parseISO(reservation.startTime), "dd/MM 'às' HH:mm", { locale: ptBR })} → {format(parseISO(reservation.endTime), "dd/MM 'às' HH:mm", { locale: ptBR })}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {reservation.status === 'pending' && (
-                  <><button onClick={() => handleApproveReservation(reservation.id)} className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm">Aprovar</button><button onClick={() => handleRejectReservation(reservation.id)} className="bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-600/20 py-2 rounded-lg text-sm">Rejeitar</button></>
+                {reservation.status === 'PENDING' && (
+                  <>
+                    <button onClick={() => handleApproveReservation(reservation.id)} className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm">Aprovar</button>
+                    <button onClick={() => handleRejectReservation(reservation.id)} className="bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-600/20 py-2 rounded-lg text-sm">Rejeitar</button>
+                  </>
                 )}
-                <button onClick={() => handleOpenChat(reservation)} className={`col-span-2 bg-blue-600/10 text-blue-400 border border-blue-600/20 py-2 rounded-lg text-sm`}>Conversar</button>
+                <button onClick={() => handleOpenChat(reservation)} className={`${reservation.status === 'PENDING' ? 'col-span-2' : 'col-span-2'} bg-blue-600/10 text-blue-400 border border-blue-600/20 py-2 rounded-lg text-sm`}>Conversar</button>
               </div>
             </div>
           ))
@@ -379,21 +425,21 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
 
       {/* DESKTOP VIEW */}
       <div className="hidden md:block">
-         {renderMetrics()}
-         {renderPrinters()}
-         <div className={`grid grid-cols-1 ${isTechnician ? 'lg:grid-cols-2' : 'lg:grid-cols-2'} gap-6 lg:gap-8`}>
-           {isTechnician ? (
-             <>
-               {renderQueueList()}
-               {renderMyTicketsList()}
-             </>
-           ) : (
-             <>
-               {renderReservationsList()}
-               {renderTicketsList()}
-             </>
-           )}
-         </div>
+        {renderMetrics()}
+        {renderPrinters()}
+        <div className={`grid grid-cols-1 ${isTechnician ? 'lg:grid-cols-2' : 'lg:grid-cols-2'} gap-6 lg:gap-8`}>
+          {isTechnician ? (
+            <>
+              {renderQueueList()}
+              {renderMyTicketsList()}
+            </>
+          ) : (
+            <>
+              {renderReservationsList()}
+              {renderTicketsList()}
+            </>
+          )}
+        </div>
       </div>
 
       {/* MOBILE VIEW */}
@@ -406,40 +452,40 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
         )}
 
         {isTechnician && mobileTab === 'queue' && (
-           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
-             {renderQueueList()}
-           </motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
+            {renderQueueList()}
+          </motion.div>
         )}
-        
+
         {isTechnician && mobileTab === 'mytickets' && (
-           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
-             {renderMyTicketsList()}
-           </motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
+            {renderMyTicketsList()}
+          </motion.div>
         )}
 
         {!isTechnician && mobileTab === 'tickets' && (
-           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
-             {renderTicketsList()}
-           </motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
+            {renderTicketsList()}
+          </motion.div>
         )}
 
         {!isTechnician && mobileTab === 'reservations' && (
-           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
-             {renderReservationsList()}
-           </motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
+            {renderReservationsList()}
+          </motion.div>
         )}
       </div>
 
-      <MobileFloatingMenu 
-        activeId={mobileTab} 
+      <MobileFloatingMenu
+        activeId={mobileTab}
         onSelect={setMobileTab}
-        items={isTechnician ? technicianMenuItems : adminMenuItems} 
+        items={isTechnician ? technicianMenuItems : adminMenuItems}
       />
 
       {activeReservationChat && (
-        <ReservationChat 
-          isOpen={!!activeReservationChat} 
-          onClose={() => setActiveReservationChat(null)} 
+        <ReservationChat
+          isOpen={!!activeReservationChat}
+          onClose={() => setActiveReservationChat(null)}
           requesterName={activeReservationChat.requester}
           assetName={activeReservationChat.assetName}
           reservationId={activeReservationChat.id}
