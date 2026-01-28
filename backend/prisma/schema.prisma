@@ -459,3 +459,130 @@ model ReportRecipient {
 
   @@map("report_recipients")
 }
+
+// ===========================================================================
+// Stock Items - Controle Unificado de Estoque (TI + Elétrica) [v2 ERP]
+// ===========================================================================
+
+model StockItem {
+  id          String        @id @default(uuid())
+  name        String
+  code        String?       @unique  // SKU/Código interno
+  description String?
+  
+  // Classificação
+  stockType   StockType     @default(TI)      // TI ou ELECTRIC
+  category    ItemCategory  @default(SUPPLY)  // SUPPLY, INK, ASSET
+  
+  // Quantidades e Unidades
+  quantity    Decimal       @default(0) @db.Decimal(10,2)  // Suporta frações (1.5m, 0.5L)
+  minQuantity Decimal       @default(5) @db.Decimal(10,2)
+  unit        UnitOfMeasure @default(UN)
+  unitCost    Decimal?      @db.Decimal(10,2)
+  
+  // Localização
+  location    String?       // "Almoxarifado A", "Armário TI"
+  
+  // Específico de Tintas
+  printerModel String?      // Para qual impressora serve
+  inkColor     InkColor?    // CYAN, MAGENTA, YELLOW, BLACK
+  
+  // Específico de Patrimônio
+  assetTag     String?      @unique  // Plaqueta de patrimônio
+  assetStatus  AssetStatus  @default(AVAILABLE)
+  
+  // Controle
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  reservations Reservation[]
+
+  @@map("stock_items")
+  @@index([stockType])
+  @@index([category])
+  @@index([assetStatus])
+}
+
+enum StockType {
+  TI
+  ELECTRIC
+}
+
+enum ItemCategory {
+  SUPPLY   // Insumos (mouse, cabo, disjuntor)
+  INK      // Tintas e Toners
+  ASSET    // Patrimônio (projetor, notebook)
+}
+
+enum UnitOfMeasure {
+  UN   // Unidade
+  M    // Metro
+  L    // Litro
+  ML   // Mililitro
+  CX   // Caixa
+  PCT  // Pacote
+  KG   // Quilograma
+}
+
+enum InkColor {
+  BLACK
+  CYAN
+  MAGENTA
+  YELLOW
+}
+
+enum AssetStatus {
+  AVAILABLE    // Disponível para reserva
+  RESERVED     // Reservado
+  IN_USE       // Em uso
+  MAINTENANCE  // Em manutenção
+}
+
+// ===========================================================================
+// Reservations - Agendamento de Patrimônio [v2 ERP]
+// ===========================================================================
+
+model Reservation {
+  id            String            @id @default(uuid())
+  
+  stockItemId   String
+  stockItem     StockItem         @relation(fields: [stockItemId], references: [id])
+  
+  // Solicitante
+  userId        String?           // Se for usuário do sistema
+  userName      String            // Nome do solicitante
+  userPhone     String?           // Telefone/WhatsApp
+  userSector    String?           // Setor do solicitante
+  
+  // Período
+  startTime     DateTime
+  endTime       DateTime
+  
+  // Status
+  status        ReservationStatus @default(PENDING)
+  
+  // Link com Ticket (se criado pelo bot)
+  ticketId      String?
+  
+  // Controle
+  notes         String?
+  approvedById  String?           // Quem aprovou
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@map("reservations")
+  @@index([stockItemId])
+  @@index([status])
+  @@index([startTime])
+}
+
+enum ReservationStatus {
+  PENDING     // Aguardando aprovação
+  APPROVED    // Aprovada
+  REJECTED    // Rejeitada
+  IN_USE      // Em uso (retirado)
+  COMPLETED   // Devolvido
+  CANCELLED   // Cancelada
+}
+
