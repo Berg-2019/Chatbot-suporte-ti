@@ -74,6 +74,7 @@ Como posso ajudar você hoje?
 2️⃣ Abrir chamado de Elétrica
 3️⃣ Consultar status de chamado
 4️⃣ Falar com um técnico
+5️⃣ Reservar equipamento 📦
 
 Digite o número da opção desejada:`,
 
@@ -120,5 +121,20 @@ Um técnico entrará em contato em breve.`,
     error: '❌ Ocorreu um erro. Por favor, tente novamente.',
 
     invalidOption: '❓ Opção inválida. Por favor, escolha uma das opções disponíveis.',
+
+    // Reservation messages
+    askEquipmentList: (items) => `📦 *Equipamentos disponíveis para reserva:*\n\n${items.map((item, i) => `${i + 1}️⃣ ${item.name} (${item.assetTag || 'S/N'})`).join('\n')}\n\nDigite o número do equipamento:`,
+
+    askReservationDate: '📅 Quando você precisa do equipamento?\n\nDigite a *data de início* no formato:\n`DD/MM/AAAA HH:MM`\n\nExemplo: 30/01/2026 14:00',
+
+    askReservationEnd: '📅 Até quando você precisa?\n\nDigite a *data de devolução* no formato:\n`DD/MM/AAAA HH:MM`',
+
+    askReservationReason: '📝 Qual o motivo da reserva? (opcional, digite "pular" para não informar)',
+
+    confirmReservation: (data) => `✅ Confirma a reserva?\n\n📦 *Equipamento:* ${data.equipmentName}\n📅 *De:* ${data.startDate}\n📅 *Até:* ${data.endDate}\n${data.reason ? `📝 *Motivo:* ${data.reason}` : ''}\n\nDigite *sim* para confirmar ou *não* para cancelar:`,
+
+    reservationCreated: '🎉 Reserva solicitada com sucesso!\n\nVocê receberá uma notificação quando for aprovada pelo técnico.',
+
+    noEquipmentsAvailable: '😔 No momento não há equipamentos disponíveis para reserva.\n\nDigite *menu* para voltar ao início.',
   },
 };

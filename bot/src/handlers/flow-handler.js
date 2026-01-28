@@ -22,6 +22,12 @@ const STATES = {
   CONFIRM: 'confirm',
   WAITING_TECHNICIAN: 'waiting_technician',
   RATING_TICKET: 'rating_ticket',  // Aguardando avaliação 1-5
+  // Reservation states
+  SELECT_EQUIPMENT: 'select_equipment',
+  ASK_RESERVATION_START: 'ask_reservation_start',
+  ASK_RESERVATION_END: 'ask_reservation_end',
+  ASK_RESERVATION_REASON: 'ask_reservation_reason',
+  CONFIRM_RESERVATION: 'confirm_reservation',
 };
 
 class FlowHandler {
@@ -243,6 +249,27 @@ class FlowHandler {
         await this.handleRatingTicket(sock, from, normalizedText, session);
         break;
 
+      // Reservation flow states
+      case STATES.SELECT_EQUIPMENT:
+        await this.handleSelectEquipment(sock, from, normalizedText, session);
+        break;
+
+      case STATES.ASK_RESERVATION_START:
+        await this.handleReservationStart(sock, from, text, session);
+        break;
+
+      case STATES.ASK_RESERVATION_END:
+        await this.handleReservationEnd(sock, from, text, session);
+        break;
+
+      case STATES.ASK_RESERVATION_REASON:
+        await this.handleReservationReason(sock, from, text, session);
+        break;
+
+      case STATES.CONFIRM_RESERVATION:
+        await this.handleConfirmReservation(sock, from, normalizedText, session);
+        break;
+
       default:
         session = { state: STATES.MENU, data: {} };
         await redisService.setSession(phone, session);
@@ -334,6 +361,32 @@ class FlowHandler {
         session.state = STATES.ASK_NAME;
         await redisService.setSession(phone, session);
         await this.sendMessage(sock, from, 'Olá! Antes de começarmos, qual é o seu *nome*?');
+        break;
+
+      case '5': // Reservar equipamento
+        try {
+          const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+          // Buscar equipamentos disponíveis (assets com status AVAILABLE)
+          const equipRes = await axios.get(`${backendUrl}/api/stock?category=ASSET&assetStatus=AVAILABLE`, {
+            timeout: 5000,
+          });
+
+          const availableItems = equipRes.data || [];
+
+          if (availableItems.length === 0) {
+            await this.sendMessage(sock, from, config.messages.noEquipmentsAvailable);
+            break;
+          }
+
+          // Salvar lista na sessão
+          session.data.availableEquipments = availableItems;
+          session.state = STATES.SELECT_EQUIPMENT;
+          await redisService.setSession(phone, session);
+          await this.sendMessage(sock, from, config.messages.askEquipmentList(availableItems));
+        } catch (e) {
+          console.error('Erro ao buscar equipamentos:', e.message);
+          await this.sendMessage(sock, from, '❌ Erro ao buscar equipamentos. Tente novamente mais tarde.');
+        }
         break;
 
       default:
@@ -662,6 +715,168 @@ class FlowHandler {
     } catch (error) {
       console.error('❌ Erro ao enviar mensagem:', error.message);
     }
+  }
+
+  // ============================================
+  // RESERVATION FLOW HANDLERS
+  // ============================================
+
+  /**
+   * Handle equipment selection
+   */
+  async handleSelectEquipment(sock, from, text, session) {
+    const phone = from.split('@')[0];
+    const equipments = session.data.availableEquipments || [];
+    const choice = parseInt(text);
+
+    if (isNaN(choice) || choice < 1 || choice > equipments.length) {
+      await this.sendMessage(sock, from, `❌ Opção inválida. Digite um número de 1 a ${equipments.length}:`);
+      return;
+    }
+
+    const selectedEquip = equipments[choice - 1];
+    session.data.selectedEquipment = selectedEquip;
+    session.state = STATES.ASK_RESERVATION_START;
+    await redisService.setSession(phone, session);
+
+    await this.sendMessage(sock, from, `✅ Você selecionou: *${selectedEquip.name}*\n\n${config.messages.askReservationDate}`);
+  }
+
+  /**
+   * Handle reservation start date
+   */
+  async handleReservationStart(sock, from, text, session) {
+    const phone = from.split('@')[0];
+
+    // Parse date format: DD/MM/YYYY HH:MM
+    const dateMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+
+    if (!dateMatch) {
+      await this.sendMessage(sock, from, '❌ Formato inválido. Use: DD/MM/AAAA HH:MM\n\nExemplo: 30/01/2026 14:00');
+      return;
+    }
+
+    const [, day, month, year, hour, minute] = dateMatch;
+    const startDate = new Date(year, parseInt(month) - 1, day, hour, minute);
+
+    if (startDate < new Date()) {
+      await this.sendMessage(sock, from, '❌ A data não pode ser no passado. Digite uma data futura:');
+      return;
+    }
+
+    session.data.startDate = startDate.toISOString();
+    session.data.startDateFormatted = text;
+    session.state = STATES.ASK_RESERVATION_END;
+    await redisService.setSession(phone, session);
+
+    await this.sendMessage(sock, from, config.messages.askReservationEnd);
+  }
+
+  /**
+   * Handle reservation end date
+   */
+  async handleReservationEnd(sock, from, text, session) {
+    const phone = from.split('@')[0];
+
+    // Parse date format: DD/MM/YYYY HH:MM
+    const dateMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+
+    if (!dateMatch) {
+      await this.sendMessage(sock, from, '❌ Formato inválido. Use: DD/MM/AAAA HH:MM\n\nExemplo: 30/01/2026 18:00');
+      return;
+    }
+
+    const [, day, month, year, hour, minute] = dateMatch;
+    const endDate = new Date(year, parseInt(month) - 1, day, hour, minute);
+    const startDate = new Date(session.data.startDate);
+
+    if (endDate <= startDate) {
+      await this.sendMessage(sock, from, '❌ A data de devolução deve ser após a data de início. Digite novamente:');
+      return;
+    }
+
+    session.data.endDate = endDate.toISOString();
+    session.data.endDateFormatted = text;
+    session.state = STATES.ASK_RESERVATION_REASON;
+    await redisService.setSession(phone, session);
+
+    await this.sendMessage(sock, from, config.messages.askReservationReason);
+  }
+
+  /**
+   * Handle reservation reason
+   */
+  async handleReservationReason(sock, from, text, session) {
+    const phone = from.split('@')[0];
+
+    if (text.toLowerCase() !== 'pular' && text.trim()) {
+      session.data.reservationReason = text;
+    }
+
+    session.state = STATES.CONFIRM_RESERVATION;
+    await redisService.setSession(phone, session);
+
+    const confirmMsg = config.messages.confirmReservation({
+      equipmentName: session.data.selectedEquipment.name,
+      startDate: session.data.startDateFormatted,
+      endDate: session.data.endDateFormatted,
+      reason: session.data.reservationReason || null
+    });
+
+    await this.sendMessage(sock, from, confirmMsg);
+  }
+
+  /**
+   * Handle reservation confirmation
+   */
+  async handleConfirmReservation(sock, from, text, session) {
+    const phone = from.split('@')[0];
+
+    if (text === 'sim' || text === 's') {
+      try {
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+
+        // Create reservation via API
+        const response = await axios.post(`${backendUrl}/api/reservations`, {
+          stockItemId: session.data.selectedEquipment.id,
+          userName: session.data.contactName || 'Cliente WhatsApp',
+          userPhone: phone,
+          startTime: session.data.startDate,
+          endTime: session.data.endDate,
+          notes: session.data.reservationReason || 'Reserva via WhatsApp',
+        }, { timeout: 10000 });
+
+        await this.sendMessage(sock, from, config.messages.reservationCreated);
+
+        // Notify panel about new reservation
+        await rabbitmqService.publishNotification(
+          'reservation_created',
+          null,
+          {
+            phone,
+            equipmentName: session.data.selectedEquipment.name,
+            reservationId: response.data.id
+          }
+        );
+
+      } catch (error) {
+        console.error('❌ Erro ao criar reserva:', error.message);
+
+        if (error.response?.data?.message?.includes('conflict')) {
+          await this.sendMessage(sock, from, '⚠️ Esse equipamento já está reservado para o horário solicitado.\n\nDigite *menu* para tentar novamente com outro horário.');
+        } else {
+          await this.sendMessage(sock, from, '❌ Erro ao criar reserva. Tente novamente mais tarde.\n\nDigite *menu* para voltar ao início.');
+        }
+      }
+    } else if (text === 'nao' || text === 'não' || text === 'n') {
+      await this.sendMessage(sock, from, '❌ Reserva cancelada.\n\nDigite *menu* para voltar ao início.');
+    } else {
+      await this.sendMessage(sock, from, '❓ Digite *sim* para confirmar ou *não* para cancelar:');
+      return;
+    }
+
+    // Clear session after completion
+    await redisService.deleteSession(phone);
   }
 }
 
