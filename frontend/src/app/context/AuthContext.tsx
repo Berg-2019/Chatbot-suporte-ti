@@ -49,11 +49,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const response = await fetch(`${API_URL}/api/auth/login`, {
+
+      // Try regular login first
+      let response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+
+      // If regular login fails, try GLPI login
+      if (!response.ok) {
+        response = await fetch(`${API_URL}/api/auth/glpi-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+      }
 
       if (!response.ok) {
         setIsLoading(false);
@@ -61,24 +72,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
+      const token = data.token || data.access_token; // Handle both formats
 
       const newUser = {
         name: data.user?.name || email.split('@')[0],
         email: data.user?.email || email,
         avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        token: data.access_token,
+        token: token,
       };
 
       setUser(newUser);
       setIsAuthenticated(true);
       localStorage.setItem('helpdesk_user', JSON.stringify(newUser));
-      localStorage.setItem('authToken', data.access_token); // Store token for API calls
+      localStorage.setItem('authToken', token); // Store token for API calls
 
       // Define profile based on role from backend or email
       let newProfile: UserProfile = 'admin';
-      if (data.user?.role === 'tech_elect' || email.includes('eletrica')) newProfile = 'tech_elect';
-      else if (data.user?.role === 'tech_ti' || email.includes('tecnico')) newProfile = 'tech_ti';
-      else if (data.user?.role === 'manager' || email.includes('gestor')) newProfile = 'manager';
+      if (data.user?.role === 'TECH_ELECT' || data.user?.role === 'tech_elect' || email.includes('eletrica')) newProfile = 'tech_elect';
+      else if (data.user?.role === 'TECH_TI' || data.user?.role === 'tech_ti' || email.includes('tecnico')) newProfile = 'tech_ti';
+      else if (data.user?.role === 'MANAGER' || data.user?.role === 'manager' || email.includes('gestor')) newProfile = 'manager';
 
       setProfile(newProfile);
       localStorage.setItem('helpdesk_profile', newProfile);
