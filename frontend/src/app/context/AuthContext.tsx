@@ -31,12 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedUser = localStorage.getItem('helpdesk_user');
     const storedProfile = localStorage.getItem('helpdesk_profile');
-    
+
     if (storedUser) {
       setUser(JSON.parse(storedUser));
       setIsAuthenticated(true);
     }
-    
+
     if (storedProfile) {
       setProfile(storedProfile as UserProfile);
     }
@@ -46,40 +46,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-    
-    // Simulação de chamada API ao GLPI
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // Lógica mockada de login
-        // Em produção, isso seria um fetch('/api/auth/login', ...)
-        if (password.length > 0) {
-          const mockUser = {
-            name: email.split('@')[0],
-            email: email,
-            avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-            token: 'mock-jwt-token-glpi'
-          };
-          
-          setUser(mockUser);
-          setIsAuthenticated(true);
-          localStorage.setItem('helpdesk_user', JSON.stringify(mockUser));
-          
-          // Define perfil baseado no email (para testes)
-          let newProfile: UserProfile = 'admin';
-          if (email.includes('eletrica')) newProfile = 'tech_elect';
-          else if (email.includes('tecnico')) newProfile = 'tech_ti';
-          else if (email.includes('gestor')) newProfile = 'manager';
-          
-          setProfile(newProfile);
-          localStorage.setItem('helpdesk_profile', newProfile);
-          
-          resolve(true);
-        } else {
-          resolve(false);
-        }
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
         setIsLoading(false);
-      }, 1500);
-    });
+        return false;
+      }
+
+      const data = await response.json();
+
+      const newUser = {
+        name: data.user?.name || email.split('@')[0],
+        email: data.user?.email || email,
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
+        token: data.access_token,
+      };
+
+      setUser(newUser);
+      setIsAuthenticated(true);
+      localStorage.setItem('helpdesk_user', JSON.stringify(newUser));
+      localStorage.setItem('authToken', data.access_token); // Store token for API calls
+
+      // Define profile based on role from backend or email
+      let newProfile: UserProfile = 'admin';
+      if (data.user?.role === 'tech_elect' || email.includes('eletrica')) newProfile = 'tech_elect';
+      else if (data.user?.role === 'tech_ti' || email.includes('tecnico')) newProfile = 'tech_ti';
+      else if (data.user?.role === 'manager' || email.includes('gestor')) newProfile = 'manager';
+
+      setProfile(newProfile);
+      localStorage.setItem('helpdesk_profile', newProfile);
+      setIsLoading(false);
+
+      return true;
+    } catch (error) {
+      console.error('Login error:', error);
+      setIsLoading(false);
+      return false;
+    }
   };
 
   const logout = () => {
@@ -87,15 +97,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false);
     localStorage.removeItem('helpdesk_user');
     localStorage.removeItem('helpdesk_profile');
+    localStorage.removeItem('authToken');
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      profile, 
-      setProfile, 
-      user, 
-      isAuthenticated, 
-      login, 
+    <AuthContext.Provider value={{
+      profile,
+      setProfile,
+      user,
+      isAuthenticated,
+      login,
       logout,
       isLoading
     }}>
