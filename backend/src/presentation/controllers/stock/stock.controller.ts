@@ -20,10 +20,10 @@ import {
     StockQueryDto,
     StockMovementDto,
 } from './stock.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('stock')
-@UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard('jwt'))
 export class StockController {
     constructor(private readonly stockService: StockService) { }
 

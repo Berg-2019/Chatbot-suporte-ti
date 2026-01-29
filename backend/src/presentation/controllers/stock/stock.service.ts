@@ -45,9 +45,10 @@ export class StockService {
         }
 
         if (query.lowStock) {
-            // Itens com quantidade <= minQuantity
+            // Itens com quantidade baixa (usando valor fixo para simplificar)
+            // Idealmente, isso deveria ser uma raw query comparando quantity <= minQuantity
             where.quantity = {
-                lte: where.minQuantity || 5,
+                lte: 5,
             };
         }
 

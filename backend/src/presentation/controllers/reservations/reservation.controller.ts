@@ -19,10 +19,10 @@ import {
     UpdateReservationStatusDto,
     ReservationQueryDto,
 } from './reservation.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('reservations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard('jwt'))
 export class ReservationController {
     constructor(private readonly reservationService: ReservationService) { }
 
