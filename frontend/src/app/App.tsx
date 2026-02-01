@@ -1,23 +1,32 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import Sidebar from '@/app/components/Sidebar';
 import ChatView from '@/app/components/ChatView';
-import LoginView from '@/app/components/views/LoginView';
-import DashboardView from '@/app/components/views/DashboardView';
-import ElectricalDashboardView from '@/app/components/views/ElectricalDashboardView';
-import ManagerView from '@/app/components/views/ManagerView';
-import MetricsView from '@/app/components/views/MetricsView';
-import PrintersView from '@/app/components/views/PrintersView';
-import BotConfigView from '@/app/components/views/BotConfigView';
-import ReportsView from '@/app/components/views/ReportsView';
-import FAQView from '@/app/components/views/FAQView';
-import StockView from '@/app/components/views/StockView';
-import UsersView from '@/app/components/views/UsersView';
-import TeamChatView from '@/app/components/views/TeamChatView';
 import { AuthProvider, useAuth } from '@/app/context/AuthContext';
 import { Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogOut } from 'lucide-react';
 import { Ticket } from '@/types/ticket';
+
+// Lazy load view components for better performance
+const LoginView = lazy(() => import('@/app/components/views/LoginView'));
+const DashboardView = lazy(() => import('@/app/components/views/DashboardView'));
+const ElectricalDashboardView = lazy(() => import('@/app/components/views/ElectricalDashboardView'));
+const ManagerView = lazy(() => import('@/app/components/views/ManagerView'));
+const MetricsView = lazy(() => import('@/app/components/views/MetricsView'));
+const PrintersView = lazy(() => import('@/app/components/views/PrintersView'));
+const BotConfigView = lazy(() => import('@/app/components/views/BotConfigView'));
+const ReportsView = lazy(() => import('@/app/components/views/ReportsView'));
+const FAQView = lazy(() => import('@/app/components/views/FAQView'));
+const StockView = lazy(() => import('@/app/components/views/StockView'));
+const UsersView = lazy(() => import('@/app/components/views/UsersView'));
+const TeamChatView = lazy(() => import('@/app/components/views/TeamChatView'));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 
 function MainContent() {
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
@@ -71,7 +80,11 @@ function MainContent() {
 
   // If not authenticated, show Login View
   if (!isAuthenticated) {
-    return <LoginView />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <LoginView />
+      </Suspense>
+    );
   }
 
   const isManagerTvMode = profile === 'manager';
@@ -79,21 +92,24 @@ function MainContent() {
   return (
     <div className="flex min-h-screen bg-slate-950">
       {!isManagerTvMode && <Sidebar activeItem={activeMenuItem} onItemClick={setActiveMenuItem} />}
-      
+
       <main className={`flex-1 overflow-auto relative ${isManagerTvMode ? 'h-screen overflow-hidden p-0' : ''}`}>
         {/* Logout Button (Floating for easy access) */}
         <div className="absolute top-4 right-4 z-50">
-          <button 
+          <button
             onClick={logout}
             className={`p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-500 rounded-full transition-all ${isManagerTvMode ? 'bg-slate-900/80 backdrop-blur-md border border-slate-700' : 'bg-slate-800/50'}`}
             title="Sair do Sistema"
+            aria-label="Sair do Sistema"
           >
             <LogOut size={20} />
           </button>
         </div>
 
         <div className={isManagerTvMode ? 'h-full' : 'p-6 lg:p-8 pt-16 lg:pt-8'}>
-          {isManagerTvMode ? <ManagerView /> : renderView()}
+          <Suspense fallback={<LoadingFallback />}>
+            {isManagerTvMode ? <ManagerView /> : renderView()}
+          </Suspense>
         </div>
       </main>
 
