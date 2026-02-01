@@ -4,6 +4,9 @@
 
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { validate } from './config/env.validation';
 
 // Infrastructure
 import { PrismaModule } from './infrastructure/database/prisma.module';
@@ -35,11 +38,18 @@ import { HealthController } from './presentation/controllers/health.controller';
 
 @Module({
   imports: [
-    // Config
+    // Config with validation
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validate,
     }),
+
+    // Rate Limiting (60 requests per minute)
+    ThrottlerModule.forRoot([{
+      ttl: 60000, // 60 seconds
+      limit: 60,  // 60 requests
+    }]),
 
     // Infrastructure
     PrismaModule,
@@ -67,6 +77,13 @@ import { HealthController } from './presentation/controllers/health.controller';
     WebsocketModule,
   ],
   controllers: [HealthController],
+  providers: [
+    // Apply rate limiting globally
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule { }
 
