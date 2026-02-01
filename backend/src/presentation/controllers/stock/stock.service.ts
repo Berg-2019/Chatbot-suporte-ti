@@ -20,6 +20,10 @@ export class StockService {
      * Lista todos os itens de estoque com filtros
      */
     async findAll(query: StockQueryDto) {
+        const page = query.page || 1;
+        const limit = query.limit || 20;
+        const skip = (page - 1) * limit;
+
         const where: Prisma.StockItemWhereInput = {
             active: true,
         };
@@ -44,29 +48,40 @@ export class StockService {
             ];
         }
 
+        // Buscar com paginação
+        const [items, total] = await Promise.all([
+            this.prisma.stockItem.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { name: 'asc' },
+                include: {
+                    _count: {
+                        select: { reservations: true },
+                    },
+                },
+            }),
+            this.prisma.stockItem.count({ where }),
+        ]);
+
+        // Filtrar lowStock comparando quantity <= minQuantity (pós-processamento)
+        let filteredItems = items;
+        let filteredTotal = total;
+
         if (query.lowStock) {
-            // Itens com quantidade baixa (usando valor fixo para simplificar)
-            // Idealmente, isso deveria ser uma raw query comparando quantity <= minQuantity
-            where.quantity = {
-                lte: 5,
-            };
+            filteredItems = items.filter(item =>
+                Number(item.quantity) <= Number(item.minQuantity)
+            );
+            filteredTotal = filteredItems.length;
         }
 
-        const items = await this.prisma.stockItem.findMany({
-            where,
-            orderBy: { name: 'asc' },
-            include: {
-                reservations: {
-                    where: {
-                        status: { in: ['PENDING', 'APPROVED', 'IN_USE'] },
-                    },
-                    orderBy: { startTime: 'asc' },
-                    take: 5,
-                },
-            },
-        });
-
-        return items;
+        return {
+            items: filteredItems,
+            total: filteredTotal,
+            page,
+            limit,
+            pages: Math.ceil(filteredTotal / limit),
+        };
     }
 
     /**
@@ -179,14 +194,9 @@ export class StockService {
             where.stockType = stockType as any;
         }
 
-        const [total, lowStock, assets] = await Promise.all([
+        // Buscar total e assets normalmente
+        const [total, assets] = await Promise.all([
             this.prisma.stockItem.count({ where }),
-            this.prisma.stockItem.count({
-                where: {
-                    ...where,
-                    quantity: { lte: 5 }, // Simplificado - idealmente comparar com minQuantity
-                },
-            }),
             this.prisma.stockItem.count({
                 where: {
                     ...where,
@@ -194,6 +204,19 @@ export class StockService {
                 },
             }),
         ]);
+
+        // Contar lowStock usando raw query para comparar quantity <= minQuantity
+        const stockTypeFilter = stockType ? this.prisma.$queryRaw`AND "stockType" = ${stockType}` : this.prisma.$queryRaw``;
+
+        const lowStockResult = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(*)::int as count
+            FROM stock_items
+            WHERE active = true
+              AND quantity <= "minQuantity"
+              ${stockTypeFilter}
+        `;
+
+        const lowStock = Number(lowStockResult[0]?.count || 0);
 
         return {
             total,

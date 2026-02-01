@@ -175,35 +175,40 @@ export class ReservationService {
             );
         }
 
-        // Atualizar status do asset se necessário
-        if (dto.status === 'IN_USE') {
-            await this.prisma.stockItem.update({
-                where: { id: reservation.stockItemId },
-                data: { assetStatus: 'IN_USE' },
-            });
-        } else if (dto.status === 'COMPLETED' || dto.status === 'CANCELLED') {
-            await this.prisma.stockItem.update({
-                where: { id: reservation.stockItemId },
-                data: { assetStatus: 'AVAILABLE' },
-            });
-        }
+        // Usar transação para evitar race conditions
+        return this.prisma.$transaction(async (tx) => {
+            // Atualizar status do asset se necessário
+            if (dto.status === 'IN_USE') {
+                await tx.stockItem.update({
+                    where: { id: reservation.stockItemId },
+                    data: { assetStatus: 'IN_USE' },
+                });
+            } else if (dto.status === 'COMPLETED' || dto.status === 'CANCELLED') {
+                await tx.stockItem.update({
+                    where: { id: reservation.stockItemId },
+                    data: { assetStatus: 'AVAILABLE' },
+                });
+            }
 
-        return this.prisma.reservation.update({
-            where: { id },
-            data: {
-                status: dto.status,
-                notes: dto.notes || reservation.notes,
-                approvedById: dto.status === 'APPROVED' ? approvedById : reservation.approvedById,
-            },
-            include: {
-                stockItem: {
-                    select: {
-                        id: true,
-                        name: true,
-                        assetTag: true,
+            // Atualizar reserva
+            return tx.reservation.update({
+                where: { id },
+                data: {
+                    status: dto.status,
+                    notes: dto.notes || reservation.notes,
+                    approvedById: dto.status === 'APPROVED' ? approvedById : reservation.approvedById,
+                    updatedAt: new Date(),
+                },
+                include: {
+                    stockItem: {
+                        select: {
+                            id: true,
+                            name: true,
+                            assetTag: true,
+                        },
                     },
                 },
-            },
+            });
         });
     }
 

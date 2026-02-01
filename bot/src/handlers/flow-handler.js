@@ -15,6 +15,7 @@ const STATES = {
   SELECT_AREA: 'select_area', // TI ou Elétrica
   SELECT_SECTOR_TI: 'select_sector_ti',
   SELECT_SECTOR_ELECTRIC: 'select_sector_electric',
+  SELECT_SECTOR_GENERIC: 'select_sector_generic', // Para fluxos genéricos (técnico, reserva)
   ASK_NAME: 'ask_name',
   DESCRIBE_PROBLEM: 'describe_problem',
   CHECK_FAQ: 'check_faq',
@@ -53,6 +54,49 @@ class FlowHandler {
       console.warn('⚠️ Falha ao verificar ticket no backend:', e.message);
       return null;
     }
+  }
+
+  /**
+   * Garante que dados do usuário (nome e setor) estão disponíveis
+   * @param {object} sock - Socket do WhatsApp
+   * @param {string} from - JID do remetente
+   * @param {object} session - Sessão atual
+   * @param {string} nextState - Próximo estado após coletar dados
+   * @returns {Promise<boolean>} - true se dados existem, false se precisa coletar
+   */
+  async ensureUserData(sock, from, session, nextState) {
+    const phone = from.split('@')[0];
+
+    // 1. Verificar se já tem dados na sessão
+    if (session.data.contactName && session.data.sector) {
+      return true;
+    }
+
+    // 2. Verificar se contato existe no backend
+    try {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+      const contactRes = await axios.get(
+        `${backendUrl}/api/contacts/by-jid/${encodeURIComponent(from)}`,
+        { timeout: 3000 }
+      );
+
+      if (contactRes?.data) {
+        const contact = contactRes.data;
+        session.data.contactName = contact.name;
+        session.data.sector = contact.sector;
+        await redisService.setSession(phone, session);
+        return true;
+      }
+    } catch (e) {
+      // Contato não encontrado, continua para coletar
+    }
+
+    // 3. Precisa coletar dados - salvar próximo estado e ir para ASK_NAME
+    session.data.afterUserData = nextState;
+    session.state = STATES.ASK_NAME;
+    await redisService.setSession(phone, session);
+    await this.sendMessage(sock, from, 'Olá! Para continuar, preciso de algumas informações.\n\nQual é o seu *nome completo*?');
+    return false;
   }
 
   /**
@@ -225,6 +269,10 @@ class FlowHandler {
         await this.handleSelectSectorElectric(sock, from, normalizedText, session);
         break;
 
+      case STATES.SELECT_SECTOR_GENERIC:
+        await this.handleSelectSectorGeneric(sock, from, text, session);
+        break;
+
       case STATES.DESCRIBE_PROBLEM:
         await this.handleDescribeProblem(sock, from, text, session, msg);
         break;
@@ -311,20 +359,28 @@ class FlowHandler {
         break;
 
 
-      case '4': // Falar com técnico (era 3)
-        session.state = STATES.WAITING_TECHNICIAN;
+      case '4': // Falar com técnico
         session.data.requestedHuman = true;
+        const hasData = await this.ensureUserData(sock, from, session, STATES.WAITING_TECHNICIAN);
+
+        if (!hasData) {
+          // Dados sendo coletados, fluxo continua em handleAskName
+          return;
+        }
+
+        // Dados já disponíveis, continuar para técnico
+        session.state = STATES.WAITING_TECHNICIAN;
         await redisService.setSession(phone, session);
         await this.sendMessage(sock, from, config.messages.transferToHuman);
 
-        // Criar ticket de solicitação de técnico
+        // Criar ticket com dados reais
         await rabbitmqService.publishCreateTicket({
           phoneNumber: from,
           title: "Falar com Técnico",
           description: "Solicitação direta de atendimento humano via menu do bot.",
-          sector: "Atendimento",
+          sector: session.data.sector,
           category: "Suporte",
-          customerName: session.data.contactName || "Cliente",
+          customerName: session.data.contactName,
           priority: "HIGH"
         });
 
@@ -332,7 +388,7 @@ class FlowHandler {
         await rabbitmqService.publishNotification(
           'human_requested',
           null,
-          { phone, message: 'Cliente solicitou atendimento humano' }
+          { phone, message: `${session.data.contactName} (${session.data.sector}) solicitou atendimento humano` }
         );
         break;
 
@@ -364,21 +420,29 @@ class FlowHandler {
         break;
 
       case '5': // Reservar equipamento
+        const hasDataReserv = await this.ensureUserData(sock, from, session, STATES.SELECT_EQUIPMENT);
+
+        if (!hasDataReserv) {
+          // Dados sendo coletados, salvar contexto
+          session.data.reservationFlow = true;
+          await redisService.setSession(phone, session);
+          return;
+        }
+
+        // Dados já disponíveis, buscar equipamentos
         try {
           const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-          // Buscar equipamentos disponíveis (assets com status AVAILABLE)
           const equipRes = await axios.get(`${backendUrl}/api/stock?category=ASSET&assetStatus=AVAILABLE`, {
             timeout: 5000,
           });
 
-          const availableItems = equipRes.data || [];
+          const availableItems = equipRes.data.items || equipRes.data || [];
 
           if (availableItems.length === 0) {
             await this.sendMessage(sock, from, config.messages.noEquipmentsAvailable);
             break;
           }
 
-          // Salvar lista na sessão
           session.data.availableEquipments = availableItems;
           session.state = STATES.SELECT_EQUIPMENT;
           await redisService.setSession(phone, session);
@@ -405,7 +469,15 @@ class FlowHandler {
 
     session.data.contactName = name;
 
-    // Decidir próximo estado baseado no tipo de chamado
+    // Se tem afterUserData, está em fluxo genérico (técnico, reserva)
+    if (session.data.afterUserData) {
+      session.state = STATES.SELECT_SECTOR_GENERIC;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, `Obrigado, ${name}!\n\nAgora, informe seu *setor/departamento*:`);
+      return;
+    }
+
+    // Fluxo normal de ticket (TI ou Elétrica)
     if (session.data.ticketType === 'electric') {
       session.state = STATES.SELECT_SECTOR_ELECTRIC;
       await redisService.setSession(phone, session);
@@ -447,6 +519,69 @@ class FlowHandler {
     session.state = STATES.DESCRIBE_PROBLEM;
     await redisService.setSession(phone, session);
     await this.sendMessage(sock, from, config.messages.askProblem);
+  }
+
+  async handleSelectSectorGeneric(sock, from, text, session) {
+    const phone = from.split('@')[0];
+    const sector = text.trim();
+
+    if (sector.length < 2) {
+      await this.sendMessage(sock, from, 'Por favor, informe seu setor (ex: TI, RH, Financeiro, etc.):');
+      return;
+    }
+
+    session.data.sector = sector;
+
+    // Ir para o estado de destino
+    const nextState = session.data.afterUserData || STATES.MENU;
+    delete session.data.afterUserData;
+
+    session.state = nextState;
+    await redisService.setSession(phone, session);
+
+    // Executar ação do estado de destino
+    if (nextState === STATES.WAITING_TECHNICIAN) {
+      // Criar ticket de falar com técnico
+      await this.sendMessage(sock, from, config.messages.transferToHuman);
+
+      await rabbitmqService.publishCreateTicket({
+        phoneNumber: from,
+        title: "Falar com Técnico",
+        description: "Solicitação direta de atendimento humano via menu do bot.",
+        sector: session.data.sector,
+        category: "Suporte",
+        customerName: session.data.contactName,
+        priority: "HIGH"
+      });
+
+      await rabbitmqService.publishNotification(
+        'human_requested',
+        null,
+        { phone, message: `${session.data.contactName} (${session.data.sector}) solicitou atendimento humano` }
+      );
+    } else if (nextState === STATES.SELECT_EQUIPMENT) {
+      // Buscar equipamentos para reserva
+      try {
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+        const equipRes = await axios.get(`${backendUrl}/api/stock?category=ASSET&assetStatus=AVAILABLE`, {
+          timeout: 5000,
+        });
+
+        const availableItems = equipRes.data.items || equipRes.data || [];
+
+        if (availableItems.length === 0) {
+          await this.sendMessage(sock, from, config.messages.noEquipmentsAvailable || '❌ Nenhum equipamento disponível.');
+          return;
+        }
+
+        session.data.availableEquipments = availableItems;
+        await redisService.setSession(phone, session);
+        await this.sendMessage(sock, from, config.messages.askEquipmentList(availableItems));
+      } catch (e) {
+        console.error('Erro ao buscar equipamentos:', e.message);
+        await this.sendMessage(sock, from, '❌ Erro ao buscar equipamentos. Tente novamente mais tarde.');
+      }
+    }
   }
 
   async handleDescribeProblem(sock, from, text, session) {
@@ -722,6 +857,18 @@ class FlowHandler {
   // ============================================
 
   /**
+   * Valida se uma data é válida (não é auto-corrigida)
+   */
+  isValidDate(day, month, year) {
+    const date = new Date(year, month - 1, day);
+    return (
+      date.getFullYear() === parseInt(year) &&
+      date.getMonth() === parseInt(month) - 1 &&
+      date.getDate() === parseInt(day)
+    );
+  }
+
+  /**
    * Handle equipment selection
    */
   async handleSelectEquipment(sock, from, text, session) {
@@ -757,6 +904,21 @@ class FlowHandler {
     }
 
     const [, day, month, year, hour, minute] = dateMatch;
+
+    // Validate date components
+    if (!this.isValidDate(day, month, year)) {
+      await this.sendMessage(sock, from, '❌ Data inválida. Verifique se o dia e mês existem.\n\nExemplo: 30/02 não existe.\n\nDigite novamente:');
+      return;
+    }
+
+    // Validate time components
+    const hourNum = parseInt(hour);
+    const minuteNum = parseInt(minute);
+    if (hourNum < 0 || hourNum > 23 || minuteNum < 0 || minuteNum > 59) {
+      await this.sendMessage(sock, from, '❌ Hora inválida. Use formato 24h (00:00 - 23:59).\n\nDigite novamente:');
+      return;
+    }
+
     const startDate = new Date(year, parseInt(month) - 1, day, hour, minute);
 
     if (startDate < new Date()) {
@@ -787,11 +949,41 @@ class FlowHandler {
     }
 
     const [, day, month, year, hour, minute] = dateMatch;
+
+    // Validate date components
+    if (!this.isValidDate(day, month, year)) {
+      await this.sendMessage(sock, from, '❌ Data inválida. Verifique se o dia e mês existem.\n\nExemplo: 30/02 não existe.\n\nDigite novamente:');
+      return;
+    }
+
+    // Validate time components
+    const hourNum = parseInt(hour);
+    const minuteNum = parseInt(minute);
+    if (hourNum < 0 || hourNum > 23 || minuteNum < 0 || minuteNum > 59) {
+      await this.sendMessage(sock, from, '❌ Hora inválida. Use formato 24h (00:00 - 23:59).\n\nDigite novamente:');
+      return;
+    }
+
     const endDate = new Date(year, parseInt(month) - 1, day, hour, minute);
     const startDate = new Date(session.data.startDate);
 
     if (endDate <= startDate) {
       await this.sendMessage(sock, from, '❌ A data de devolução deve ser após a data de início. Digite novamente:');
+      return;
+    }
+
+    // Validate minimum duration (1 hour)
+    const durationMs = endDate - startDate;
+    const durationHours = durationMs / (1000 * 60 * 60);
+    if (durationHours < 1) {
+      await this.sendMessage(sock, from, '❌ A reserva deve ter duração mínima de 1 hora. Digite novamente:');
+      return;
+    }
+
+    // Validate maximum duration (30 days)
+    const durationDays = durationMs / (1000 * 60 * 60 * 24);
+    if (durationDays > 30) {
+      await this.sendMessage(sock, from, '❌ A reserva não pode exceder 30 dias. Digite novamente:');
       return;
     }
 

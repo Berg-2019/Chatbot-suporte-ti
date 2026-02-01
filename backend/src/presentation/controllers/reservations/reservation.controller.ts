@@ -20,9 +20,11 @@ import {
     ReservationQueryDto,
 } from './reservation.dto';
 import { AuthGuard } from '@nestjs/passport';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 
 @Controller('reservations')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class ReservationController {
     constructor(private readonly reservationService: ReservationService) { }
 
@@ -31,6 +33,7 @@ export class ReservationController {
      * Lista reservas com filtros
      */
     @Get()
+    @Roles(UserRole.ADMIN, UserRole.AGENT, UserRole.STOCK_MANAGER, UserRole.VIEWER)
     async findAll(@Query() query: ReservationQueryDto) {
         return this.reservationService.findAll(query);
     }
@@ -40,6 +43,7 @@ export class ReservationController {
      * Quantidade de reservas pendentes
      */
     @Get('pending-count')
+    @Roles(UserRole.ADMIN, UserRole.AGENT, UserRole.STOCK_MANAGER)
     async getPendingCount() {
         const count = await this.reservationService.getPendingCount();
         return { count };
@@ -50,6 +54,7 @@ export class ReservationController {
      * Timeline para cronograma
      */
     @Get('timeline')
+    @Roles(UserRole.ADMIN, UserRole.AGENT, UserRole.STOCK_MANAGER, UserRole.VIEWER)
     async getTimeline(
         @Query('startDate') startDate: string,
         @Query('endDate') endDate: string,
@@ -65,6 +70,7 @@ export class ReservationController {
      * Busca uma reserva por ID
      */
     @Get(':id')
+    @Roles(UserRole.ADMIN, UserRole.AGENT, UserRole.STOCK_MANAGER, UserRole.VIEWER)
     async findOne(@Param('id') id: string) {
         return this.reservationService.findOne(id);
     }
@@ -74,6 +80,7 @@ export class ReservationController {
      * Cria uma nova reserva
      */
     @Post()
+    @Roles(UserRole.ADMIN, UserRole.AGENT, UserRole.STOCK_MANAGER)
     async create(@Body() dto: CreateReservationDto) {
         return this.reservationService.create(dto);
     }
@@ -83,6 +90,7 @@ export class ReservationController {
      * Atualiza status (aprovar, rejeitar, etc)
      */
     @Patch(':id/status')
+    @Roles(UserRole.ADMIN, UserRole.STOCK_MANAGER)
     async updateStatus(
         @Param('id') id: string,
         @Body() dto: UpdateReservationStatusDto,
@@ -96,6 +104,7 @@ export class ReservationController {
      * Atalho para aprovar
      */
     @Post(':id/approve')
+    @Roles(UserRole.ADMIN, UserRole.STOCK_MANAGER)
     async approve(@Param('id') id: string, @Request() req: any) {
         return this.reservationService.updateStatus(
             id,
@@ -109,6 +118,7 @@ export class ReservationController {
      * Atalho para rejeitar
      */
     @Post(':id/reject')
+    @Roles(UserRole.ADMIN, UserRole.STOCK_MANAGER)
     async reject(@Param('id') id: string, @Body('notes') notes?: string) {
         return this.reservationService.updateStatus(id, {
             status: 'REJECTED' as any,

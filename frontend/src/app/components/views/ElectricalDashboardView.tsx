@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { format, isSameDay, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useBadges } from '@/app/hooks/useBadges';
+import { Ticket } from '@/types/ticket';
 
 const data = [
   { name: 'Seg', chamados: 4 },
@@ -39,21 +40,8 @@ interface TimelineReservation {
   status: 'approved' | 'pending';
 }
 
-interface ElectricalTicket {
-  id: number | string;
-  title: string;
-  loc: string;
-  status: 'pending' | 'urgent' | 'done' | 'progress';
-  time: string;
-  client: string;
-  description: string;
-  category: string;
-  ticketNumber: string;
-  date?: string;
-}
-
 interface ElectricalDashboardViewProps {
-  onTicketClick: (ticket: any) => void;
+  onTicketClick: (ticket: Ticket) => void;
 }
 
 export default function ElectricalDashboardView({ onTicketClick }: ElectricalDashboardViewProps) {
@@ -79,7 +67,7 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
   ];
 
   // Mock Tickets
-  const requests: ElectricalTicket[] = [
+  const requests: Ticket[] = [
     { 
       id: 1, 
       title: 'Troca de Disjuntor', 

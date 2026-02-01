@@ -17,13 +17,14 @@ import { AuthProvider, useAuth } from '@/app/context/AuthContext';
 import { Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogOut } from 'lucide-react';
+import { Ticket } from '@/types/ticket';
 
 function MainContent() {
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
-  const [selectedTicketData, setSelectedTicketData] = useState<any>(null);
+  const [selectedTicketData, setSelectedTicketData] = useState<Ticket | null>(null);
   const { profile, isAuthenticated, logout, isLoading } = useAuth();
 
-  const handleTicketClick = (ticket: any) => {
+  const handleTicketClick = (ticket: Ticket) => {
     setSelectedTicketData(ticket);
   };
 

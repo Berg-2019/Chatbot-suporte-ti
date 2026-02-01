@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Send, 
-  X, 
-  Paperclip, 
-  MoreVertical, 
-  User, 
-  Briefcase, 
-  Clock, 
-  CheckCircle2, 
+import {
+  Send,
+  X,
+  Paperclip,
+  MoreVertical,
+  User,
+  Briefcase,
+  Clock,
+  CheckCircle2,
   AlertCircle,
   RefreshCw,
   LogOut,
@@ -16,9 +16,10 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import CloseTicketModal, { CloseTicketData } from './modals/CloseTicketModal';
 import { toast } from 'sonner';
+import { Ticket } from '@/types/ticket';
 
 interface ChatViewProps {
-  ticket: any; // Using any for flexibility with the mock data structure
+  ticket: Ticket;
   onClose: () => void;
   onCloseTicket: () => void; // Called when ticket is formally closed
 }
