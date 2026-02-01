@@ -42,6 +42,8 @@ model User {
   teamMessages TeamMessage[]
 
   @@map("users")
+  @@index([role, active])
+  @@index([email])
 }
 
 enum Role {
@@ -97,6 +99,9 @@ model Ticket {
   @@index([phoneNumber])
   @@index([status])
   @@index([glpiId])
+  @@index([status, assignedToId])
+  @@index([createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
 }
 
 enum TicketStatus {
@@ -137,6 +142,7 @@ model Message {
 
   @@map("messages")
   @@index([ticketId])
+  @@index([ticketId, createdAt(sort: Desc)])
 }
 
 enum MessageType {
@@ -502,6 +508,8 @@ model StockItem {
   @@index([stockType])
   @@index([category])
   @@index([assetStatus])
+  @@index([stockType, active])
+  @@index([category, assetStatus])
 }
 
 enum StockType {
@@ -575,6 +583,8 @@ model Reservation {
   @@index([stockItemId])
   @@index([status])
   @@index([startTime])
+  @@index([status, startTime])
+  @@index([stockItemId, status])
 }
 
 enum ReservationStatus {

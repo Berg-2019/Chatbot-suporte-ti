@@ -102,4 +102,60 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async unlockTicket(ticketId: string): Promise<void> {
     await this.del(`ticket:${ticketId}:lock`);
   }
+
+  // === Generic Cache Methods ===
+
+  /**
+   * Get cached data with automatic JSON parsing
+   */
+  async getCache<T>(key: string): Promise<T | null> {
+    const data = await this.get(`cache:${key}`);
+    return data ? JSON.parse(data) : null;
+  }
+
+  /**
+   * Set cached data with automatic JSON stringify
+   * @param key Cache key
+   * @param value Data to cache
+   * @param ttl Time to live in seconds (default 5 minutes)
+   */
+  async setCache<T>(key: string, value: T, ttl: number = 300): Promise<void> {
+    await this.set(`cache:${key}`, JSON.stringify(value), ttl);
+  }
+
+  /**
+   * Delete cache by key
+   */
+  async deleteCache(key: string): Promise<void> {
+    await this.del(`cache:${key}`);
+  }
+
+  /**
+   * Delete cache by pattern (e.g., "tickets:*")
+   */
+  async deleteCacheByPattern(pattern: string): Promise<void> {
+    const keys = await this.client.keys(`cache:${pattern}`);
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+
+  /**
+   * Get or set cache with factory function
+   * If cache exists, return it. Otherwise, execute factory and cache result.
+   */
+  async getOrSetCache<T>(
+    key: string,
+    factory: () => Promise<T>,
+    ttl: number = 300,
+  ): Promise<T> {
+    const cached = await this.getCache<T>(key);
+    if (cached !== null) {
+      return cached;
+    }
+
+    const data = await factory();
+    await this.setCache(key, data, ttl);
+    return data;
+  }
 }
