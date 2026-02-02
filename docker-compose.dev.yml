@@ -128,12 +128,14 @@ services:
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://helpdesk:${POSTGRES_PASSWORD:-helpdesk123}@postgres:5432/helpdesk
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
       JWT_SECRET: ${JWT_SECRET:-dev-secret-jwt}
       GLPI_URL: http://glpi/apirest.php
-      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN}
-      GLPI_USER_TOKEN: ${GLPI_USER_TOKEN}
+      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-dev-app-token}
+      GLPI_USER_TOKEN: ${GLPI_USER_TOKEN:-dev-user-token}
     volumes:
       - ./backend:/app:delegated
       - /app/node_modules

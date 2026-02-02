@@ -6,6 +6,18 @@ import {
 } from '@nestjs/common';
 import * as path from 'path';
 
+export interface UploadedFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination?: string;
+  filename?: string;
+  path?: string;
+  buffer?: Buffer;
+}
+
 export interface FileValidationOptions {
   maxSize?: number; // in bytes
   allowedMimeTypes?: string[];
@@ -44,7 +56,7 @@ export class FileValidationPipe implements PipeTransform {
     ];
   }
 
-  transform(file: Express.Multer.File, metadata: ArgumentMetadata) {
+  transform(file: UploadedFile, metadata: ArgumentMetadata) {
     if (!file) {
       throw new BadRequestException('Nenhum arquivo foi enviado');
     }
