@@ -136,6 +136,7 @@ services:
       GLPI_URL: http://glpi/apirest.php
       GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-dev-app-token}
       GLPI_USER_TOKEN: ${GLPI_USER_TOKEN:-dev-user-token}
+      FRONTEND_URL: http://localhost:5173,http://192.168.7.118,http://192.168.7.118:5173,http://helpdeskmsm.com.br
     volumes:
       - ./backend:/app:delegated
       - /app/node_modules
@@ -163,8 +164,8 @@ services:
       - "5173:5173"
     environment:
       NODE_ENV: development
-      VITE_API_URL: http://localhost:3000
-      VITE_WS_URL: ws://localhost:3000
+      VITE_API_URL: http://192.168.7.118
+      VITE_WS_URL: ws://192.168.7.118
     volumes:
       - ./frontend:/app:delegated
       - /app/node_modules

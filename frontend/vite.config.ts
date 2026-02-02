@@ -16,4 +16,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    allowedHosts: [
+      'localhost',
+      '192.168.7.118',
+      'helpdeskmsm.com.br',
+      'www.helpdeskmsm.com.br',
+    ],
+  },
 })
