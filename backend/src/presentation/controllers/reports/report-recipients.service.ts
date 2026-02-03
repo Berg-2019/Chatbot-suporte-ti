@@ -150,10 +150,10 @@ export class ReportRecipientsService {
       const data = await this.metricsService.getSectorMetrics(sevenDaysAgo, today);
 
       message = `📊 *Relatório Geral (7 dias)*\n📅 ${sevenDaysAgo.toLocaleDateString()} - ${today.toLocaleDateString()}\n\n`;
-      message += `Total Criados: ${data.summary.totalTickets}\n`;
-      message += `Fechados no Período: ${data.summary.closedTickets} ✅\n`;
-      message += `Tempo Médio: ${data.summary.avgResolutionTime}min\n`;
-      message += `SLA Compliance: ${data.summary.slaCompliance}%\n\n`;
+      message += `Total Criados: ${data.totalTickets}\n`;
+      message += `Fechados no Período: ${data.closedTickets} ✅\n`;
+      message += `Tempo Médio: ${data.avgResolutionTime}min\n`;
+      message += `SLA Compliance: ${data.slaCompliance}%\n\n`;
 
       if (data.byTechnician && data.byTechnician.length > 0) {
         message += `👨‍🔧 *Produtividade por Técnico:*\n`;

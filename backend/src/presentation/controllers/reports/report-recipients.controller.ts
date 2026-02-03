@@ -20,7 +20,7 @@ export class ReportRecipientsController {
     }
 
     @Post('send')
-    async sendReport(@Body() dto: { reportType?: string; filters?: any }) {
+    async sendReport(@Body() dto: { reportType?: string; filters?: any; recipientJid?: string }) {
         // Obter dados do relatório
         let reportData;
         const today = new Date();
@@ -30,15 +30,21 @@ export class ReportRecipientsController {
             reportData = await this.metricsService.getSectorMetrics(startOfMonth, today);
 
             // Adicionar dados simplificados para template
-            (reportData as any).totalTickets = reportData.summary.totalTickets;
-            (reportData as any).openTickets = reportData.summary.openTickets;
-            (reportData as any).closedTickets = reportData.summary.closedTickets;
-            (reportData as any).avgResolutionMinutes = reportData.summary.avgResolutionTime;
-            (reportData as any).slaCompliance = reportData.summary.slaCompliance;
+            (reportData as any).totalTickets = reportData.totalTickets;
+            (reportData as any).openTickets = reportData.openTickets;
+            (reportData as any).closedTickets = reportData.closedTickets;
+            (reportData as any).avgResolutionMinutes = reportData.avgResolutionTime;
+            (reportData as any).slaCompliance = reportData.slaCompliance;
         }
 
         // Buscar destinatários
-        const recipients = await this.service.findAll();
+        let recipients = await this.service.findAll();
+
+        // Se especificou um destinatário, filtrar
+        if (dto.recipientJid) {
+            recipients = recipients.filter(r => r.jid === dto.recipientJid);
+        }
+
         let sentCount = 0;
 
         // Enviar para cada um

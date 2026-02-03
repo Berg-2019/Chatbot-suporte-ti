@@ -1,15 +1,17 @@
 import { FileText, Download, Calendar, Filter, Share2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { metricsApi, type SectorMetrics } from '@/app/services/api';
+import { metricsApi, reportsApi, type SectorMetrics } from '@/app/services/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ShareReportModal from '../modals/ShareReportModal';
 
 export default function ReportsView() {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(false);
   const [metrics, setMetrics] = useState<SectorMetrics | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -109,12 +111,29 @@ export default function ReportsView() {
     toast.success('Relatório exportado com sucesso!');
   };
 
-  const handleShareReport = () => {
-    toast.success('Relatório encaminhado para os gestores via Bot!');
+  const onShareConfirm = async (recipientJid?: string) => {
+    try {
+      await reportsApi.sendReport({
+        reportType: 'tickets',
+        recipientJid
+      });
+      toast.success(recipientJid ? 'Relatório enviado para o contato selecionado!' : 'Relatório enviado para todos os destinatários!');
+      setIsShareModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao enviar relatório');
+    }
   };
 
   return (
     <div className="space-y-6">
+      <ShareReportModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        onConfirm={onShareConfirm}
+        reportTitle={`Relatório Geral (${selectedPeriod})`}
+      />
+
       <div>
         <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Relatórios</h1>
         <p className="text-slate-400">Visualize e exporte relatórios detalhados</p>
@@ -214,7 +233,7 @@ export default function ReportsView() {
           </div>
           <div className="flex gap-3">
             <button
-              onClick={handleShareReport}
+              onClick={() => setIsShareModalOpen(true)}
               className="bg-slate-700 hover:bg-slate-600 text-slate-300 px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors"
             >
               <Share2 size={16} />

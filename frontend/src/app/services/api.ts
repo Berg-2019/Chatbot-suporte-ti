@@ -647,6 +647,32 @@ export const teamChatApi = {
 };
 
 // ================================================================
+// Reports API
+// ================================================================
+
+export interface ReportRecipient {
+    id: string;
+    name: string;
+    jid: string;
+    active: boolean;
+}
+
+export const reportsApi = {
+    // Get all recipients
+    getRecipients: (): Promise<ReportRecipient[]> => {
+        return apiFetch<ReportRecipient[]>('/reports/recipients');
+    },
+
+    // Send report to recipients (optional specific recipient)
+    sendReport: (data: { reportType?: string; filters?: any; recipientJid?: string }): Promise<any> => {
+        return apiFetch('/reports/recipients/send', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+};
+
+// ================================================================
 // Export all APIs
 // ================================================================
 
@@ -660,6 +686,7 @@ export const api = {
     metrics: metricsApi,
     faq: faqApi,
     teamChat: teamChatApi,
+    reports: reportsApi,
 };
 
 export default api;
