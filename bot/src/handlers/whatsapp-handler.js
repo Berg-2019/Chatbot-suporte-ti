@@ -8,6 +8,7 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
 } from '@whiskeysockets/baileys';
+import axios from 'axios';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
@@ -143,6 +144,33 @@ class WhatsAppHandler {
       // Log
       const phone = from.split('@')[0];
       console.log(`📩 Mensagem de ${phone}: ${text?.substring(0, 50) || '[mídia]'}`);
+
+      // === COMANDOS DO SISTEMA ===
+      // !tecnico [nome/email] -> Vincula o WhatsApp atual ao usuário do sistema
+      if (text?.toLowerCase().startsWith('!tecnico ')) {
+        const username = text.substring(9).trim();
+        if (!username) {
+          await this.sendMessage(from, '❌ Digite o nome do usuário. Ex: !tecnico matheus');
+          continue;
+        }
+
+        try {
+          const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+          const res = await axios.post(`${backendUrl}/api/bot/users/link`, {
+            identifier: username,
+            waId: from // Salva o JID completo para envio de mensagens
+          });
+
+          const user = res.data.user;
+          await this.sendMessage(from, `✅ *Sucesso!* \nSeu WhatsApp foi vinculado ao usuário:\nNome: *${user.name}*\nEmail: ${user.email}\nFunção: ${user.role}`);
+          console.log(`🔗 Técnico vinculado via comando: ${phone} -> ${user.name}`);
+
+        } catch (error) {
+          const errorMsg = error.response?.data?.message || error.message;
+          await this.sendMessage(from, `❌ Falha ao vincular usuário: ${errorMsg}`);
+        }
+        continue; // Não processa como fluxo de atendimento
+      }
 
       // Processar com o flow handler
       if (text) {

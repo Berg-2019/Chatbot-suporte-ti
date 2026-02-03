@@ -51,6 +51,7 @@ export interface StockItem {
     inkColor: 'BLACK' | 'CYAN' | 'MAGENTA' | 'YELLOW' | null;
     assetTag: string | null;
     assetStatus: 'AVAILABLE' | 'RESERVED' | 'IN_USE' | 'MAINTENANCE';
+    isReservable?: boolean;
     active: boolean;
     createdAt: string;
     updatedAt: string;
@@ -414,6 +415,14 @@ export const ticketsApi = {
         return apiFetch<Ticket>(`/tickets/${id}/assign`, {
             method: 'POST',
             body: JSON.stringify({ technicianId }),
+        });
+    },
+
+    // Transfer ticket to another technician
+    transfer: (id: string, userId: string): Promise<Ticket> => {
+        return apiFetch<Ticket>(`/tickets/${id}/transfer`, {
+            method: 'POST',
+            body: JSON.stringify({ userId }),
         });
     },
 

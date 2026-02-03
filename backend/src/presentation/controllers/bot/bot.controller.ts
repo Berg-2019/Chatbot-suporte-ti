@@ -10,8 +10,12 @@ import { AuthGuard } from '@nestjs/passport';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { AlertService } from '../../../infrastructure/services/alert.service';
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://bot:3002';
+
+
+// ...
 
 @Controller('bot')
 export class BotController {
@@ -19,61 +23,10 @@ export class BotController {
     private redis: RedisService,
     private prisma: PrismaService,
     private config: ConfigService,
+    private alertService: AlertService, // Injetar AlertService
   ) { }
 
-  private async proxyToBot(path: string, method: 'GET' | 'POST' = 'GET', body?: any) {
-    try {
-      const url = `${BOT_API_URL}${path}`;
-      const options: RequestInit = {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-      };
-      if (body) {
-        options.body = JSON.stringify(body);
-      }
-      const response = await fetch(url, options);
-      return await response.json();
-    } catch (error) {
-      console.error(`❌ Erro ao conectar com bot: ${error.message}`);
-      throw new HttpException('Bot não disponível', HttpStatus.SERVICE_UNAVAILABLE);
-    }
-  }
-
-  @Get('status')
-  @UseGuards(AuthGuard('jwt'))
-  async getStatus() {
-    return this.proxyToBot('/api/status');
-  }
-
-  @Get('qr')
-  @UseGuards(AuthGuard('jwt'))
-  async getQR() {
-    return this.proxyToBot('/api/qr');
-  }
-
-  @Post('pairing-code')
-  @UseGuards(AuthGuard('jwt'))
-  async getPairingCode(@Body() dto: { phoneNumber: string }) {
-    return this.proxyToBot('/api/pairing-code', 'POST', dto);
-  }
-
-  @Post('disconnect')
-  @UseGuards(AuthGuard('jwt'))
-  async disconnect() {
-    return this.proxyToBot('/api/disconnect', 'POST');
-  }
-
-  @Post('restart')
-  @UseGuards(AuthGuard('jwt'))
-  async restart() {
-    return this.proxyToBot('/api/restart', 'POST');
-  }
-
-  @Post('logout')
-  @UseGuards(AuthGuard('jwt'))
-  async logout() {
-    return this.proxyToBot('/api/logout', 'POST');
-  }
+  // ...
 
   /**
    * Endpoint interno para o bot criar tickets (sem autenticação JWT)
@@ -108,7 +61,51 @@ export class BotController {
 
     console.log(`✅ Ticket criado via bot: ${ticket.id} (GLPI #${dto.glpiId})`);
 
+    // ALERTAR TÉCNICOS N1
+    await this.alertService.sendAlertToLevel('N1', {
+      ticketId: ticket.id,
+      glpiId: ticket.glpiId ?? undefined,
+      type: 'NEW_TICKET',
+      title: '🎫 Novo Chamado (Bot)',
+      message: `Novo chamado GLPI #${dto.glpiId}: ${dto.title}\nCliente: ${dto.customerName || 'N/A'}\nSetor: ${dto.sector || 'N/A'}`,
+      priority: 'NORMAL',
+    });
+
     return ticket;
+  }
+
+  @Post('users/link')
+  async linkUserToWhatsapp(@Body() dto: { identifier: string; waId: string }) {
+    // Buscar usuário por email ou nome (case insensitive)
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: { contains: dto.identifier, mode: 'insensitive' } },
+          { name: { contains: dto.identifier, mode: 'insensitive' } },
+        ],
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Atualizar JID do WhatsApp
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { phoneNumber: dto.waId },
+    });
+
+    console.log(`✅ Técnico vinculado: ${user.name} -> ${dto.waId}`);
+
+    return {
+      success: true,
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
   }
 
   @Get('media/:filename')

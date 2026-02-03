@@ -254,6 +254,22 @@ export class TicketsService {
       });
     }
 
+    // Notificar NOVO TÉCNICO via WhatsApp
+    const newTechnician = await this.prisma.user.findUnique({
+      where: { id: newUserId },
+      select: { phoneNumber: true, receiveAlerts: true },
+    });
+
+    if (newTechnician?.phoneNumber && newTechnician?.receiveAlerts) {
+      const techMessage = `🔄 *Chamado Transferido para Você!*\n\nID: *#${ticket.glpiId || ticket.id.slice(-6)}*\nTítulo: ${ticket.title}\nDe: ${currentUser?.name || 'Sistema'}\n\nAcesse o painel para assumir.`;
+
+      await this.rabbitmq.publishOutgoingMessage({
+        to: newTechnician.phoneNumber.includes('@') ? newTechnician.phoneNumber : `${newTechnician.phoneNumber}@s.whatsapp.net`,
+        text: techMessage,
+        ticketId: id,
+      });
+    }
+
     // Notificar painel
     await this.rabbitmq.publishNotification({
       type: 'ticket_assigned',

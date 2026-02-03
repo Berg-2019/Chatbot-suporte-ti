@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import CloseTicketModal, { CloseTicketData } from './modals/CloseTicketModal';
+import TransferTicketModal from './modals/TransferTicketModal';
 import { toast } from 'sonner';
 import { ticketsApi, type Ticket, type Message as ApiMessage } from '@/app/services/api';
 
@@ -174,7 +175,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
         {/* Action Buttons Toolbar */}
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => toast.info('Funcionalidade de transferência em desenvolvimento')}
+            onClick={() => setIsTransferModalOpen(true)}
             className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-lg text-sm border border-slate-700 transition-colors"
           >
             <RefreshCw size={16} /> Transferir
@@ -282,6 +283,23 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
           />
         )}
       </AnimatePresence>
+
+      <TransferTicketModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        onConfirm={async (userId) => {
+          try {
+            await ticketsApi.transfer(ticket.id.toString(), userId);
+            toast.success('Chamado transferido com sucesso!');
+            setIsTransferModalOpen(false);
+            onClose(); // Close chat as user no longer owns it
+          } catch (err) {
+            toast.error('Erro ao transferir chamado');
+          }
+        }}
+        currentTechnicianId={ticket.technician} // Assuming ticket has technician ID or similar
+        ticketTitle={ticket.title}
+      />
     </div>
   );
 }

@@ -71,16 +71,21 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
         }
 
         // Prepare data based on category
+        // Prepare data based on category
         const data: any = {
             name: formData.name,
             code: formData.code,
-            category: formData.category,
-            stockType: formData.stockType,
             quantity: Number(formData.quantity),
             minQuantity: Number(formData.minQuantity),
-            unit: formData.unit,
             location: formData.location,
         };
+
+        // Fields only allowed on creation
+        if (!initialData) {
+            data.category = formData.category;
+            data.stockType = formData.stockType;
+            data.unit = formData.unit;
+        }
 
         if (formData.category === 'INK') {
             data.printerModel = formData.printerModel;
@@ -133,7 +138,8 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
                                             } : {})
                                         }));
                                     }}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    disabled={!!initialData}
+                                    className={`w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${initialData ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <option value="SUPPLY">Insumo / Peça</option>
                                     <option value="INK">Tinta / Toner</option>
@@ -147,7 +153,8 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
                                 <select
                                     value={formData.stockType}
                                     onChange={(e) => setFormData({ ...formData, stockType: e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    disabled={!!initialData}
+                                    className={`w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${initialData ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <option value="TI">TI</option>
                                     <option value="ELECTRIC">Elétrica</option>
@@ -192,8 +199,8 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
                                 <select
                                     value={formData.unit}
                                     onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                                    disabled={formData.category === 'ASSET'}
-                                    className={`w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${formData.category === 'ASSET' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    disabled={!!initialData || formData.category === 'ASSET'}
+                                    className={`w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${initialData || formData.category === 'ASSET' ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <option value="UN">Unidade</option>
                                     <option value="CX">Caixa</option>

@@ -24,27 +24,23 @@ export interface TechnicianMetrics {
 }
 
 export interface SectorMetrics {
-    period: {
-        start: Date;
-        end: Date;
-    };
-    summary: {
-        totalTickets: number;
-        openTickets: number;
-        closedTickets: number;
-        avgResolutionTime: number;
-        slaCompliance: number;
-    };
+    totalTickets: number;
+    openTickets: number;
+    closedTickets: number;
+    avgResolutionTime: number;
+    slaCompliance: number;
     byStatus: Record<string, number>;
     byPriority: Record<string, number>;
-    byCategory: Record<string, number>;
+    ticketsByCategory: { name: string; value: number }[];
     byTechnician: { name: string; count: number }[];
-    timeline: { date: string; opened: number; closed: number }[];
+    ticketsByDay: { day: string; total: number; open: number; closed: number }[];
+    responseTimeByHour: { hour: string; tempo: number }[];
 }
 
 @Injectable()
 export class MetricsService {
     constructor(private prisma: PrismaService) { }
+    // ... (rest of class)
 
     /**
      * Métricas de um técnico específico
@@ -187,8 +183,7 @@ export class MetricsService {
             }
         }
 
-        // Timeline (últimos 30 dias)
-        const timeline: { date: string; opened: number; closed: number }[] = [];
+        const timeline: { day: string; total: number; open: number; closed: number }[] = [];
         for (let i = 29; i >= 0; i--) {
             const date = new Date(now);
             date.setDate(date.getDate() - i);
@@ -198,10 +193,14 @@ export class MetricsService {
             const dayEnd = new Date(dayStart);
             dayEnd.setDate(dayEnd.getDate() + 1);
 
+            const opened = tickets.filter(t => t.createdAt >= dayStart && t.createdAt < dayEnd).length;
+            const closed = tickets.filter(t => t.closedAt && t.closedAt >= dayStart && t.closedAt < dayEnd).length;
+
             timeline.push({
-                date: dateStr,
-                opened: tickets.filter(t => t.createdAt >= dayStart && t.createdAt < dayEnd).length,
-                closed: tickets.filter(t => t.closedAt && t.closedAt >= dayStart && t.closedAt < dayEnd).length,
+                day: dateStr,
+                total: opened + closed, // Simplification, or could be active tickets
+                open: opened,
+                closed: closed,
             });
         }
 
@@ -209,25 +208,23 @@ export class MetricsService {
         const openTickets = tickets.filter(t => !['CLOSED', 'RESOLVED'].includes(t.status));
 
         return {
-            period: { start, end },
-            summary: {
-                totalTickets: tickets.length,
-                openTickets: openTickets.length,
-                closedTickets: closedTickets.length,
-                avgResolutionTime: resolvedCount > 0
-                    ? Math.round(totalResolutionTime / resolvedCount / 60000)
-                    : 0,
-                slaCompliance: tickets.length > 0
-                    ? Math.round((closedTickets.length / tickets.length) * 100)
-                    : 100,
-            },
+            totalTickets: tickets.length,
+            openTickets: openTickets.length,
+            closedTickets: closedTickets.length,
+            avgResolutionTime: resolvedCount > 0
+                ? Math.round(totalResolutionTime / resolvedCount / 60000)
+                : 0,
+            slaCompliance: tickets.length > 0
+                ? Math.round((closedTickets.length / tickets.length) * 100)
+                : 100,
             byStatus,
             byPriority,
-            byCategory,
+            ticketsByCategory: Object.entries(byCategory).map(([name, value]) => ({ name, value })),
             byTechnician: Object.entries(technicianCount)
                 .map(([name, count]) => ({ name, count }))
                 .sort((a, b) => b.count - a.count),
-            timeline,
+            ticketsByDay: timeline,
+            responseTimeByHour: [], // TODO: Implement response time by hour
         };
     }
 

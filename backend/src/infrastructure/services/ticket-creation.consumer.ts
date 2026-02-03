@@ -3,6 +3,7 @@ import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { RabbitMQService } from '../messaging/rabbitmq.service';
 import { PrismaService } from '../database/prisma.service';
 import { GlpiService } from '../external/glpi.service';
+import { AlertService } from './alert.service';
 
 @Injectable()
 export class TicketCreationConsumer implements OnModuleInit {
@@ -12,6 +13,7 @@ export class TicketCreationConsumer implements OnModuleInit {
         private rabbitmq: RabbitMQService,
         private prisma: PrismaService,
         private glpi: GlpiService,
+        private alertService: AlertService,
     ) { }
 
     onModuleInit() {
@@ -53,11 +55,26 @@ export class TicketCreationConsumer implements OnModuleInit {
                     payload: newTicket,
                 });
 
+                // AVISA TÉCNICOS N1 sobre novo chamado
+                await this.alertService.sendAlertToLevel('N1', {
+                    ticketId: newTicket.id,
+                    type: 'NEW_TICKET',
+                    title: '🎫 Novo Chamado Criado',
+                    message: `Novo chamado (Bot): ${newTicket.title}\nCliente: ${newTicket.customerName || 'N/A'}\nSetor: ${newTicket.sector || 'N/A'}`,
+                    priority: newTicket.priority,
+                });
+
             } catch (error) {
                 this.logger.error(`❌ Erro ao criar ticket local: ${error.message}`);
                 // Se falhar aqui, não tem como prosseguir para GLPI sem vinculo
                 return;
             }
+        } else {
+            // Se já veio com ticketId (criado via API/Painel), precisamos notificar também?
+            // Geralmente se criado pelo painel, já está lá. Mas se criado pelo BotController diretamente e passado pra cá?
+            // O BotController cria o Ticket e NÃO chama o RabbitMQ CREATE_TICKET?
+            // Vamos verificar quem chama CREATE_TICKET.
+            // TicketsService.create chama CREATE_TICKET.
         }
 
         // 2. Criar no GLPI
@@ -99,8 +116,10 @@ export class TicketCreationConsumer implements OnModuleInit {
                     payload: updatedTicket,
                 });
 
-                // 4. Se tiver ID do GLPI, tentar atribuir técnico ou grupo default?
-                // Por enquanto deixa como está (NEW)
+                // Se já não alertou antes (fluxo local), alertar agora com o ID do GLPI?
+                // Acho melhor alertar logo na criação local para agilidade.
+                // Mas enviar um update "Gerado GLPI #1234" pode ser spam.
+                // Vou manter apenas o alerta na criação do local ticket acima.
 
             } catch (error) {
                 this.logger.error(`❌ Erro ao criar ticket no GLPI: ${error.message}`);
