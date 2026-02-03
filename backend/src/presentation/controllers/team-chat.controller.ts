@@ -1,30 +1,30 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { TeamChatService } from './team-chat.service';
+import { TeamChatGateway } from '../websockets/team-chat.gateway';
 
 @Controller('team-chat')
 @UseGuards(AuthGuard('jwt'))
 export class TeamChatController {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private service: TeamChatService,
+        private gateway: TeamChatGateway
+    ) { }
 
     @Get()
     async getMessages() {
-        // Buscar últimas 50 mensagens
-        const messages = await this.prisma.teamMessage.findMany({
-            orderBy: { createdAt: 'desc' },
-            take: 50,
-            include: {
-                sender: {
-                    select: {
-                        id: true,
-                        name: true,
-                        role: true,
-                    },
-                },
-            },
-        });
+        return this.service.getMessages();
+    }
 
-        // Inverter para ordem cronológica (mais antigas primeiro) para o frontend
-        return messages.reverse();
+    @Post()
+    async sendMessage(@Body() dto: { content: string }, @Req() req: any) {
+        // userId comes from JWT guard (req.user)
+        const userId = req.user.id;
+        const message = await this.service.saveMessage(userId, dto.content);
+
+        // Notify via WebSocket
+        this.gateway.server.emit('newMessage', message);
+
+        return message;
     }
 }
