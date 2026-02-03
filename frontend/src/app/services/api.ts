@@ -644,6 +644,14 @@ export const teamChatApi = {
     getMessages: (): Promise<TeamMessage[]> => {
         return apiFetch<TeamMessage[]>('/team-chat');
     },
+
+    // Send message
+    sendMessage: (content: string): Promise<TeamMessage> => {
+        return apiFetch<TeamMessage>('/team-chat', {
+            method: 'POST',
+            body: JSON.stringify({ content }),
+        });
+    },
 };
 
 // ================================================================

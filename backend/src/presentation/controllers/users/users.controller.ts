@@ -111,7 +111,7 @@ export class UsersController {
   @Put(':id')
   async update(
     @Param('id') id: string,
-    @Body() data: { name?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean },
+    @Body() data: { name?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; email?: string; department?: string; permissions?: string[] },
     @Request() req: any,
   ) {
     if (req.user.role !== 'ADMIN') {

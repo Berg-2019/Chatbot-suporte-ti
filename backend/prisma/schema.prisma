@@ -35,6 +35,8 @@ model User {
   // Alertas
   phoneNumber   String?           // WhatsApp para receber alertas
   receiveAlerts Boolean           @default(true)
+  department    String?
+  permissions   String[]          @default([]) // Array de IDs dos módulos
 
   tickets   Ticket[]
   messages  Message[]

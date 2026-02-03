@@ -38,6 +38,7 @@ export default function UsersView() {
     phone: '',
     department: '',
     role: 'Usuário',
+    password: '',
     permissions: ['dashboard', 'chat'] // Default permissions
   });
 
@@ -58,9 +59,9 @@ export default function UsersView() {
         status: u.active ? 'active' : 'inactive',
         tickets: 0,
         lastAccess: 'N/A',
-        permissions: u.role === 'ADMIN' ? ALL_MODULES.map(m => m.id) : ['dashboard', 'chat'],
-        phone: u.phone || '',
-        department: u.department || ''
+        permissions: u.role === 'ADMIN' ? ALL_MODULES.map(m => m.id) : ((u as any).permissions || ['dashboard', 'chat']),
+        phone: u.phone || (u as any).phoneNumber || '',
+        department: u.department || (u as any).department || ''
       }));
       setUsers(mapped);
     } catch (err: any) {
@@ -84,7 +85,7 @@ export default function UsersView() {
     const matchesSearch =
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.department.toLowerCase().includes(searchTerm.toLowerCase());
+      (user.department && user.department.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesRole = filterRole === 'all' || user.role === filterRole;
 
@@ -97,7 +98,9 @@ export default function UsersView() {
     Usuário: 'bg-slate-600/20 text-slate-400 border-slate-600/30',
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email) {
       toast.error('Preencha os campos obrigatórios');
@@ -105,29 +108,84 @@ export default function UsersView() {
     }
 
     try {
-      await usersApi.createGlpiUser({
-        login: formData.email.split('@')[0],
-        password: 'password123', // Default or generate
-        firstName: formData.name.split(' ')[0],
-        lastName: formData.name.split(' ').slice(1).join(' '),
-        email: formData.email,
-        phone: formData.phone
-      });
-      toast.success('Usuário criado com sucesso (GLPI + Local)!');
+      if (editingUserId) {
+        // Mode: Edit
+        await usersApi.update(editingUserId, {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          role: formData.role === 'Admin' ? 'ADMIN' : 'AGENT',
+          department: formData.department,
+          permissions: formData.permissions,
+          ...(formData.password ? { password: formData.password } : {})
+        });
+        toast.success('Usuário atualizado com sucesso!');
+      } else {
+        if (!formData.password) {
+          toast.error('Senha é obrigatória para novos usuários');
+          return;
+        }
+        // Mode: Create
+        await usersApi.createGlpiUser({
+          login: formData.email.split('@')[0],
+          password: formData.password,
+          firstName: formData.name.split(' ')[0],
+          lastName: formData.name.split(' ').slice(1).join(' '),
+          email: formData.email,
+          phone: formData.phone,
+          department: formData.department,
+          permissions: formData.permissions
+        });
+        toast.success('Usuário criado com sucesso (GLPI + Local)!');
+      }
+
       setIsModalOpen(false);
       fetchUsers();
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        department: '',
-        role: 'Usuário',
-        permissions: ['dashboard', 'chat']
-      });
+      resetForm();
     } catch (err) {
-      toast.error('Erro ao criar usuário');
+      toast.error(editingUserId ? 'Erro ao atualizar usuário' : 'Erro ao criar usuário');
       console.error(err);
     }
+  };
+
+  const handleEditUser = (user: User) => {
+    setEditingUserId(user.id);
+    setFormData({
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      department: user.department || '',
+      role: user.role, // 'Admin' | 'Técnico' | 'Usuário' matches select options
+      password: '', // Don't allow editing password directly here, only via new input
+      permissions: user.permissions
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    if (!confirm(`Tem certeza que deseja excluir o usuário ${user.name}?`)) return;
+
+    try {
+      await usersApi.delete(user.id);
+      toast.success('Usuário excluído com sucesso');
+      fetchUsers();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao excluir usuário');
+    }
+  };
+
+  const resetForm = () => {
+    setEditingUserId(null);
+    setFormData({
+      name: '',
+      email: '',
+      phone: '',
+      department: '',
+      role: 'Usuário',
+      password: '',
+      permissions: ['dashboard', 'chat']
+    });
   };
 
   const togglePermission = (moduleId: string) => {
@@ -190,7 +248,10 @@ export default function UsersView() {
           <p className="text-slate-400">Gerencie usuários e permissões do sistema</p>
         </div>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            resetForm();
+            setIsModalOpen(true);
+          }}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-blue-900/20"
         >
           <Plus size={20} />
@@ -335,10 +396,14 @@ export default function UsersView() {
               </div>
 
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button className="p-2 bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg transition-colors text-slate-400">
+                <button
+                  onClick={() => handleEditUser(user)}
+                  className="p-2 bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg transition-colors text-slate-400">
                   <Edit2 size={18} />
                 </button>
-                <button className="p-2 bg-slate-800 hover:bg-red-600 hover:text-white rounded-lg transition-colors text-slate-400">
+                <button
+                  onClick={() => handleDeleteUser(user)}
+                  className="p-2 bg-slate-800 hover:bg-red-600 hover:text-white rounded-lg transition-colors text-slate-400">
                   <Trash2 size={18} />
                 </button>
               </div>
@@ -373,7 +438,7 @@ export default function UsersView() {
             >
               <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Plus className="text-blue-500" /> Criar Novo Usuário
+                  <Plus className="text-blue-500" /> {editingUserId ? 'Editar Usuário' : 'Criar Novo Usuário'}
                 </h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
                   <X size={20} />
@@ -419,6 +484,17 @@ export default function UsersView() {
                             placeholder="(11) 99999-9999"
                           />
                         </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-300">Senha {editingUserId && <span className="text-xs text-slate-500 font-normal">(deixe em branco para manter)</span>}</label>
+                        <input
+                          type="password"
+                          value={formData.password || ''}
+                          onChange={e => setFormData({ ...formData, password: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
+                          placeholder={editingUserId ? "Nova senha (opcional)" : "Senha de acesso"}
+                        />
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
@@ -548,11 +624,11 @@ export default function UsersView() {
                   Cancelar
                 </button>
                 <button
-                  onClick={handleCreateUser}
+                  onClick={handleSaveUser}
                   disabled={!formData.name || !formData.email}
                   className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  <Check size={18} /> Criar Usuário
+                  <Check size={18} /> {editingUserId ? 'Salvar Alterações' : 'Criar Usuário'}
                 </button>
               </div>
             </motion.div>
