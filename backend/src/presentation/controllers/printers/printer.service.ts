@@ -131,22 +131,51 @@ export class PrinterService {
   /**
    * Consultar todas as impressoras
    */
-  async getAllStatus(): Promise<Array<{ id: string; name: string; ip: string; status: PrinterStatus }>> {
-    const printers = await this.prisma.printer.findMany({
-      where: { active: true },
-    });
+  async getAllStatus(): Promise<Array<{ id: string; name: string; ip: string; location: string | null; status: PrinterStatus }>> {
+    try {
+      const printers = await this.prisma.printer.findMany({
+        where: { active: true },
+      });
 
-    const results = await Promise.all(
-      printers.map(async (printer) => ({
-        id: printer.id,
-        name: printer.name,
-        ip: printer.ip,
-        location: printer.location,
-        status: await this.getStatus(printer.id),
-      }))
-    );
+      // Se não houver impressoras, retorna array vazio
+      if (!printers || printers.length === 0) {
+        return [];
+      }
 
-    return results;
+      const results = await Promise.all(
+        printers.map(async (printer) => {
+          try {
+            const status = await this.getStatus(printer.id);
+            return {
+              id: printer.id,
+              name: printer.name,
+              ip: printer.ip,
+              location: printer.location,
+              status,
+            };
+          } catch (err) {
+            // Se falhar ao buscar status de uma impressora, retorna offline
+            return {
+              id: printer.id,
+              name: printer.name,
+              ip: printer.ip,
+              location: printer.location,
+              status: {
+                online: false,
+                status: 'error',
+                tonerBlack: printer.lastTonerBlack ?? undefined,
+                error: 'Falha ao consultar status',
+              } as PrinterStatus,
+            };
+          }
+        })
+      );
+
+      return results;
+    } catch (error) {
+      console.error('Erro ao buscar status das impressoras:', error);
+      return [];
+    }
   }
 
   /**

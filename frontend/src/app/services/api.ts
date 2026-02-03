@@ -2,7 +2,7 @@
  * API Service - Centralized API calls for the frontend
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 // Helper to get auth token
 const getAuthHeaders = (): HeadersInit => {
@@ -220,12 +220,398 @@ export const reservationApi = {
 };
 
 // ================================================================
+// Printers API
+// ================================================================
+
+export interface PrinterStatus {
+    online: boolean;
+    status: string;
+    model?: string;
+    tonerBlack?: number;
+    tonerCyan?: number;
+    tonerMagenta?: number;
+    tonerYellow?: number;
+    pageCount?: number;
+    error?: string;
+}
+
+export interface Printer {
+    id: string;
+    name: string;
+    ip: string;
+    location: string;
+    status: PrinterStatus;
+}
+
+export const printerApi = {
+    getAllStatus: (): Promise<Printer[]> => {
+        return apiFetch<Printer[]>('/printers/status/all');
+    },
+};
+
+// ================================================================
+// Messages API
+// ================================================================
+
+export interface Message {
+    id: string;
+    ticketId: string;
+    content: string;
+    direction: 'INCOMING' | 'OUTGOING';
+    senderId?: string;
+    sender?: { id: string; name: string };
+    createdAt: string;
+}
+
+// ================================================================
+// Users API
+// ================================================================
+
+export interface User {
+    id: string;
+    name: string;
+    email: string;
+    role: 'ADMIN' | 'AGENT' | 'USER';
+    active: boolean;
+    createdAt?: string;
+    phone?: string;
+    department?: string;
+}
+
+export const usersApi = {
+    getAll: (): Promise<User[]> => {
+        return apiFetch<User[]>('/users');
+    },
+
+    getTechnicians: (): Promise<User[]> => {
+        return apiFetch<User[]>('/users/technicians');
+    },
+
+    createGlpiUser: (data: any): Promise<any> => {
+        return apiFetch('/users/glpi', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    update: (id: string, data: any): Promise<User> => {
+        return apiFetch<User>(`/users/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    delete: (id: string): Promise<void> => {
+        return apiFetch<void>(`/users/${id}`, { method: 'DELETE' });
+    }
+};
+
+// ================================================================
+// Tickets API
+// ================================================================
+
+export interface Ticket {
+    id: string;
+    title: string;
+    category: string;
+    status: 'NEW' | 'ASSIGNED' | 'IN_PROGRESS' | 'WAITING_CLIENT' | 'RESOLVED' | 'CLOSED';
+    ticketNumber: string;
+    client: string;
+    customerName?: string;
+    sector?: string;
+    description: string;
+    technician?: string;
+    phoneNumber?: string;
+    date: string;
+    priority?: number;
+}
+
+export interface TicketsResponse {
+    tickets: Ticket[];
+    total: number;
+    page: number;
+    limit: number;
+}
+
+export interface TicketFilters {
+    status?: string;
+    technician?: string;
+    description?: string; // search usually maps to description or title
+    category?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+}
+
+export const ticketsApi = {
+    // Get all tickets
+    getAll: (filters?: TicketFilters): Promise<TicketsResponse> => {
+        const params = new URLSearchParams();
+        if (filters?.status) params.set('status', filters.status);
+        if (filters?.technician) params.set('technician', filters.technician);
+        if (filters?.search) params.set('search', filters.search);
+        if (filters?.page) params.set('page', filters.page.toString());
+        if (filters?.limit) params.set('limit', filters.limit.toString());
+
+        const query = params.toString();
+        return apiFetch<TicketsResponse>(`/tickets${query ? `?${query}` : ''}`);
+    },
+
+    // Get single ticket
+    getById: (id: string): Promise<Ticket> => {
+        return apiFetch<Ticket>(`/tickets/${id}`);
+    },
+
+    // Update ticket status
+    updateStatus: (id: string, status: string): Promise<Ticket> => {
+        return apiFetch<Ticket>(`/tickets/${id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status }),
+        });
+    },
+
+    // Assign ticket to technician
+    assign: (id: string, technicianId: string): Promise<Ticket> => {
+        return apiFetch<Ticket>(`/tickets/${id}/assign`, {
+            method: 'POST',
+            body: JSON.stringify({ technicianId }),
+        });
+    },
+
+    // Get messages
+    getMessages: (ticketId: string): Promise<Message[]> => {
+        return apiFetch<Message[]>(`/tickets/${ticketId}/messages`);
+    },
+
+    // Send message
+    sendMessage: (ticketId: string, content: string): Promise<Message> => {
+        return apiFetch<Message>(`/tickets/${ticketId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ content }),
+        });
+    },
+};
+
+// ================================================================
+// Bot API (WhatsApp Connection)
+// ================================================================
+
+export interface BotStatus {
+    status: 'connected' | 'disconnected' | 'connecting' | 'qr_ready' | 'maintenance';
+    uptime?: number;
+    connectedNumber?: string;
+    messagesReceived?: number;
+    messagesSent?: number;
+    lastActivity?: string;
+}
+
+export interface QRCodeResponse {
+    qrCode?: string; // base64 QR code image
+    status: string;
+    message?: string;
+}
+
+export interface PairingCodeResponse {
+    pairingCode?: string;
+    status: string;
+    message?: string;
+    expiresIn?: number;
+}
+
+export const botApi = {
+    // Get bot status
+    getStatus: (): Promise<BotStatus> => {
+        return apiFetch<BotStatus>('/bot/status');
+    },
+
+    // Get QR code for connection
+    getQR: (): Promise<QRCodeResponse> => {
+        return apiFetch<QRCodeResponse>('/bot/qr');
+    },
+
+    // Get pairing code (alternative to QR)
+    getPairingCode: (phoneNumber: string): Promise<PairingCodeResponse> => {
+        return apiFetch<PairingCodeResponse>('/bot/pairing-code', {
+            method: 'POST',
+            body: JSON.stringify({ phoneNumber }),
+        });
+    },
+
+    // Disconnect from WhatsApp
+    disconnect: (): Promise<{ success: boolean; message: string }> => {
+        return apiFetch('/bot/disconnect', { method: 'POST' });
+    },
+
+    // Restart bot
+    restart: (): Promise<{ success: boolean; message: string }> => {
+        return apiFetch('/bot/restart', { method: 'POST' });
+    },
+
+    // Logout (clear session)
+    logout: (): Promise<{ success: boolean; message: string }> => {
+        return apiFetch('/bot/logout', { method: 'POST' });
+    },
+};
+
+// ================================================================
+// Metrics API
+// ================================================================
+
+export interface DashboardSummary {
+    ticketsToday: number;
+    ticketsOpen: number;
+    ticketsClosed: number;
+    avgResponseTime: number;
+    slaCompliance: number;
+}
+
+export interface TechnicianMetrics {
+    id: string;
+    name: string;
+    ticketsAssigned: number;
+    ticketsClosed: number;
+    avgRating: number;
+    avgResponseTime: number;
+}
+
+export interface SectorMetrics {
+    totalTickets: number;
+    ticketsByDay: { day: string; total: number; open: number; closed: number }[];
+    ticketsByCategory: { name: string; value: number }[];
+    responseTimeByHour: { hour: string; tempo: number }[];
+    avgResolutionTime: number;
+    slaCompliance: number;
+}
+
+export const metricsApi = {
+    // Get dashboard summary
+    getDashboard: (): Promise<DashboardSummary> => {
+        return apiFetch<DashboardSummary>('/metrics/dashboard');
+    },
+
+    // Get all technicians metrics
+    getTechnicians: (): Promise<TechnicianMetrics[]> => {
+        return apiFetch<TechnicianMetrics[]>('/metrics/technicians');
+    },
+
+    // Get single technician metrics
+    getTechnician: (id: string): Promise<TechnicianMetrics> => {
+        return apiFetch<TechnicianMetrics>(`/metrics/technicians/${id}`);
+    },
+
+    // Get sector metrics
+    getSector: (startDate?: Date, endDate?: Date): Promise<SectorMetrics> => {
+        const params = new URLSearchParams();
+        if (startDate) params.set('startDate', startDate.toISOString());
+        if (endDate) params.set('endDate', endDate.toISOString());
+        const query = params.toString();
+        return apiFetch<SectorMetrics>(`/metrics/sector${query ? `?${query}` : ''}`);
+    },
+};
+
+// ================================================================
+// FAQ API
+// ================================================================
+
+export interface FAQ {
+    id: string;
+    question: string;
+    answer: string;
+    keywords: string;
+    category: string | null;
+    views: number;
+    helpful: number;
+    active: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export const faqApi = {
+    // Get all FAQs
+    getAll: (includeInactive?: boolean): Promise<FAQ[]> => {
+        const query = includeInactive ? '?includeInactive=true' : '';
+        return apiFetch<FAQ[]>(`/faq${query}`);
+    },
+
+    // Search FAQs (public endpoint)
+    search: (query: string): Promise<FAQ[]> => {
+        return apiFetch<FAQ[]>(`/faq/search?q=${encodeURIComponent(query)}`);
+    },
+
+    // Get single FAQ
+    getById: (id: string): Promise<FAQ> => {
+        return apiFetch<FAQ>(`/faq/${id}`);
+    },
+
+    // Create FAQ
+    create: (data: { question: string; answer: string; keywords: string; category?: string }): Promise<FAQ> => {
+        return apiFetch<FAQ>('/faq', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Update FAQ
+    update: (id: string, data: Partial<FAQ>): Promise<FAQ> => {
+        return apiFetch<FAQ>(`/faq/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Deactivate FAQ
+    delete: (id: string): Promise<void> => {
+        return apiFetch<void>(`/faq/${id}`, { method: 'DELETE' });
+    },
+
+    // Increment views
+    incrementViews: (id: string): Promise<FAQ> => {
+        return apiFetch<FAQ>(`/faq/${id}/view`, { method: 'POST' });
+    },
+
+    // Mark as helpful
+    markHelpful: (id: string): Promise<FAQ> => {
+        return apiFetch<FAQ>(`/faq/${id}/helpful`, { method: 'POST' });
+    },
+};
+
+// ================================================================
+// Team Chat API
+// ================================================================
+
+export interface TeamMessage {
+    id: string;
+    content: string;
+    senderId: string;
+    sender: {
+        id: string;
+        name: string;
+        role: 'ADMIN' | 'AGENT';
+    };
+    createdAt: string;
+}
+
+export const teamChatApi = {
+    // Get messages
+    getMessages: (): Promise<TeamMessage[]> => {
+        return apiFetch<TeamMessage[]>('/team-chat');
+    },
+};
+
+// ================================================================
 // Export all APIs
 // ================================================================
 
 export const api = {
     stock: stockApi,
     reservations: reservationApi,
+    tickets: ticketsApi,
+    printers: printerApi,
+    users: usersApi,
+    bot: botApi,
+    metrics: metricsApi,
+    faq: faqApi,
+    teamChat: teamChatApi,
 };
 
 export default api;

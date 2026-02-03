@@ -54,15 +54,15 @@ export default function LoginView() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">E-mail Corporativo</label>
+            <label className="text-sm font-medium text-slate-300">Usuário ou E-mail</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-slate-600"
-                placeholder="usuario@empresa.com"
+                placeholder="usuario ou usuario@empresa.com"
                 disabled={isLoading}
               />
             </div>

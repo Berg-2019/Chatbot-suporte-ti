@@ -14,10 +14,10 @@ const statusConfig = {
 };
 
 export default function TicketItem({ category, title, date, status, onClick }: TicketItemProps) {
-  const statusInfo = statusConfig[status];
+  const statusInfo = statusConfig[status] || { label: status || 'DESCONHECIDO', color: 'bg-slate-600/20 text-slate-400 border-slate-600/30' };
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700/30 hover:bg-slate-800/50 hover:border-slate-600/50 transition-all cursor-pointer group"
     >

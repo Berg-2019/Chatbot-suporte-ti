@@ -1,17 +1,17 @@
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Slider from "react-slick";
-import MetricCard from '@/app/components/MetricCard';
-import TicketItem from '@/app/components/TicketItem';
-import ReservationChat from '@/app/components/ReservationChat';
-import MobileFloatingMenu from '@/app/components/MobileFloatingMenu';
+import MetricCard from '../MetricCard';
+import TicketItem from '../TicketItem';
+import ReservationChat from '../ReservationChat';
+import MobileFloatingMenu from '../MobileFloatingMenu';
 import {
   FolderOpen,
   Calendar,
   Clock,
   Timer,
   Headphones,
-  Printer,
+  Printer as PrinterIcon,
   Zap,
   RefreshCw,
   UserCheck,
@@ -24,27 +24,14 @@ import {
   LayoutDashboard,
   ListTodo
 } from 'lucide-react';
-import { useAuth } from '@/app/context/AuthContext';
-import { useBadges } from '@/app/hooks/useBadges';
+import { useAuth } from '../../context/AuthContext';
+import { useBadges } from '../../hooks/useBadges';
 import { toast } from 'sonner';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { reservationApi, type Reservation as ApiReservation } from '@/app/services/api';
+import { reservationApi, ticketsApi, printerApi, type Reservation as ApiReservation, type Ticket, type Printer } from '../../services/api';
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-// Interface para os dados vindos da API
-interface Ticket {
-  id: number | string;
-  category: string;
-  title: string;
-  date: string;
-  status: 'OPEN' | 'CLOSED' | 'WAITING' | 'IN_PROGRESS';
-  ticketNumber: string;
-  client?: string;
-  description?: string;
-  technician?: string;
-}
 
 interface Reservation {
   id: number;
@@ -67,6 +54,9 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeReservationChat, setActiveReservationChat] = useState<{ requester: string, assetName: string, id: number } | null>(null);
 
+  const [printers, setPrinters] = useState<Printer[]>([]);
+  const [printersLoading, setPrintersLoading] = useState(false);
+
   // Mobile Tab State
   const [mobileTab, setMobileTab] = useState('home');
 
@@ -78,16 +68,9 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
 
   const metrics = [
     { icon: FolderOpen, value: tickets.filter(t => t.status !== 'CLOSED').length, label: 'Tickets', sublabel: 'Abertos', iconColor: 'bg-yellow-600' },
-    { icon: Calendar, value: 9, label: 'Novos', sublabel: 'Hoje', iconColor: 'bg-blue-600' },
+    { icon: Calendar, value: tickets.filter(t => t.date && parseISO(t.date).getDate() === new Date().getDate()).length, label: 'Novos', sublabel: 'Hoje', iconColor: 'bg-blue-600' },
     { icon: Clock, value: tickets.filter(t => t.status === 'WAITING').length, label: 'Aguardando', sublabel: '', iconColor: 'bg-orange-600' },
     { icon: Timer, value: '45min', label: 'Tempo', sublabel: 'Médio', iconColor: 'bg-purple-600' },
-  ];
-
-  const printers = [
-    { name: 'Impressora Recepção', status: 'online', ink: 65 },
-    { name: 'Impressora Financeiro', status: 'warning', ink: 15 },
-    { name: 'Impressora TI', status: 'online', ink: 92 },
-    { name: 'Impressora RH', status: 'offline', ink: 72 },
   ];
 
   // Fetch Reservations from API
@@ -139,73 +122,27 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
     });
   };
 
+  const fetchPrinters = useCallback(async () => {
+    setPrintersLoading(true);
+    try {
+      const data = await printerApi.getAllStatus();
+      setPrinters(data || []);
+    } catch (error) {
+      // Silently handle error - just show empty printers
+      console.error('Error fetching printers:', error);
+      setPrinters([]);
+    } finally {
+      setPrintersLoading(false);
+    }
+  }, []);
+
   const fetchTickets = async (isAutoRefresh = false) => {
     if (isAutoRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const mockData: Ticket[] = [
-        {
-          id: 1,
-          category: 'TI - Infraestrutura',
-          title: 'Gustavo César Silva do Valle',
-          date: '27/01/2026, 11:13:33',
-          status: 'CLOSED',
-          ticketNumber: '854571532858',
-          client: 'Gustavo César',
-          description: 'Falta de rede no computador principal da recepção.',
-          technician: 'admin'
-        },
-        {
-          id: 2,
-          category: 'TI - Infraestrutura',
-          title: 'Gustavo cesar silva',
-          date: '27/01/2026, 11:10:29',
-          status: 'WAITING',
-          ticketNumber: '854571532859',
-          client: 'Gustavo C.',
-          description: 'Problema de conexão intermitente no setor financeiro.',
-          technician: user?.email
-        },
-        {
-          id: 3,
-          category: 'TI - Hardware',
-          title: 'Maria Souza',
-          date: '27/01/2026, 10:59:49',
-          status: 'OPEN',
-          ticketNumber: '854571532860',
-          client: 'Maria Souza',
-          description: 'Mouse não funciona, testado em outra porta USB.',
-          technician: undefined
-        },
-        {
-          id: 4,
-          category: 'TI - Infraestrutura',
-          title: 'Chamado via WhatsApp',
-          date: '27/01/2026, 09:33:50',
-          status: 'IN_PROGRESS',
-          ticketNumber: '854571532861',
-          client: 'Cliente WhatsApp',
-          description: 'Problema na rede wi-fi de visitantes.',
-          technician: user?.email
-        },
-        {
-          id: 5,
-          category: 'TI - Software',
-          title: 'Roberto Alves',
-          date: '27/01/2026, 08:27:53',
-          status: 'OPEN',
-          ticketNumber: '854571532862',
-          client: 'Roberto A.',
-          description: 'Outlook pedindo senha repetidamente.',
-          technician: undefined
-        },
-      ];
-
-      setTickets(mockData);
-
+      const response = await ticketsApi.getAll();
+      setTickets(response.tickets);
     } catch (error) {
       console.error('Erro ao buscar tickets:', error);
       toast.error('Erro ao atualizar tickets');
@@ -217,11 +154,13 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
 
   useEffect(() => {
     fetchTickets();
+    fetchPrinters();
     const intervalId = setInterval(() => {
       fetchTickets(true);
+      fetchPrinters(); // Refresh printers too
     }, 30000);
     return () => clearInterval(intervalId);
-  }, []);
+  }, [fetchPrinters]);
 
   const myTickets = tickets.filter(t => t.technician === user?.email && t.status !== 'CLOSED');
   const queueTickets = tickets.filter(t => !t.technician && t.status !== 'CLOSED');
@@ -270,28 +209,43 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
       <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 mb-8">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-white">Status das Impressoras</h2>
-          <button className="text-blue-400 hover:text-blue-300 text-sm">Ver todas</button>
+          <button className="text-blue-400 hover:text-blue-300 text-sm" onClick={fetchPrinters}>Atualizar</button>
         </div>
         <div className="mx-[-0.5rem] px-2">
-          <Slider {...{ dots: false, infinite: false, speed: 500, slidesToShow: 4, slidesToScroll: 1, arrows: true, responsive: [{ breakpoint: 1280, settings: { slidesToShow: 3 } }, { breakpoint: 1024, settings: { slidesToShow: 2 } }, { breakpoint: 640, settings: { slidesToShow: 1 } }] }}>
-            {printers.map((printer, index) => (
-              <div key={index} className="px-2">
-                <div className="bg-slate-800/30 rounded-lg p-3 border border-slate-700/30">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Printer className={`${printer.status === 'online' ? 'text-green-500' : printer.status === 'offline' ? 'text-red-500' : 'text-yellow-500'}`} size={20} />
-                      <h3 className="text-white font-medium text-xs truncate max-w-[120px]" title={printer.name}>{printer.name}</h3>
+          {printersLoading && printers.length === 0 ? (
+            <div className="text-center py-4 text-slate-500">Carregando impressoras...</div>
+          ) : printers.length === 0 ? (
+            <div className="text-center py-8 text-slate-500">
+              <PrinterIcon className="mx-auto mb-2 opacity-50" size={32} />
+              <p className="text-sm">Nenhuma impressora cadastrada</p>
+              <p className="text-xs text-slate-600 mt-1">Cadastre impressoras no painel de administração</p>
+            </div>
+          ) : (
+            <Slider {...{ dots: false, infinite: false, speed: 500, slidesToShow: 4, slidesToScroll: 1, arrows: true, responsive: [{ breakpoint: 1280, settings: { slidesToShow: 3 } }, { breakpoint: 1024, settings: { slidesToShow: 2 } }, { breakpoint: 640, settings: { slidesToShow: 1 } }] }}>
+              {printers.map((printer, index) => {
+                const inkLevel = printer.status?.tonerBlack ?? 0;
+                const isOnline = printer.status?.online ?? false;
+
+                return (
+                  <div key={printer.id || index} className="px-2">
+                    <div className="bg-slate-800/30 rounded-lg p-3 border border-slate-700/30">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <PrinterIcon className={`${isOnline ? 'text-green-500' : 'text-red-500'}`} size={20} />
+                          <h3 className="text-white font-medium text-xs truncate max-w-[120px]" title={printer.name}>{printer.name}</h3>
+                        </div>
+                        <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 space-y-1"><div className="h-1.5 bg-slate-700 rounded-full overflow-hidden w-full"><div className={`h-full ${inkLevel < 20 ? 'bg-red-500' : inkLevel < 40 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${inkLevel}%` }} /></div></div>
+                        <span className={`text-xs font-semibold ${inkLevel < 20 ? 'text-red-400' : inkLevel < 40 ? 'text-yellow-400' : 'text-green-400'}`}>{inkLevel}%</span>
+                      </div>
                     </div>
-                    <div className={`w-2 h-2 rounded-full ${printer.status === 'online' ? 'bg-green-500' : printer.status === 'offline' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500'}`} />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 space-y-1"><div className="h-1.5 bg-slate-700 rounded-full overflow-hidden w-full"><div className={`h-full ${printer.ink < 20 ? 'bg-red-500' : printer.ink < 40 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${printer.ink}%` }} /></div></div>
-                    <span className={`text-xs font-semibold ${printer.ink < 20 ? 'text-red-400' : printer.ink < 40 ? 'text-yellow-400' : 'text-green-400'}`}>{printer.ink}%</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </Slider>
+                );
+              })}
+            </Slider>
+          )}
         </div>
       </div>
     )

@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const API_URL = import.meta.env.VITE_API_URL ?? '';
 
       // Try regular login first
       let response = await fetch(`${API_URL}/api/auth/login`, {
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         response = await fetch(`${API_URL}/api/auth/glpi-login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ login: email, password }),
         });
       }
 
@@ -88,7 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Define profile based on role from backend or email
       let newProfile: UserProfile = 'admin';
-      if (data.user?.role === 'TECH_ELECT' || data.user?.role === 'tech_elect' || email.includes('eletrica')) newProfile = 'tech_elect';
+
+      // Use profile returned from backend (based on GLPI groups)
+      if (data.user?.profile) {
+        newProfile = data.user.profile as UserProfile;
+      }
+      // Fallback to legacy checks
+      else if (data.user?.role === 'TECH_ELECT' || data.user?.role === 'tech_elect' || email.includes('eletrica')) newProfile = 'tech_elect';
       else if (data.user?.role === 'TECH_TI' || data.user?.role === 'tech_ti' || email.includes('tecnico')) newProfile = 'tech_ti';
       else if (data.user?.role === 'MANAGER' || data.user?.role === 'manager' || email.includes('gestor')) newProfile = 'manager';
 

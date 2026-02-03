@@ -30,7 +30,7 @@ import { PurchasesModule } from './presentation/controllers/purchases/purchases.
 import { ReportRecipientsModule } from './presentation/controllers/reports/report-recipients.module';
 import { StockModule } from './presentation/controllers/stock/stock.module';
 import { ReservationModule } from './presentation/controllers/reservations/reservation.module';
-// import { PrinterModule } from './presentation/controllers/printers/printer.module';
+import { PrinterModule } from './presentation/controllers/printers/printer.module';
 import { WebsocketModule } from './presentation/websockets/websocket.module';
 
 // Health check
@@ -73,7 +73,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     ReportRecipientsModule,
     StockModule,
     ReservationModule,
-    // PrinterModule,
+    PrinterModule,
     WebsocketModule,
   ],
   controllers: [HealthController],

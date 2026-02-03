@@ -194,35 +194,43 @@ export class StockService {
             where.stockType = stockType as any;
         }
 
-        // Buscar total e assets normalmente
-        const [total, assets] = await Promise.all([
-            this.prisma.stockItem.count({ where }),
-            this.prisma.stockItem.count({
-                where: {
-                    ...where,
-                    category: 'ASSET',
-                },
-            }),
-        ]);
+        try {
+            // Buscar total e assets normalmente
+            const [total, assets] = await Promise.all([
+                this.prisma.stockItem.count({ where }),
+                this.prisma.stockItem.count({
+                    where: {
+                        ...where,
+                        category: 'ASSET',
+                    },
+                }),
+            ]);
 
-        // Contar lowStock usando raw query para comparar quantity <= minQuantity
-        const stockTypeFilter = stockType ? this.prisma.$queryRaw`AND "stockType" = ${stockType}` : this.prisma.$queryRaw``;
+            // Contar lowStock buscando todos itens e filtrando
+            const allItems = await this.prisma.stockItem.findMany({
+                where,
+                select: { quantity: true, minQuantity: true },
+            });
 
-        const lowStockResult = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
-            SELECT COUNT(*)::int as count
-            FROM stock_items
-            WHERE active = true
-              AND quantity <= "minQuantity"
-              ${stockTypeFilter}
-        `;
+            const lowStock = allItems.filter(
+                item => Number(item.quantity) <= Number(item.minQuantity)
+            ).length;
 
-        const lowStock = Number(lowStockResult[0]?.count || 0);
-
-        return {
-            total,
-            lowStock,
-            assets,
-            supplies: total - assets,
-        };
+            return {
+                total,
+                lowStock,
+                assets,
+                supplies: total - assets,
+            };
+        } catch (error) {
+            console.error('Erro ao buscar estatísticas de estoque:', error);
+            // Retorna valores padrão em caso de erro
+            return {
+                total: 0,
+                lowStock: 0,
+                assets: 0,
+                supplies: 0,
+            };
+        }
     }
 }

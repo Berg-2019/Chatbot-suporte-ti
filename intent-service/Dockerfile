@@ -6,10 +6,11 @@ WORKDIR /app
 
 # Install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Download spaCy Portuguese model
-RUN python -m spacy download pt_core_news_sm
+# Download spaCy Portuguese model (using direct pip install for reliability)
+RUN pip install --no-cache-dir https://github.com/explosion/spacy-models/releases/download/pt_core_news_sm-3.7.0/pt_core_news_sm-3.7.0-py3-none-any.whl
 
 # Copy app files
 COPY . .

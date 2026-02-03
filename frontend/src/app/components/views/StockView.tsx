@@ -62,8 +62,9 @@ export default function StockView() {
         stockApi.getStats(stockType),
       ]);
 
-      setStockItems(items);
-      setStats(stockStats);
+      // Garantir que items seja sempre um array
+      setStockItems(Array.isArray(items) ? items : []);
+      setStats(stockStats || { total: 0, lowStock: 0, assets: 0, supplies: 0 });
     } catch (err) {
       console.error('Error fetching stock:', err);
       setError('Erro ao carregar estoque');

@@ -4,6 +4,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import QRCode from 'qrcode';
 import { whatsappHandler } from './handlers/whatsapp-handler.js';
 
 const app = express();
@@ -16,19 +17,43 @@ app.use(express.json());
  * GET /api/status - Status do bot
  */
 app.get('/api/status', (req, res) => {
-  const status = whatsappHandler.getStatus();
-  res.json(status);
+  const rawStatus = whatsappHandler.getStatus();
+
+  // Converter para formato esperado pelo frontend
+  let status = 'disconnected';
+  if (rawStatus.connected) {
+    status = 'connected';
+  } else if (rawStatus.connectionState === 'waiting_qr' || rawStatus.hasQR) {
+    status = 'qr_ready';
+  } else if (rawStatus.connectionState === 'connecting') {
+    status = 'connecting';
+  }
+
+  res.json({
+    status,
+    uptime: rawStatus.uptime ? Math.floor(rawStatus.uptime / 1000) : 0,
+    connectedNumber: rawStatus.phoneNumber,
+    messagesReceived: 0,
+    messagesSent: 0,
+  });
 });
 
 /**
- * GET /api/qr - QR Code atual (string para gerar imagem no frontend)
+ * GET /api/qr - QR Code atual (imagem base64)
  */
-app.get('/api/qr', (req, res) => {
+app.get('/api/qr', async (req, res) => {
   const qr = whatsappHandler.getCurrentQR();
   if (qr) {
-    res.json({ qr, available: true });
+    try {
+      // Converter string QR para imagem base64
+      const qrImage = await QRCode.toDataURL(qr, { width: 256, margin: 2 });
+      res.json({ qrCode: qrImage, status: 'qr_ready', available: true });
+    } catch (err) {
+      console.error('Erro ao gerar QR image:', err);
+      res.json({ qrCode: null, status: 'error', available: false, message: 'Erro ao gerar imagem QR' });
+    }
   } else {
-    res.json({ qr: null, available: false });
+    res.json({ qrCode: null, status: 'waiting', available: false, message: 'QR Code não disponível ainda' });
   }
 });
 
@@ -50,9 +75,9 @@ app.post('/api/pairing-code', async (req, res) => {
     const code = await whatsappHandler.requestPairingCode(formattedNumber);
 
     if (code) {
-      res.json({ code, success: true });
+      res.json({ pairingCode: code, status: 'success', expiresIn: 60 });
     } else {
-      res.status(400).json({ error: 'Não foi possível gerar código', success: false });
+      res.status(400).json({ pairingCode: null, status: 'error', message: 'Não foi possível gerar código' });
     }
   } catch (error) {
     console.error('❌ Erro ao gerar pairing code:', error.message);

@@ -1,15 +1,15 @@
 import { Zap, AlertTriangle, CheckCircle, Clock, Plus, X, MapPin, User, FileText, CalendarClock, MessageCircle, XCircle, CheckCircle2, LayoutDashboard, ListTodo } from 'lucide-react';
-import MetricCard from '@/app/components/MetricCard';
-import ReservationChat from '@/app/components/ReservationChat';
-import MobileFloatingMenu from '@/app/components/MobileFloatingMenu';
+import MetricCard from '../MetricCard';
+import ReservationChat from '../ReservationChat';
+import MobileFloatingMenu from '../MobileFloatingMenu';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, isSameDay, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useBadges } from '@/app/hooks/useBadges';
-import { Ticket } from '@/types/ticket';
+import { useBadges } from '../../hooks/useBadges';
+import { ticketsApi, reservationApi, type Ticket, type Reservation } from '../../services/api';
 
 const data = [
   { name: 'Seg', chamados: 4 },
@@ -21,24 +21,8 @@ const data = [
   { name: 'Dom', chamados: 2 },
 ];
 
-interface Reservation {
-  id: number;
-  assetName: string;
-  requester: string;
-  dateStart: string;
-  dateEnd: string;
-  status: 'pending' | 'approved' | 'active' | 'completed';
-}
-
-interface TimelineReservation {
-  id: number;
-  assetId: number;
-  assetName: string;
-  userName: string;
-  startTime: Date;
-  endTime: Date;
-  status: 'approved' | 'pending';
-}
+// Timeline helper type (could be same as Reservation but simplified for chart/timeline)
+interface TimelineReservation extends Reservation { }
 
 interface ElectricalDashboardViewProps {
   onTicketClick: (ticket: Ticket) => void;
@@ -48,96 +32,72 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [activeReservationChat, setActiveReservationChat] = useState<{ requester: string, assetName: string, id: number } | null>(null);
   const badges = useBadges();
-  
+
   // Mobile Tab State
   const [mobileTab, setMobileTab] = useState('home');
 
-  // Mock Reservas (Solicitações Bot)
-  const [reservations, setReservations] = useState<Reservation[]>([
-    { id: 1, assetName: 'Parafusadeira Bosch Profissional', requester: 'Carlos (Manutenção)', dateStart: '28/01/2026 14:00', dateEnd: '28/01/2026 16:00', status: 'pending' },
-    { id: 2, assetName: 'Escada Extensiva 7 Degraus', requester: 'Equipe Pintura', dateStart: '29/01/2026 08:00', dateEnd: '29/01/2026 12:00', status: 'pending' },
-    { id: 3, assetName: 'Multímetro Fluke 117', requester: 'João (Elétrica)', dateStart: '27/01/2026 09:00', dateEnd: '27/01/2026 18:00', status: 'approved' },
-  ]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [timelineReservations, setTimelineReservations] = useState<Reservation[]>([]);
+  const [requests, setRequests] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock Reservas (Cronograma Horizontal)
-  const timelineReservations: TimelineReservation[] = [
-    { id: 101, assetId: 1, assetName: 'Multímetro Fluke', userName: 'João (Elétrica)', startTime: addHours(new Date(), -1), endTime: addHours(new Date(), 2), status: 'approved' },
-    { id: 102, assetId: 2, assetName: 'Furadeira Bosch', userName: 'Carlos (Manutenção)', startTime: addHours(new Date(), 1), endTime: addHours(new Date(), 4), status: 'pending' },
-    { id: 103, assetId: 3, assetName: 'Escada Extensiva', userName: 'Equipe Predial', startTime: new Date(), endTime: addHours(new Date(), 5), status: 'approved' },
-  ];
+  const fetchData = async () => {
+    try {
+      const [ticketsRes, reservationsAll] = await Promise.all([
+        ticketsApi.getAll({ category: 'Elétrica' }),
+        reservationApi.getAll()
+      ]);
+      setRequests(ticketsRes.tickets);
+      setReservations(reservationsAll);
 
-  // Mock Tickets
-  const requests: Ticket[] = [
-    { 
-      id: 1, 
-      title: 'Troca de Disjuntor', 
-      loc: 'Sala 302', 
-      status: 'pending', 
-      time: '2h atrás',
-      client: 'Administração Predial',
-      description: 'Disjuntor do ar condicionado desarmando após 10min de uso. Cheiro de queimado.',
-      category: 'Elétrica - Manutenção',
-      ticketNumber: 'OS-2601-001',
-      date: '28/01/2026'
-    },
-    { 
-      id: 2, 
-      title: 'Queda de Energia', 
-      loc: 'Servidor', 
-      status: 'urgent', 
-      time: '4h atrás',
-      client: 'TI - Infraestrutura',
-      description: 'Queda total de energia na sala de servidores. Nobreaks atuando.',
-      category: 'Elétrica - Emergência',
-      ticketNumber: 'OS-2601-002',
-      date: '28/01/2026'
-    },
-    { 
-      id: 3, 
-      title: 'Lâmpada Queimada', 
-      loc: 'Corredor B', 
-      status: 'done', 
-      time: '5h atrás',
-      client: 'Limpeza',
-      description: 'Duas lâmpadas do corredor principal queimadas.',
-      category: 'Iluminação',
-      ticketNumber: 'OS-2601-003',
-      date: '28/01/2026'
-    },
-    { 
-      id: 4, 
-      title: 'Instalação Tomada', 
-      loc: 'RH', 
-      status: 'progress', 
-      time: '1d atrás',
-      client: 'Recursos Humanos',
-      description: 'Instalação de novo ponto de energia para impressora.',
-      category: 'Instalação',
-      ticketNumber: 'OS-2601-004',
-      date: '27/01/2026'
-    },
-  ];
+      // Simple timeline mapping or separate fetch
+      setTimelineReservations(reservationsAll.filter((r: Reservation) => r.status === 'APPROVED' || r.status === 'PENDING'));
 
-  const todayReservations = timelineReservations.filter(res => 
-    isSameDay(res.startTime, new Date()) || 
-    (res.startTime < new Date() && res.endTime > new Date())
-  ).sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-
-  const handleApproveReservation = (id: number) => {
-    toast.success('Reserva aprovada com sucesso!');
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'approved' } : r));
+    } catch (err) {
+      console.error('Failed to fetch dashboard data', err);
+      toast.error('Erro ao atualizar painel');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRejectReservation = (id: number) => {
-    toast.error('Reserva rejeitada/cancelada.');
-    setReservations(prev => prev.filter(r => r.id !== id));
+  useState(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  });
+
+  const todayReservations = timelineReservations.filter(res => {
+    const start = new Date(res.startTime);
+    const end = new Date(res.endTime);
+    return isSameDay(start, new Date()) || (start < new Date() && end > new Date());
+  }).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+  const handleApproveReservation = async (id: number) => {
+    try {
+      await reservationApi.approve(id.toString());
+      toast.success('Reserva aprovada com sucesso!');
+      fetchData();
+    } catch {
+      toast.error('Erro ao aprovar');
+    }
+  };
+
+  const handleRejectReservation = async (id: number) => {
+    try {
+      await reservationApi.reject(id.toString());
+      toast.error('Reserva rejeitada.');
+      fetchData();
+    } catch {
+      toast.error('Erro ao rejeitar');
+    }
   };
 
   const handleOpenChat = (reservation: Reservation) => {
-    setActiveReservationChat({ 
-      requester: reservation.requester, 
-      assetName: reservation.assetName, 
-      id: reservation.id 
+    setActiveReservationChat({
+      requester: reservation.userName,
+      assetName: reservation.stockItem?.name || 'Item',
+      id: Number(reservation.id)
     });
   };
 
@@ -150,10 +110,10 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
   // Render Functions for Components
   const renderMetrics = () => (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <MetricCard title="Pendentes" value="12" trend="+2" trendUp={false} icon={AlertTriangle} color="text-yellow-500" />
-      <MetricCard title="Em Andamento" value="5" trend="Estável" icon={Clock} color="text-blue-500" />
-      <MetricCard title="Concluídas" value="8" trend="+3" trendUp={true} icon={CheckCircle} color="text-green-500" />
-      <MetricCard title="Consumo" value="1.2k" trend="-5%" trendUp={true} icon={Zap} color="text-purple-500" />
+      <MetricCard label="Pendentes" value="12" trend="+2" trendUp={false} icon={AlertTriangle} iconColor="text-yellow-500" />
+      <MetricCard label="Em Andamento" value="5" trend="Estável" icon={Clock} iconColor="text-blue-500" />
+      <MetricCard label="Concluídas" value="8" trend="+3" trendUp={true} icon={CheckCircle} iconColor="text-green-500" />
+      <MetricCard label="Consumo" value="1.2k" trend="-5%" trendUp={true} icon={Zap} iconColor="text-purple-500" />
     </div>
   );
 
@@ -173,9 +133,12 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
         <div className="flex gap-4 min-w-max">
           {todayReservations.length > 0 ? (
             todayReservations.map((res) => {
-              const isNow = new Date() >= res.startTime && new Date() <= res.endTime;
+              const start = new Date(res.startTime);
+              const end = new Date(res.endTime);
+              const now = new Date();
+              const isNow = now >= start && now <= end;
               return (
-                <div key={res.id} onClick={() => setActiveReservationChat({ requester: res.userName, assetName: res.assetName, id: res.id })}
+                <div key={res.id} onClick={() => setActiveReservationChat({ requester: res.userName, assetName: res.stockItem?.name || 'Item', id: Number(res.id) })}
                   className={`relative flex flex-col min-w-[200px] p-3 rounded-xl border transition-all cursor-pointer
                   ${isNow ? 'bg-yellow-600/10 border-yellow-500/50' : 'bg-slate-800/30 border-slate-700/50'}`}>
                   {isNow && <span className="absolute -top-2 -right-2 bg-yellow-600 text-black text-[10px] font-bold px-2 py-0.5 rounded-full">EM USO</span>}
@@ -185,7 +148,7 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
                     </div>
                   </div>
                   <div className="mb-2">
-                    <div className="text-white font-semibold truncate">{res.assetName}</div>
+                    <div className="text-white font-semibold truncate">{res.stockItem?.name || 'Item sem nome'}</div>
                     <div className="flex items-center gap-1 text-xs text-slate-400 mt-1"><User size={12} /> {res.userName}</div>
                   </div>
                 </div>
@@ -193,7 +156,7 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
             })
           ) : (
             <div className="flex items-center gap-4 text-slate-500 p-2 italic w-full justify-center">
-               <Clock size={20} className="text-slate-600" /> Nenhuma reserva hoje.
+              <Clock size={20} className="text-slate-600" /> Nenhuma reserva hoje.
             </div>
           )}
         </div>
@@ -209,8 +172,8 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorElect" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#eab308" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -234,15 +197,15 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
           <div key={item.id} onClick={() => onTicketClick(item)}
             className="flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-800 rounded-lg cursor-pointer border border-transparent hover:border-slate-700 group">
             <div className="flex items-center gap-3">
-              <div className={`w-2 h-2 rounded-full ${item.status === 'urgent' ? 'bg-red-500' : item.status === 'pending' ? 'bg-yellow-500' : 'bg-green-500'}`} />
+              <div className={`w-2 h-2 rounded-full ${item.status === 'NEW' || item.status === 'IN_PROGRESS' || item.status === 'ASSIGNED' ? 'bg-red-500' : item.status === 'WAITING_CLIENT' ? 'bg-yellow-500' : 'bg-green-500'}`} />
               <div>
                 <h4 className="text-sm font-medium text-white group-hover:text-yellow-400">{item.title}</h4>
-                <p className="text-xs text-slate-400 flex items-center gap-1"><MapPin size={10} /> {item.loc}</p>
+                <p className="text-xs text-slate-400 flex items-center gap-1"><MapPin size={10} /> {item.client}</p>
               </div>
             </div>
             <div className="flex flex-col items-end">
-               <span className="text-[10px] text-slate-500">{item.time}</span>
-               <span className="text-[10px] text-slate-600 bg-slate-900 px-1.5 rounded mt-1">#{item.ticketNumber.split('-')[2]}</span>
+              <span className="text-[10px] text-slate-500">{format(new Date(item.date), 'HH:mm')}</span>
+              <span className="text-[10px] text-slate-600 bg-slate-900 px-1.5 rounded mt-1">#{item.ticketNumber.split('-')[2]}</span>
             </div>
           </div>
         ))}
@@ -252,13 +215,13 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
 
   const renderReservationsList = () => (
     <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 h-full min-h-[500px] flex flex-col">
-       <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
           <CalendarClock className="text-blue-500" size={20} /> Solicitações
         </h2>
         <div className="flex gap-2">
           <span className="px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded text-xs border border-yellow-500/20">
-            {reservations.filter(r => r.status === 'pending').length} Pendentes
+            {reservations.filter(r => r.status === 'PENDING').length} Pendentes
           </span>
         </div>
       </div>
@@ -270,16 +233,16 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-yellow-500/10 text-yellow-500"><CalendarClock size={20} /></div>
                   <div>
-                    <h3 className="text-white font-medium text-sm">{reservation.assetName}</h3>
-                    <p className="text-slate-400 text-xs">{reservation.requester}</p>
+                    <h3 className="text-white font-medium text-sm">{reservation.stockItem?.name || 'Item'}</h3>
+                    <p className="text-slate-400 text-xs">{reservation.userName}</p>
                   </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {reservation.status === 'pending' && (
+                {reservation.status === 'PENDING' && (
                   <>
-                    <button onClick={() => handleApproveReservation(reservation.id)} className="bg-green-600 text-white py-1.5 rounded-lg text-xs">Aprovar</button>
-                    <button onClick={() => handleRejectReservation(reservation.id)} className="bg-red-600/10 text-red-400 border border-red-600/20 py-1.5 rounded-lg text-xs">Rejeitar</button>
+                    <button onClick={() => handleApproveReservation(Number(reservation.id))} className="bg-green-600 text-white py-1.5 rounded-lg text-xs">Aprovar</button>
+                    <button onClick={() => handleRejectReservation(Number(reservation.id))} className="bg-red-600/10 text-red-400 border border-red-600/20 py-1.5 rounded-lg text-xs">Rejeitar</button>
                   </>
                 )}
                 <button onClick={() => handleOpenChat(reservation)} className={`col-span-2 bg-blue-600/10 text-blue-400 border border-blue-600/20 py-1.5 rounded-lg text-xs`}>Conversar</button>
@@ -299,7 +262,7 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
           <h2 className="text-2xl font-bold text-white">Painel Elétrica</h2>
           <p className="text-slate-400 hidden md:block">Monitoramento de ordens de serviço e manutenção predial</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsNewOrderModalOpen(true)}
           className="bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-yellow-500/20"
         >
@@ -309,13 +272,13 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
 
       {/* DESKTOP VIEW */}
       <div className="hidden md:grid gap-6">
-         <div className="grid grid-cols-4 gap-4">{renderMetrics().props.children}</div>
-         {renderSchedule()}
-         {renderChart()}
-         <div className="grid grid-cols-2 gap-6">
-            {renderTicketsList()}
-            {renderReservationsList()}
-         </div>
+        <div className="grid grid-cols-4 gap-4">{renderMetrics().props.children}</div>
+        {renderSchedule()}
+        {renderChart()}
+        <div className="grid grid-cols-2 gap-6">
+          {renderTicketsList()}
+          {renderReservationsList()}
+        </div>
       </div>
 
       {/* MOBILE VIEW */}
@@ -327,7 +290,7 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
             {renderChart()}
           </motion.div>
         )}
-        
+
         {mobileTab === 'tickets' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)]">
             {renderTicketsList()}
@@ -342,24 +305,24 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
 
         {mobileTab === 'schedule' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-200px)] flex flex-col gap-4">
-             {renderSchedule()}
-             <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
-               <p className="text-slate-400 text-sm text-center">Visualização completa do cronograma disponível em Desktop.</p>
-             </div>
+            {renderSchedule()}
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
+              <p className="text-slate-400 text-sm text-center">Visualização completa do cronograma disponível em Desktop.</p>
+            </div>
           </motion.div>
         )}
       </div>
 
       {/* MOBILE FLOATING MENU */}
-      <MobileFloatingMenu 
-        activeId={mobileTab} 
+      <MobileFloatingMenu
+        activeId={mobileTab}
         onSelect={setMobileTab}
         items={[
           { id: 'home', icon: LayoutDashboard, label: 'Visão Geral', badge: badges.home },
           { id: 'tickets', icon: ListTodo, label: 'Tickets', badge: badges.tickets },
           { id: 'reservations', icon: CalendarClock, label: 'Reservas', badge: badges.reservations },
           { id: 'schedule', icon: Clock, label: 'Agenda' },
-        ]} 
+        ]}
       />
 
       {/* Modal Nova Ordem de Serviço */}
@@ -402,9 +365,9 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
 
       {/* Reservation Chat Drawer */}
       {activeReservationChat && (
-        <ReservationChat 
-          isOpen={!!activeReservationChat} 
-          onClose={() => setActiveReservationChat(null)} 
+        <ReservationChat
+          isOpen={!!activeReservationChat}
+          onClose={() => setActiveReservationChat(null)}
           requesterName={activeReservationChat.requester}
           assetName={activeReservationChat.assetName}
           reservationId={activeReservationChat.id}

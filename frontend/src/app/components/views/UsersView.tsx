@@ -1,19 +1,16 @@
 import { Users, Plus, Search, Edit2, Trash2, Mail, Phone, Shield, X, Check, LayoutDashboard, Briefcase, BarChart3, Package, FileText, HelpCircle, MessageSquare, Bot, Printer, CheckSquare, Square } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  role: 'Técnico' | 'Admin' | 'Usuário';
-  department: string;
+import { usersApi, type User as ApiUser } from '@/app/services/api';
+
+interface User extends Omit<ApiUser, 'role'> {
+  role: 'Admin' | 'Técnico' | 'Usuário';
   status: 'active' | 'inactive';
-  tickets: number;
+  tickets: number; // Extended for UI
   lastAccess: string;
-  permissions?: string[];
+  permissions: string[];
 }
 
 const ALL_MODULES = [
@@ -44,53 +41,53 @@ export default function UsersView() {
     permissions: ['dashboard', 'chat'] // Default permissions
   });
 
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: 1,
-      name: 'Matheus Soares',
-      email: 'matheus@empresa.com',
-      phone: '(11) 98765-4321',
-      role: 'Admin',
-      department: 'TI',
-      status: 'active',
-      tickets: 0,
-      lastAccess: '27/01/2026 11:30',
-      permissions: ALL_MODULES.map(m => m.id)
-    },
-    {
-      id: 2,
-      name: 'Robison TI',
-      email: 'robison@empresa.com',
-      phone: '(11) 98765-4322',
-      role: 'Técnico',
-      department: 'TI',
-      status: 'active',
-      tickets: 45,
-      lastAccess: '27/01/2026 11:15',
-      permissions: ['dashboard', 'metricas', 'estoque', 'chat', 'faq', 'impressoras']
-    },
-    {
-      id: 3,
-      name: 'Gustavo César Silva',
-      email: 'gustavo@empresa.com',
-      phone: '(11) 98765-4323',
-      role: 'Usuário',
-      department: 'Financeiro',
-      status: 'active',
-      tickets: 12,
-      lastAccess: '27/01/2026 10:45',
-      permissions: ['dashboard', 'chat']
-    },
-  ]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    setError(null);
+    setAccessDenied(false);
+    try {
+      const data = await usersApi.getAll();
+      const mapped: User[] = data.map(u => ({
+        ...u,
+        role: u.role === 'ADMIN' ? 'Admin' : u.role === 'AGENT' ? 'Técnico' : 'Usuário',
+        status: u.active ? 'active' : 'inactive',
+        tickets: 0,
+        lastAccess: 'N/A',
+        permissions: u.role === 'ADMIN' ? ALL_MODULES.map(m => m.id) : ['dashboard', 'chat'],
+        phone: u.phone || '',
+        department: u.department || ''
+      }));
+      setUsers(mapped);
+    } catch (err: any) {
+      console.error('Failed to fetch users', err);
+      if (err.message?.includes('403') || err.message?.includes('Forbidden') || err.message?.includes('admins')) {
+        setAccessDenied(true);
+      } else {
+        setError('Erro ao carregar usuários');
+        toast.error('Erro ao carregar usuários');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = 
+    const matchesSearch =
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.department.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesRole = filterRole === 'all' || user.role === filterRole;
-    
+
     return matchesSearch && matchesRole;
   });
 
@@ -100,37 +97,37 @@ export default function UsersView() {
     Usuário: 'bg-slate-600/20 text-slate-400 border-slate-600/30',
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email) {
       toast.error('Preencha os campos obrigatórios');
       return;
     }
 
-    const newUser: User = {
-      id: users.length + 1,
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      department: formData.department,
-      role: formData.role as any,
-      status: 'active',
-      tickets: 0,
-      lastAccess: 'Nunca',
-      permissions: formData.permissions
-    };
-
-    setUsers([...users, newUser]);
-    setIsModalOpen(false);
-    toast.success('Usuário criado com sucesso!');
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      department: '',
-      role: 'Usuário',
-      permissions: ['dashboard', 'chat']
-    });
+    try {
+      await usersApi.createGlpiUser({
+        login: formData.email.split('@')[0],
+        password: 'password123', // Default or generate
+        firstName: formData.name.split(' ')[0],
+        lastName: formData.name.split(' ').slice(1).join(' '),
+        email: formData.email,
+        phone: formData.phone
+      });
+      toast.success('Usuário criado com sucesso (GLPI + Local)!');
+      setIsModalOpen(false);
+      fetchUsers();
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        department: '',
+        role: 'Usuário',
+        permissions: ['dashboard', 'chat']
+      });
+    } catch (err) {
+      toast.error('Erro ao criar usuário');
+      console.error(err);
+    }
   };
 
   const togglePermission = (moduleId: string) => {
@@ -142,6 +139,49 @@ export default function UsersView() {
     }));
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // Access denied state
+  if (accessDenied) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-full">
+          <Shield className="text-red-500" size={48} />
+        </div>
+        <h2 className="text-xl font-bold text-white">Acesso Restrito</h2>
+        <p className="text-slate-400 text-center max-w-md">
+          Você não tem permissão para acessar esta página. Apenas administradores podem gerenciar usuários.
+        </p>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <div className="p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-full">
+          <Users className="text-yellow-500" size={48} />
+        </div>
+        <h2 className="text-xl font-bold text-white">Erro ao carregar</h2>
+        <p className="text-slate-400">{error}</p>
+        <button
+          onClick={fetchUsers}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -149,7 +189,7 @@ export default function UsersView() {
           <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Gestão de Usuários</h1>
           <p className="text-slate-400">Gerencie usuários e permissões do sistema</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-blue-900/20"
         >
@@ -232,7 +272,7 @@ export default function UsersView() {
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg">
                   {user.name.charAt(0)}
                 </div>
-                
+
                 <div className="flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
                     <h3 className="text-white font-semibold text-lg">{user.name}</h3>
@@ -251,7 +291,7 @@ export default function UsersView() {
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                     <div className="flex items-center gap-2 text-slate-400">
                       <Mail size={16} />
@@ -268,7 +308,7 @@ export default function UsersView() {
                       <span className="text-slate-500 font-medium">Tickets:</span> {user.tickets}
                     </div>
                   </div>
-                  
+
                   {/* Permissions Chips */}
                   {user.permissions && (
                     <div className="mt-3 flex flex-wrap gap-1">
@@ -293,7 +333,7 @@ export default function UsersView() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button className="p-2 bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg transition-colors text-slate-400">
                   <Edit2 size={18} />
@@ -318,16 +358,16 @@ export default function UsersView() {
       <AnimatePresence>
         {isModalOpen && (
           <>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" 
-              onClick={() => setIsModalOpen(false)} 
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
+              onClick={() => setIsModalOpen(false)}
             />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-              animate={{ opacity: 1, scale: 1, y: 0 }} 
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95%] max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
             >
@@ -345,36 +385,36 @@ export default function UsersView() {
                   {/* Left Side: Form */}
                   <div className="flex-1 p-6 space-y-6 border-r border-slate-800">
                     <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Dados Básicos</h4>
-                    
+
                     <div className="grid grid-cols-1 gap-4">
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-300">Nome Completo *</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={formData.name}
-                          onChange={e => setFormData({...formData, name: e.target.value})}
+                          onChange={e => setFormData({ ...formData, name: e.target.value })}
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
                           placeholder="Ex: João Silva"
                         />
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-slate-300">Email *</label>
-                          <input 
-                            type="email" 
+                          <input
+                            type="email"
                             value={formData.email}
-                            onChange={e => setFormData({...formData, email: e.target.value})}
+                            onChange={e => setFormData({ ...formData, email: e.target.value })}
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
                             placeholder="joao@empresa.com"
                           />
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-slate-300">Telefone</label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             value={formData.phone}
-                            onChange={e => setFormData({...formData, phone: e.target.value})}
+                            onChange={e => setFormData({ ...formData, phone: e.target.value })}
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
                             placeholder="(11) 99999-9999"
                           />
@@ -382,11 +422,11 @@ export default function UsersView() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-2">
+                        <div className="space-y-2">
                           <label className="text-sm font-medium text-slate-300">Departamento</label>
-                          <select 
+                          <select
                             value={formData.department}
-                            onChange={e => setFormData({...formData, department: e.target.value})}
+                            onChange={e => setFormData({ ...formData, department: e.target.value })}
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
                           >
                             <option value="">Selecione...</option>
@@ -399,9 +439,9 @@ export default function UsersView() {
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-slate-300">Função</label>
-                          <select 
+                          <select
                             value={formData.role}
-                            onChange={e => setFormData({...formData, role: e.target.value})}
+                            onChange={e => setFormData({ ...formData, role: e.target.value })}
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
                           >
                             <option value="Usuário">Usuário</option>
@@ -418,13 +458,13 @@ export default function UsersView() {
                         {ALL_MODULES.map(module => {
                           const isSelected = formData.permissions.includes(module.id);
                           return (
-                            <div 
+                            <div
                               key={module.id}
                               onClick={() => togglePermission(module.id)}
                               className={`
                                 flex items-center gap-3 p-3 rounded-lg cursor-pointer border transition-all
-                                ${isSelected 
-                                  ? 'bg-blue-600/10 border-blue-500/50 text-white' 
+                                ${isSelected
+                                  ? 'bg-blue-600/10 border-blue-500/50 text-white'
                                   : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'}
                               `}
                             >
@@ -445,51 +485,51 @@ export default function UsersView() {
                   {/* Right Side: Preview */}
                   <div className="w-full lg:w-80 bg-slate-950 p-6 border-l border-slate-800 flex flex-col">
                     <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Preview do Menu</h4>
-                    
-                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden flex-1 flex flex-col">
-                       {/* Fake Sidebar Header */}
-                       <div className="p-4 border-b border-slate-800 bg-slate-900">
-                         <div className="flex items-center gap-2">
-                           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                             <LayoutDashboard size={18} className="text-white" />
-                           </div>
-                           <div>
-                             <div className="h-2 w-20 bg-slate-700 rounded mb-1"></div>
-                             <div className="h-1.5 w-12 bg-slate-800 rounded"></div>
-                           </div>
-                         </div>
-                       </div>
-                       
-                       {/* Fake Sidebar Items */}
-                       <div className="p-3 space-y-1 overflow-y-auto custom-scrollbar flex-1">
-                         {ALL_MODULES.filter(m => formData.permissions.includes(m.id)).map(module => {
-                           const Icon = module.icon;
-                           return (
-                             <div key={module.id} className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 bg-slate-800/50 border border-slate-700/50">
-                               <Icon size={16} className="text-slate-400" />
-                               <span className="text-xs font-medium">{module.label}</span>
-                             </div>
-                           );
-                         })}
-                         {formData.permissions.length === 0 && (
-                           <div className="text-center py-10 px-4">
-                             <p className="text-xs text-slate-600">Nenhum módulo selecionado. O usuário não verá nada no menu.</p>
-                           </div>
-                         )}
-                       </div>
 
-                       {/* Fake User Profile Bottom */}
-                       <div className="p-3 border-t border-slate-800 bg-slate-900">
-                         <div className="flex items-center gap-2">
-                           <div className="w-8 h-8 rounded-full bg-slate-700"></div>
-                           <div className="flex-1">
-                             <p className="text-xs font-medium text-white truncate w-32">{formData.name || 'Nome do Usuário'}</p>
-                             <p className="text-[10px] text-slate-500 truncate w-32">{formData.email || 'email@exemplo.com'}</p>
-                           </div>
-                         </div>
-                       </div>
+                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden flex-1 flex flex-col">
+                      {/* Fake Sidebar Header */}
+                      <div className="p-4 border-b border-slate-800 bg-slate-900">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                            <LayoutDashboard size={18} className="text-white" />
+                          </div>
+                          <div>
+                            <div className="h-2 w-20 bg-slate-700 rounded mb-1"></div>
+                            <div className="h-1.5 w-12 bg-slate-800 rounded"></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fake Sidebar Items */}
+                      <div className="p-3 space-y-1 overflow-y-auto custom-scrollbar flex-1">
+                        {ALL_MODULES.filter(m => formData.permissions.includes(m.id)).map(module => {
+                          const Icon = module.icon;
+                          return (
+                            <div key={module.id} className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 bg-slate-800/50 border border-slate-700/50">
+                              <Icon size={16} className="text-slate-400" />
+                              <span className="text-xs font-medium">{module.label}</span>
+                            </div>
+                          );
+                        })}
+                        {formData.permissions.length === 0 && (
+                          <div className="text-center py-10 px-4">
+                            <p className="text-xs text-slate-600">Nenhum módulo selecionado. O usuário não verá nada no menu.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Fake User Profile Bottom */}
+                      <div className="p-3 border-t border-slate-800 bg-slate-900">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-slate-700"></div>
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-white truncate w-32">{formData.name || 'Nome do Usuário'}</p>
+                            <p className="text-[10px] text-slate-500 truncate w-32">{formData.email || 'email@exemplo.com'}</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    
+
                     <div className="mt-4 p-3 bg-blue-900/20 border border-blue-900/30 rounded-lg">
                       <p className="text-xs text-blue-300">
                         <span className="font-bold">Info:</span> O usuário terá acesso apenas aos {formData.permissions.length} módulos visualizados acima.
@@ -501,13 +541,13 @@ export default function UsersView() {
 
               {/* Footer Actions */}
               <div className="p-6 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
-                <button 
+                <button
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors font-medium"
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   onClick={handleCreateUser}
                   disabled={!formData.name || !formData.email}
                   className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
