@@ -3,7 +3,7 @@ import MetricCard from '../MetricCard';
 import ReservationChat from '../ReservationChat';
 import MobileFloatingMenu from '../MobileFloatingMenu';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, isSameDay, addHours } from 'date-fns';
@@ -26,9 +26,10 @@ interface TimelineReservation extends Reservation { }
 
 interface ElectricalDashboardViewProps {
   onTicketClick: (ticket: Ticket) => void;
+  refreshTrigger?: number;
 }
 
-export default function ElectricalDashboardView({ onTicketClick }: ElectricalDashboardViewProps) {
+export default function ElectricalDashboardView({ onTicketClick, refreshTrigger }: ElectricalDashboardViewProps) {
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [activeReservationChat, setActiveReservationChat] = useState<{ requester: string, assetName: string, id: number } | null>(null);
   const badges = useBadges();
@@ -61,11 +62,11 @@ export default function ElectricalDashboardView({ onTicketClick }: ElectricalDas
     }
   };
 
-  useState(() => {
+  useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  });
+  }, [refreshTrigger]);
 
   const todayReservations = timelineReservations.filter(res => {
     const start = new Date(res.startTime);

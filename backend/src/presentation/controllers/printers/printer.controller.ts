@@ -42,7 +42,7 @@ export class PrinterController {
 
     @Post()
     async create(
-        @Body() dto: { name: string; ip: string; community?: string; location?: string }
+        @Body() dto: { name: string; ip: string; port?: number; community?: string; location?: string }
     ) {
         return this.printerService.create(dto);
     }
@@ -50,7 +50,7 @@ export class PrinterController {
     @Put(':id')
     async update(
         @Param('id') id: string,
-        @Body() dto: { name?: string; ip?: string; community?: string; location?: string; active?: boolean }
+        @Body() dto: { name?: string; ip?: string; port?: number; community?: string; location?: string; active?: boolean }
     ) {
         return this.printerService.update(id, dto);
     }

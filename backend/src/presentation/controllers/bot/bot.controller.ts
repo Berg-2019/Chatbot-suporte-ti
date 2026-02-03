@@ -3,7 +3,9 @@
  * O bot roda em container separado, aqui faz proxy para os endpoints do bot
  */
 
-import { Controller, Get, Post, Body, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, HttpException, HttpStatus, Res, Param, SetMetadata, NotFoundException } from '@nestjs/common';
+import { Response } from 'express';
+import axios from 'axios';
 import { AuthGuard } from '@nestjs/passport';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
@@ -107,6 +109,19 @@ export class BotController {
     console.log(`✅ Ticket criado via bot: ${ticket.id} (GLPI #${dto.glpiId})`);
 
     return ticket;
+  }
+
+  @Get('media/:filename')
+  @SetMetadata('isPublic', true)
+  async getMedia(@Param('filename') filename: string, @Res() res: Response) {
+    const url = `${BOT_API_URL}/media/${filename}`;
+    try {
+      const response = await axios.get(url, { responseType: 'stream' });
+      res.setHeader('Content-Type', response.headers['content-type']);
+      response.data.pipe(res);
+    } catch (e) {
+      throw new NotFoundException('Mídia não encontrada');
+    }
   }
 }
 

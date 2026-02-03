@@ -57,18 +57,19 @@ export class PrinterService {
     });
   }
 
-  async create(data: { name: string; ip: string; community?: string; location?: string }) {
+  async create(data: { name: string; ip: string; port?: number; community?: string; location?: string }) {
     return this.prisma.printer.create({
       data: {
         name: data.name,
         ip: data.ip,
+        port: data.port || 161,
         community: data.community || 'public',
         location: data.location,
       },
     });
   }
 
-  async update(id: string, data: { name?: string; ip?: string; community?: string; location?: string; active?: boolean }) {
+  async update(id: string, data: { name?: string; ip?: string; port?: number; community?: string; location?: string; active?: boolean }) {
     return this.prisma.printer.update({
       where: { id },
       data,
@@ -95,7 +96,7 @@ export class PrinterService {
     }
 
     try {
-      const status = await this.querySnmp(printer.ip, printer.community);
+      const status = await this.querySnmp(printer.ip, printer.community, printer.port);
 
       // Atualizar cache no banco
       await this.prisma.printer.update({
@@ -181,9 +182,10 @@ export class PrinterService {
   /**
    * Consulta SNMP real
    */
-  private querySnmp(ip: string, community: string): Promise<PrinterStatus> {
+  private querySnmp(ip: string, community: string, port = 161): Promise<PrinterStatus> {
     return new Promise((resolve, reject) => {
       const session = snmp.createSession(ip, community, {
+        port,
         timeout: 5000,
         retries: 1,
       });

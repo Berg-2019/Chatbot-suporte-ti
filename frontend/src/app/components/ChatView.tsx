@@ -30,6 +30,7 @@ interface Message {
   sender: 'me' | 'other';
   time: string;
   status?: 'sent' | 'delivered' | 'read';
+  type?: 'TEXT' | 'IMAGE' | 'AUDIO';
 }
 
 export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewProps) {
@@ -46,7 +47,8 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
         text: m.content,
         sender: m.direction === 'OUTGOING' ? 'me' : 'other',
         time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'read' // Default for history
+        status: 'read',
+        type: m.type as 'TEXT' | 'IMAGE' | 'AUDIO', // Casting since exact enum might vary slightly
       }));
       setMessages(mapped);
     } catch (err) {
@@ -85,13 +87,46 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
     }
   };
 
-  const handleCloseTicket = (data: CloseTicketData) => {
+  const handleCloseTicket = async (data: CloseTicketData) => {
     console.log('Ticket Closed with Data:', data);
-    toast.success('Ticket fechado com sucesso!', {
-      description: `Tempo: ${data.timeSpent} | Custo: R$ ${data.totalCost.toFixed(2)}`
-    });
-    setIsCloseModalOpen(false);
-    onCloseTicket();
+
+    try {
+      // Parse timeSpent "Xh Ym" to minutes
+      const timeParts = data.timeSpent.match(/(\d+)h\s+(\d+)m/);
+      let minutes = 0;
+      if (timeParts) {
+        minutes = (parseInt(timeParts[1]) * 60) + parseInt(timeParts[2]);
+      } else {
+        // Fallback or simple parse
+        minutes = parseInt(data.timeSpent) || 0;
+      }
+
+      // Map details
+      const closePayload = {
+        solution: data.solution,
+        solutionType: data.category,
+        timeWorked: minutes,
+        saveContact: data.saveContact,
+        parts: data.parts.map(p => ({
+          partName: p.name,
+          quantity: p.quantity,
+          unitCost: p.cost,
+          purchased: false // Default/assumed
+        }))
+      };
+
+      await ticketsApi.closeTicket(ticket.id.toString(), closePayload);
+
+      toast.success('Ticket fechado com sucesso!', {
+        description: `Tempo: ${data.timeSpent} | Custo: R$ ${data.totalCost.toFixed(2)}`
+      });
+      setIsCloseModalOpen(false);
+      onCloseTicket();
+
+    } catch (err) {
+      console.error('Erro ao fechar ticket:', err);
+      toast.error('Erro ao fechar ticket. Tente novamente.');
+    }
   };
 
   return (
@@ -172,7 +207,18 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
                 : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
                 }`}
             >
-              <p className="text-sm leading-relaxed">{msg.text}</p>
+              {msg.type === 'IMAGE' ? (
+                <div className="space-y-2">
+                  <img src={msg.text} alt="Imagem enviada" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.text, '_blank')} />
+                </div>
+              ) : msg.type === 'AUDIO' ? (
+                <div className="flex items-center gap-2 min-w-[200px]">
+                  <audio controls src={msg.text} className="w-full h-8" />
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+              )}
+
               <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${msg.sender === 'me' ? 'text-blue-200' : 'text-slate-500'
                 }`}>
                 {msg.time}
@@ -195,6 +241,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
         <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
           <button
             type="button"
+            onClick={() => toast.info('Anexo de arquivos em breve')}
             className="p-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
             title="Anexar arquivo"
           >

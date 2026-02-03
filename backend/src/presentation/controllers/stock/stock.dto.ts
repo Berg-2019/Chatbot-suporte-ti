@@ -110,6 +110,10 @@ export class CreateStockItemDto {
     @IsOptional()
     @IsEnum(AssetStatus)
     assetStatus?: AssetStatus;
+
+    @IsOptional()
+    @IsBoolean()
+    isReservable?: boolean;
 }
 
 // Update DTO
@@ -166,6 +170,10 @@ export class UpdateStockItemDto {
 
     @IsOptional()
     @IsBoolean()
+    isReservable?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
     active?: boolean;
 }
 
@@ -191,6 +199,11 @@ export class StockQueryDto {
     @IsBoolean()
     @Type(() => Boolean)
     lowStock?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    @Type(() => Boolean)
+    reservable?: boolean;
 
     @IsOptional()
     @Type(() => Number)

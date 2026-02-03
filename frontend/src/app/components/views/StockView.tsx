@@ -29,12 +29,18 @@ import MobileTimeline from '@/app/components/MobileTimeline';
 import { useBadges } from '@/app/hooks/useBadges';
 import { stockApi, reservationApi, type StockItem, type Reservation, type StockStats } from '@/app/services/api';
 
+import StockFormModal from '../modals/StockFormModal';
+
 export default function StockView() {
   const [searchTerm, setSearchTerm] = useState('');
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'supplies' | 'ink' | 'assets' | 'timeline'>('assets');
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const badges = useBadges();
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<StockItem | null>(null);
 
   // API Data States
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
@@ -57,13 +63,14 @@ export default function StockView() {
     try {
       const stockType = getStockTypeFilter();
 
-      const [items, stockStats] = await Promise.all([
+      const [stockResponse, stockStats] = await Promise.all([
         stockApi.getAll({ stockType: stockType as any, search: searchTerm || undefined }),
         stockApi.getStats(stockType),
       ]);
 
-      // Garantir que items seja sempre um array
-      setStockItems(Array.isArray(items) ? items : []);
+      // Handle paginated response
+      const items = stockResponse.items || [];
+      setStockItems(items);
       setStats(stockStats || { total: 0, lowStock: 0, assets: 0, supplies: 0 });
     } catch (err) {
       console.error('Error fetching stock:', err);
@@ -73,6 +80,29 @@ export default function StockView() {
       setIsLoading(false);
     }
   }, [getStockTypeFilter, searchTerm]);
+
+  const handleSave = async (data: Partial<StockItem>) => {
+    try {
+      if (editingItem) {
+        await stockApi.update(editingItem.id, data);
+        toast.success('Item atualizado com sucesso');
+      } else {
+        await stockApi.create(data);
+        toast.success('Item criado com sucesso');
+      }
+      setIsModalOpen(false);
+      setEditingItem(null);
+      fetchStockData();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao salvar item');
+      console.error(err);
+    }
+  };
+
+  const openEdit = (item: StockItem) => {
+    setEditingItem(item);
+    setIsModalOpen(true);
+  };
 
   // Fetch Reservations for Timeline
   const fetchReservations = useCallback(async () => {
@@ -201,7 +231,13 @@ export default function StockView() {
           >
             <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
           </button>
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl flex items-center justify-center gap-2 transition-colors flex-1 sm:flex-initial shadow-lg shadow-blue-900/20 active:scale-95">
+          <button
+            onClick={() => {
+              setEditingItem(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl flex items-center justify-center gap-2 transition-colors flex-1 sm:flex-initial shadow-lg shadow-blue-900/20 active:scale-95"
+          >
             <Plus size={20} />
             <span className="font-medium">Novo Item</span>
           </button>
@@ -338,7 +374,9 @@ export default function StockView() {
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="p-2 bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg text-slate-400 transition-colors" title="Editar">
+                          <button
+                            onClick={() => openEdit(item)}
+                            className="p-2 bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg text-slate-400 transition-colors" title="Editar">
                             <Edit2 size={16} />
                           </button>
                           <button
@@ -389,7 +427,7 @@ export default function StockView() {
                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div
                     className={`h-full ${Number(ink.quantity) <= 2 ? 'bg-red-500' :
-                        Number(ink.quantity) <= Number(ink.minQuantity) ? 'bg-yellow-500' : 'bg-green-500'
+                      Number(ink.quantity) <= Number(ink.minQuantity) ? 'bg-yellow-500' : 'bg-green-500'
                       }`}
                     style={{ width: `${Math.min(Number(ink.quantity) * 10, 100)}%` }}
                   />
@@ -398,7 +436,9 @@ export default function StockView() {
 
               <div className="flex items-center justify-between pt-4 mt-auto border-t border-slate-800/50">
                 <div className="flex gap-2 w-full">
-                  <button className="flex-1 bg-slate-800 hover:bg-blue-600 hover:text-white py-2 rounded-lg text-slate-400 transition-colors flex items-center justify-center">
+                  <button
+                    onClick={() => openEdit(ink)}
+                    className="flex-1 bg-slate-800 hover:bg-blue-600 hover:text-white py-2 rounded-lg text-slate-400 transition-colors flex items-center justify-center">
                     <Edit2 size={16} />
                   </button>
                   <button className="flex-1 bg-slate-800 hover:bg-green-600 hover:text-white py-2 rounded-lg text-slate-400 transition-colors flex items-center justify-center">
@@ -425,7 +465,9 @@ export default function StockView() {
                   <Monitor size={24} />
                 </div>
                 <div className="flex gap-2">
-                  <button className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors">
+                  <button
+                    onClick={() => openEdit(asset)}
+                    className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors">
                     <Edit2 size={16} />
                   </button>
                   <button
@@ -444,9 +486,9 @@ export default function StockView() {
 
               <div className="mt-auto pt-4 border-t border-slate-800/50 flex justify-between items-center text-sm">
                 <span className={`text-xs px-2 py-1 rounded-full border font-medium ${asset.assetStatus === 'AVAILABLE' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                    asset.assetStatus === 'RESERVED' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                      asset.assetStatus === 'IN_USE' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                        'bg-red-500/10 text-red-400 border-red-500/20'
+                  asset.assetStatus === 'RESERVED' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                    asset.assetStatus === 'IN_USE' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                      'bg-red-500/10 text-red-400 border-red-500/20'
                   }`}>
                   {asset.assetStatus === 'AVAILABLE' ? 'Disponível' :
                     asset.assetStatus === 'RESERVED' ? 'Reservado' :
@@ -556,11 +598,18 @@ export default function StockView() {
         </>
       )}
 
-      {/* MOBILE FLOATING MENU */}
       <MobileFloatingMenu
         activeId={activeTab}
         onSelect={(id) => setActiveTab(id as any)}
         items={mobileMenuItems}
+      />
+
+      <StockFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleSave}
+        initialData={editingItem}
+        defaultType={profile === 'tech_elect' ? 'ELECTRIC' : 'TI'}
       />
     </div>
   );

@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react';
 
 import { printerApi, type Printer, type PrinterStatus } from '@/app/services/api';
 
+import PrinterFormModal from '../modals/PrinterFormModal';
+import { toast } from 'sonner';
+
 // UI Helper type if needed, or just use Printer
 interface PrinterViewModel extends Printer {
   prints: {
@@ -15,6 +18,8 @@ interface PrinterViewModel extends Printer {
 
 export default function PrintersView() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null);
 
   const [printers, setPrinters] = useState<PrinterViewModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +49,24 @@ export default function PrintersView() {
     const interval = setInterval(fetchPrinters, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleSave = async (data: Partial<Printer>) => {
+    try {
+      if (editingPrinter) {
+        await printerApi.update(editingPrinter.id, data);
+        toast.success('Impressora atualizada com sucesso');
+      } else {
+        await printerApi.create(data);
+        toast.success('Impressora criada com sucesso');
+      }
+      setIsModalOpen(false);
+      setEditingPrinter(null);
+      fetchPrinters();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao salvar impressora');
+    }
+  };
 
   const filteredPrinters = printers.filter(printer =>
     printer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -94,7 +117,13 @@ export default function PrintersView() {
           <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Monitoramento de Impressoras</h1>
           <p className="text-slate-400">Acompanhe o status e níveis de tinta das impressoras de rede</p>
         </div>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+        <button
+          onClick={() => {
+            setEditingPrinter(null);
+            setIsModalOpen(true);
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+        >
           <Plus size={20} />
           <span className="hidden sm:inline">Adicionar Impressora</span>
         </button>
@@ -282,6 +311,13 @@ export default function PrintersView() {
           <p className="text-slate-400">Nenhuma impressora encontrada</p>
         </div>
       )}
+
+      <PrinterFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleSave}
+        initialData={editingPrinter}
+      />
     </div>
   );
 }

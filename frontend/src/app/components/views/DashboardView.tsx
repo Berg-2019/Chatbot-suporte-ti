@@ -44,9 +44,10 @@ interface Reservation {
 
 interface DashboardViewProps {
   onTicketClick: (ticket: Ticket) => void;
+  refreshTrigger?: number;
 }
 
-export default function DashboardView({ onTicketClick }: DashboardViewProps) {
+export default function DashboardView({ onTicketClick, refreshTrigger }: DashboardViewProps) {
   const { profile, user } = useAuth();
   const badges = useBadges(); // Hook de badges
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -69,7 +70,7 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
   const metrics = [
     { icon: FolderOpen, value: tickets.filter(t => t.status !== 'CLOSED').length, label: 'Tickets', sublabel: 'Abertos', iconColor: 'bg-yellow-600' },
     { icon: Calendar, value: tickets.filter(t => t.date && parseISO(t.date).getDate() === new Date().getDate()).length, label: 'Novos', sublabel: 'Hoje', iconColor: 'bg-blue-600' },
-    { icon: Clock, value: tickets.filter(t => t.status === 'WAITING').length, label: 'Aguardando', sublabel: '', iconColor: 'bg-orange-600' },
+    { icon: Clock, value: tickets.filter(t => t.status === 'WAITING_CLIENT').length, label: 'Aguardando', sublabel: '', iconColor: 'bg-orange-600' },
     { icon: Timer, value: '45min', label: 'Tempo', sublabel: 'Médio', iconColor: 'bg-purple-600' },
   ];
 
@@ -92,7 +93,7 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
     if (profile === 'admin') {
       fetchReservations();
     }
-  }, [profile, fetchReservations]);
+  }, [profile, fetchReservations, refreshTrigger]);
 
   const handleApproveReservation = async (id: string) => {
     try {
@@ -160,7 +161,7 @@ export default function DashboardView({ onTicketClick }: DashboardViewProps) {
       fetchPrinters(); // Refresh printers too
     }, 30000);
     return () => clearInterval(intervalId);
-  }, [fetchPrinters]);
+  }, [fetchPrinters, refreshTrigger]);
 
   const myTickets = tickets.filter(t => t.technician === user?.email && t.status !== 'CLOSED');
   const queueTickets = tickets.filter(t => !t.technician && t.status !== 'CLOSED');

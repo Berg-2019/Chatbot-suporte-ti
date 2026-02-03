@@ -4,6 +4,8 @@ import { PrismaService } from '../database/prisma.service';
 import { GlpiService } from '../external/glpi.service';
 import { MessagesService } from '../../presentation/controllers/messages/messages.service';
 
+import { MessageType } from '@prisma/client';
+
 @Injectable()
 export class IncomingMessagesConsumer implements OnModuleInit {
     constructor(
@@ -24,8 +26,17 @@ export class IncomingMessagesConsumer implements OnModuleInit {
     }
 
     private async processMessage(data: any) {
-        const { from, text, messageId } = data;
+        const { from, text, messageId, type, mediaUrl } = data;
         const phoneNumber = from.split('@')[0];
+
+        // Se tiver mediaUrl, o conteúdo principal deve ser a URL (ou URL + legenda)
+        // Por enquanto, Frontend espera URL no content para imagens
+        let finalContent = text;
+        let finalType = (type || 'TEXT') as MessageType;
+
+        if (mediaUrl && finalType !== 'TEXT') {
+            finalContent = mediaUrl; // Ignorando caption por limitação do model atual, ou poderia ser `${mediaUrl}|${text}` se o front suportasse
+        }
 
         // Verificar se existe um ticket ATIVO para este número
         // (Não queremos reabrir tickets fechados ou criar novos para qualquer coisa aqui,
@@ -48,8 +59,9 @@ export class IncomingMessagesConsumer implements OnModuleInit {
             // O serviço de mensagens já envia a notificação via Socket.IO
             const { message: savedMsg, isNew } = await this.messagesService.createFromWhatsApp(
                 ticket.id,
-                text,
-                messageId || 'UNKNOWN_WA_ID'
+                finalContent,
+                messageId || 'UNKNOWN_WA_ID',
+                finalType
             );
 
             if (isNew) {

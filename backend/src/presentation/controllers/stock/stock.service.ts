@@ -48,6 +48,10 @@ export class StockService {
             ];
         }
 
+        if (query.reservable) {
+            where.isReservable = true;
+        }
+
         // Buscar com paginação
         const [items, total] = await Promise.all([
             this.prisma.stockItem.findMany({
@@ -119,24 +123,44 @@ export class StockService {
             }
         }
 
-        return this.prisma.stockItem.create({
-            data: {
-                name: dto.name,
-                code: dto.code,
-                description: dto.description,
-                stockType: dto.stockType,
-                category: dto.category,
-                quantity: dto.quantity || 0,
-                minQuantity: dto.minQuantity || 5,
-                unit: dto.unit,
-                unitCost: dto.unitCost,
-                location: dto.location,
-                printerModel: dto.printerModel,
-                inkColor: dto.inkColor,
-                assetTag: dto.assetTag,
-                assetStatus: dto.assetStatus || 'AVAILABLE',
-            },
-        });
+        // Verificar patrimônio duplicado se fornecido
+        if (dto.assetTag) {
+            const existing = await this.prisma.stockItem.findUnique({
+                where: { assetTag: dto.assetTag },
+            });
+            if (existing) {
+                throw new BadRequestException(`Patrimônio ${dto.assetTag} já existe`);
+            }
+        }
+
+        try {
+            return await this.prisma.stockItem.create({
+                data: {
+                    name: dto.name,
+                    code: dto.code,
+                    description: dto.description,
+                    stockType: dto.stockType,
+                    category: dto.category,
+                    quantity: dto.quantity || 0,
+                    minQuantity: dto.minQuantity || 5,
+                    unit: dto.unit,
+                    unitCost: dto.unitCost,
+                    location: dto.location,
+                    printerModel: dto.printerModel,
+                    inkColor: dto.inkColor,
+                    assetTag: dto.assetTag,
+                    assetStatus: dto.assetStatus || 'AVAILABLE',
+                    isReservable: dto.isReservable || false,
+                },
+            });
+        } catch (error) {
+            console.error('Erro ao criar item de estoque:', error);
+            if (error.code === 'P2002') {
+                const target = error.meta?.target;
+                throw new BadRequestException(`Já existe um item com este ${target}`);
+            }
+            throw new BadRequestException('Erro ao criar item. Verifique os dados.');
+        }
     }
 
     /**

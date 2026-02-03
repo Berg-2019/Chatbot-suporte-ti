@@ -95,6 +95,7 @@ export class MessagesService {
     ticketId: string,
     content: string,
     waMessageId: string,
+    type: MessageType = 'TEXT'
   ) {
     // Evitar duplicações se tiver ID válido
     if (waMessageId && waMessageId !== 'UNKNOWN_WA_ID') {
@@ -113,6 +114,7 @@ export class MessagesService {
       content,
       direction: 'INCOMING',
       waMessageId,
+      type,
     });
 
     return { message, isNew: true };

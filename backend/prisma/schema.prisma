@@ -338,6 +338,7 @@ model Printer {
   
   name        String            // Nome amigável
   ip          String   @unique  // IP da impressora
+  port        Int      @default(161) // Porta SNMP
   community   String   @default("public")  // Community SNMP
   model       String?           // Modelo detectado via SNMP
   serialNumber String?          // Número de série
@@ -496,6 +497,7 @@ model StockItem {
   // Específico de Patrimônio
   assetTag     String?      @unique  // Plaqueta de patrimônio
   assetStatus  AssetStatus  @default(AVAILABLE)
+  isReservable Boolean      @default(false) // Pode ser reservado?
   
   // Controle
   active      Boolean       @default(true)

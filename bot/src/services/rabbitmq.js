@@ -105,12 +105,13 @@ class RabbitMQService {
 
   // === Helpers específicos ===
 
-  async publishIncomingMessage(from, text, messageId) {
+  async publishIncomingMessage(from, text, messageId, extra = {}) {
     return this.publish(config.queues.INCOMING_MESSAGES, {
       from,
       text,
       messageId,
       timestamp: Date.now(),
+      ...extra
     });
   }
 

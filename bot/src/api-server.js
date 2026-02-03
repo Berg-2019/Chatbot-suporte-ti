@@ -7,11 +7,16 @@ import cors from 'cors';
 import QRCode from 'qrcode';
 import { whatsappHandler } from './handlers/whatsapp-handler.js';
 
+import path from 'path';
+
 const app = express();
 const PORT = 3002;
 
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos de mídia estáticos
+app.use('/media', express.static(path.join(process.cwd(), 'uploads')));
 
 /**
  * GET /api/status - Status do bot

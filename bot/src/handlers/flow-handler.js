@@ -3,6 +3,9 @@
  */
 
 import axios from 'axios';
+import fs from 'fs/promises';
+import path from 'path';
+import { downloadMediaMessage } from '@whiskeysockets/baileys';
 import { config } from '../config/index.js';
 import { redisService } from '../services/redis.js';
 import { rabbitmqService } from '../services/rabbitmq.js';
@@ -733,15 +736,102 @@ class FlowHandler {
   async handleWaitingTechnician(sock, from, text, session, msg) {
     const phone = from.split('@')[0];
 
-    // Verificar se é uma imagem
-    const imageMessage = msg?.message?.imageMessage;
-    if (imageMessage) {
-      await this.handleImageReceived(sock, from, msg, session);
+    // Verificar se é mídia
+    const messageType = Object.keys(msg.message || {})[0];
+    if (['imageMessage', 'audioMessage', 'videoMessage', 'documentMessage'].includes(messageType)) {
+      await this.handleMediaReceived(sock, from, msg, session, messageType);
       return;
     }
 
     await rabbitmqService.publishIncomingMessage(from, text, msg.key?.id);
     // Não responder automaticamente, técnico vai responder
+  }
+
+  async handleMediaReceived(sock, from, msg, session, messageType) {
+    try {
+      // 1. Download da mídia
+      const buffer = await downloadMediaMessage(
+        msg,
+        'buffer',
+        {},
+        {
+          logger: console,
+          reuploadRequest: sock.updateMediaMessage
+        }
+      );
+
+      // 2. Determinar extensão e tipo
+      let ext = 'bin';
+      let type = 'DOCUMENT';
+      let mime = '';
+
+      if (messageType === 'imageMessage') {
+        ext = 'jpg';
+        type = 'IMAGE';
+        mime = msg.message.imageMessage?.mimetype;
+      } else if (messageType === 'audioMessage') {
+        ext = 'mp3'; // WhatsApp costuma ser ogg, mas mp3 é mais seguro pra player genérico, ou manter original
+        // Na verdade melhor salvar como ogg se for ogg
+        mime = msg.message.audioMessage?.mimetype;
+        if (mime?.includes('ogg')) ext = 'ogg';
+        else if (mime?.includes('mp4')) ext = 'm4a';
+        else if (mime?.includes('mpeg')) ext = 'mp3';
+        type = 'AUDIO';
+      } else if (messageType === 'videoMessage') {
+        ext = 'mp4';
+        type = 'VIDEO'; // Backend needs mapping for VIDEO or treat as DOCUMENT/FILE
+        // Backend MessageType has DOCUMENT. Let's map VIDEO to DOCUMENT for now, or add VIDEO later.
+        // Current API MessageType: TEXT, IMAGE, AUDIO, DOCUMENT.
+        // Let's us DOCUMENT for video for now.
+        type = 'DOCUMENT';
+        mime = msg.message.videoMessage?.mimetype;
+      } else if (messageType === 'documentMessage') {
+        type = 'DOCUMENT';
+        mime = msg.message.documentMessage?.mimetype;
+        const fileName = msg.message.documentMessage?.fileName;
+        if (fileName) {
+          ext = fileName.split('.').pop();
+        } else {
+          if (mime?.includes('pdf')) ext = 'pdf';
+          else if (mime?.includes('spreadsheet')) ext = 'xlsx';
+          else if (mime?.includes('word')) ext = 'docx';
+        }
+      }
+
+      // 3. Salvar arquivo
+      const filename = `${Date.now()}_${msg.key.id}.${ext}`;
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+
+      // Ensure dir exists (should be done on start but safe check)
+      // await fs.mkdir(uploadsDir, { recursive: true }); 
+
+      await fs.writeFile(path.join(uploadsDir, filename), buffer);
+      console.log(`✅ Mídia salva: ${filename} (${type})`);
+
+      // 4. URL Pública (Proxy via Backend)
+      // O backend deve ter um endpoint /api/bot/media/:filename que faz proxy para o bot
+      const mediaUrl = `/api/bot/media/${filename}`;
+
+      // 5. Publicar mensagem
+      // Caption handling
+      let caption = '';
+      if (messageType === 'imageMessage') caption = msg.message.imageMessage?.caption;
+      else if (messageType === 'videoMessage') caption = msg.message.videoMessage?.caption;
+      else if (messageType === 'documentMessage') caption = msg.message.documentMessage?.caption;
+
+      await rabbitmqService.publishIncomingMessage(from, caption || '', msg.key?.id, {
+        type: type,
+        mediaUrl: mediaUrl,
+        mimeType: mime
+      });
+
+      // Feedback visual (tick azul ou msg) - opcional
+      await this.sendMessage(sock, from, '✅ Arquivo recebido.');
+
+    } catch (error) {
+      console.error('❌ Erro ao baixar/salvar mídia:', error);
+      await this.sendMessage(sock, from, '❌ Falha ao receber arquivo. Tente novamente.');
+    }
   }
 
   /**

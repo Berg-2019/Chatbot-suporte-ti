@@ -71,9 +71,17 @@ export interface StockFilters {
     lowStock?: boolean;
 }
 
+export interface StockListResponse {
+    items: StockItem[];
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+}
+
 export const stockApi = {
     // Get all stock items with optional filters
-    getAll: (filters?: StockFilters): Promise<StockItem[]> => {
+    getAll: (filters?: StockFilters): Promise<StockListResponse> => {
         const params = new URLSearchParams();
         if (filters?.stockType) params.set('stockType', filters.stockType);
         if (filters?.category) params.set('category', filters.category);
@@ -81,8 +89,11 @@ export const stockApi = {
         if (filters?.search) params.set('search', filters.search);
         if (filters?.lowStock) params.set('lowStock', 'true');
 
+        // Force high limit for now to match unlimited behavior expectation
+        params.set('limit', '100');
+
         const query = params.toString();
-        return apiFetch<StockItem[]>(`/stock${query ? `?${query}` : ''}`);
+        return apiFetch<StockListResponse>(`/stock${query ? `?${query}` : ''}`);
     },
 
     // Get single item
@@ -239,13 +250,32 @@ export interface Printer {
     id: string;
     name: string;
     ip: string;
-    location: string;
+    port?: number;
+    location: string | null;
     status: PrinterStatus;
 }
 
 export const printerApi = {
     getAllStatus: (): Promise<Printer[]> => {
         return apiFetch<Printer[]>('/printers/status/all');
+    },
+
+    create: (data: Partial<Printer>): Promise<Printer> => {
+        return apiFetch<Printer>('/printers', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    update: (id: string, data: Partial<Printer>): Promise<Printer> => {
+        return apiFetch<Printer>(`/printers/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    delete: (id: string): Promise<void> => {
+        return apiFetch<void>(`/printers/${id}`, { method: 'DELETE' });
     },
 };
 
@@ -258,6 +288,7 @@ export interface Message {
     ticketId: string;
     content: string;
     direction: 'INCOMING' | 'OUTGOING';
+    type?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'DOCUMENT';
     senderId?: string;
     sender?: { id: string; name: string };
     createdAt: string;
@@ -367,6 +398,14 @@ export const ticketsApi = {
         return apiFetch<Ticket>(`/tickets/${id}/status`, {
             method: 'PATCH',
             body: JSON.stringify({ status }),
+        });
+    },
+
+    // Close ticket with details
+    closeTicket: (id: string, data: any): Promise<Ticket> => {
+        return apiFetch<Ticket>(`/tickets/${id}/close`, {
+            method: 'POST',
+            body: JSON.stringify(data),
         });
     },
 

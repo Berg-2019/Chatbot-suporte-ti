@@ -5,7 +5,7 @@ import { AuthProvider, useAuth } from '@/app/context/AuthContext';
 import { Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogOut } from 'lucide-react';
-import { Ticket } from '@/types/ticket';
+import { Ticket } from '@/app/services/api';
 
 // Lazy load view components for better performance
 const LoginView = lazy(() => import('@/app/components/views/LoginView'));
@@ -31,10 +31,16 @@ const LoadingFallback = () => (
 function MainContent() {
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
   const [selectedTicketData, setSelectedTicketData] = useState<Ticket | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Trigger for dashboard refresh
   const { profile, isAuthenticated, logout, isLoading } = useAuth();
 
   const handleTicketClick = (ticket: Ticket) => {
     setSelectedTicketData(ticket);
+  };
+
+  const handleCloseTicketDrawer = () => {
+    setSelectedTicketData(null);
+    setRefreshTrigger(prev => prev + 1); // Force refresh of parent view
   };
 
   const renderView = () => {
@@ -43,8 +49,8 @@ function MainContent() {
 
     switch (activeMenuItem) {
       case 'dashboard':
-        if (profile === 'tech_elect') return <ElectricalDashboardView onTicketClick={handleTicketClick} />;
-        return <DashboardView onTicketClick={handleTicketClick} />;
+        if (profile === 'tech_elect') return <ElectricalDashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
+        return <DashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
       case 'gestao':
         return <ManagerView />; // Keep for non-managers viewing manager view if allowed
       case 'metricas':
@@ -64,8 +70,8 @@ function MainContent() {
       case 'chat':
         return <TeamChatView />;
       default:
-        if (profile === 'tech_elect') return <ElectricalDashboardView onTicketClick={handleTicketClick} />;
-        return <DashboardView onTicketClick={handleTicketClick} />;
+        if (profile === 'tech_elect') return <ElectricalDashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
+        return <DashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
     }
   };
 
@@ -118,27 +124,27 @@ function MainContent() {
         {selectedTicketData && (
           <>
             {/* Overlay */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-40"
               onClick={() => setSelectedTicketData(null)}
             />
-            
+
             {/* Drawer Container */}
-            <motion.div 
+            <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed inset-y-0 right-0 w-full lg:w-[450px] bg-slate-950 z-50 shadow-2xl border-l border-slate-800"
             >
-               <ChatView 
-                 ticket={selectedTicketData}
-                 onClose={() => setSelectedTicketData(null)}
-                 onCloseTicket={() => setSelectedTicketData(null)}
-               />
+              <ChatView
+                ticket={selectedTicketData}
+                onClose={() => setSelectedTicketData(null)}
+                onCloseTicket={handleCloseTicketDrawer}
+              />
             </motion.div>
           </>
         )}
