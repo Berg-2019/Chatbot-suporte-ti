@@ -25,7 +25,9 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ message: 'Request failed' }));
-        throw new Error(error.message || `HTTP ${response.status}`);
+        // NestJS retorna { message, error, statusCode } - extrair a mensagem corretamente
+        const errorMessage = error.message || error.error || `HTTP ${response.status}`;
+        throw new Error(errorMessage);
     }
 
     return response.json();
@@ -319,6 +321,7 @@ export interface GlpiUser {
     realname: string;
     firstname: string;
     email: string;
+    phone: string;
     is_active: boolean;
 }
 
@@ -342,6 +345,17 @@ export const usersApi = {
     createGlpiUser: (data: any): Promise<any> => {
         return apiFetch('/users/glpi', {
             method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    deleteGlpiUser: (id: string): Promise<void> => {
+        return apiFetch<void>(`/users/glpi/${id}`, { method: 'DELETE' });
+    },
+
+    updateGlpiUser: (id: string, data: any): Promise<any> => {
+        return apiFetch(`/users/glpi/${id}`, {
+            method: 'PUT',
             body: JSON.stringify(data),
         });
     },

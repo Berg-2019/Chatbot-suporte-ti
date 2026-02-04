@@ -104,14 +104,46 @@ export class UsersService {
     department?: string;
     permissions?: string[];
     password?: string;
+    role?: 'ADMIN' | 'AGENT';
   }) {
-    // Verificar se já existe
-    const existing = await this.prisma.user.findFirst({
+    // Verificar se já existe por glpiUserId
+    const existingByGlpi = await this.prisma.user.findFirst({
       where: { glpiUserId: data.glpiUserId },
     });
 
-    if (existing) {
-      return existing;
+    if (existingByGlpi) {
+      console.log(`✅ Usuário local já existe com glpiUserId ${data.glpiUserId}`);
+      return existingByGlpi;
+    }
+
+    // Verificar se existe por email (e vincular ao GLPI)
+    const existingByEmail = await this.prisma.user.findFirst({
+      where: { email: data.email },
+    });
+
+    if (existingByEmail) {
+      console.log(`🔗 Usuário com email ${data.email} já existe, vinculando ao GLPI ID ${data.glpiUserId}`);
+      // Atualizar o usuário existente com o glpiUserId
+      return this.prisma.user.update({
+        where: { id: existingByEmail.id },
+        data: {
+          glpiUserId: data.glpiUserId,
+          name: data.name || existingByEmail.name,
+          phoneNumber: data.phone || (existingByEmail as any).phoneNumber,
+          department: data.department || (existingByEmail as any).department,
+          permissions: data.permissions || (existingByEmail as any).permissions || [],
+        } as any,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          glpiUserId: true,
+          active: true,
+          department: true,
+          permissions: true,
+        } as any,
+      });
     }
 
     // Hash password
@@ -124,7 +156,7 @@ export class UsersService {
         email: data.email,
         password: hashedPassword,
         name: data.name,
-        role: 'AGENT',
+        role: data.role || 'AGENT',
         glpiUserId: data.glpiUserId,
         phoneNumber: data.phone,
         department: data.department,
@@ -143,4 +175,37 @@ export class UsersService {
       } as any,
     });
   }
+  async updateByGlpiId(glpiId: number, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; department?: string; permissions?: string[] }) {
+    // Find local user by glpiId
+    let user = await this.prisma.user.findFirst({
+      where: { glpiUserId: glpiId },
+    });
+
+    if (!user) {
+      // If not found, create a new local user linked to GLPI
+      console.log(`🟡 Usuário local não encontrado para GLPI ID ${glpiId}, criando...`);
+
+      // We need at least email for creation
+      if (!data.email) {
+        console.warn(`⚠️ Não é possível criar usuário local sem email`);
+        return null;
+      }
+
+      user = await this.createFromGlpi({
+        glpiUserId: glpiId,
+        name: data.name || 'Usuário GLPI',
+        email: data.email,
+        phone: data.phone,
+        department: data.department,
+        permissions: data.permissions,
+        password: data.password,
+        role: data.role,
+      }) as any;
+
+      return user;
+    }
+
+    return this.update(user.id, data);
+  }
 }
+

@@ -41,14 +41,34 @@ async function bootstrap() {
   // CORS - More restrictive configuration
   const allowedOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',')
-    : ['http://localhost:5173', 'http://localhost:3001'];
+    : [
+      'http://localhost:5173',
+      'http://localhost:3001',
+      'http://helpdeskmsm.com.br',
+      'https://helpdeskmsm.com.br',
+      'http://www.helpdeskmsm.com.br',
+      'https://www.helpdeskmsm.com.br',
+      'http://192.168.7.118',
+      'http://192.168.7.118:5173',
+    ];
 
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      // Normalize origin (remove trailing slash, lowercase)
+      const normalizedOrigin = origin.toLowerCase().replace(/\/$/, '');
+      const normalizedAllowed = allowedOrigins.map(o => o.toLowerCase().replace(/\/$/, ''));
+
+      if (normalizedAllowed.includes(normalizedOrigin)) {
         callback(null, true);
       } else {
+        console.log(`⚠️ CORS bloqueado para origin: "${origin}"`);
+        console.log(`   Allowed origins:`, allowedOrigins);
         callback(new Error('Not allowed by CORS'));
       }
     },

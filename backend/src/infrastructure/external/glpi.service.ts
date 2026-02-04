@@ -550,16 +550,19 @@ export class GlpiService implements OnModuleInit {
     realname: string;
     firstname: string;
     email: string;
+    phone: string;
     is_active: boolean;
   }[]> {
     await this.ensureSession();
 
     try {
+      // Get non-deleted users (is_deleted = 0)
       const response = await this.client.get('/User', {
         headers: this.getHeaders(),
         params: {
-          range: '0-100',
+          range: '0-200',
           expand_dropdowns: true,
+          is_deleted: 0, // Only non-deleted users
         },
       });
 
@@ -569,11 +572,53 @@ export class GlpiService implements OnModuleInit {
         realname: u.realname || '',
         firstname: u.firstname || '',
         email: u.email || u.email1 || '',
+        phone: u.phone || u.mobile || '',
         is_active: u.is_active === 1,
       }));
     } catch (error: any) {
       console.error('❌ Erro ao listar usuários GLPI:', error.response?.data || error.message);
       return [];
+    }
+  }
+
+  /**
+   * Buscar usuário por login (inclui deletados)
+   */
+  async findUserByLogin(login: string): Promise<{
+    id: number;
+    name: string;
+    is_deleted: boolean;
+    is_active: boolean;
+  } | null> {
+    await this.ensureSession();
+
+    try {
+      const response = await this.client.get('/search/User', {
+        headers: this.getHeaders(),
+        params: {
+          criteria: JSON.stringify([
+            { field: 1, searchtype: 'equals', value: login } // 1 = name field
+          ]),
+          forcedisplay: [1, 2, 80], // id, name, is_deleted
+          range: '0-5',
+        },
+      });
+
+      const data = response.data?.data || [];
+      if (data.length > 0) {
+        const user = data[0];
+        console.log(`🔍 Usuário encontrado: ${login}`, user);
+        return {
+          id: user[2], // ID
+          name: user[1], // name
+          is_deleted: user[80] === 1,
+          is_active: true,
+        };
+      }
+      return null;
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar usuário GLPI:', error.response?.data || error.message);
+      return null;
     }
   }
 
@@ -644,9 +689,41 @@ export class GlpiService implements OnModuleInit {
       console.log(`✅ Usuário GLPI criado: #${userId} (${userData.name})`);
       return { success: true, id: userId };
     } catch (error: any) {
-      const errorMsg = error.response?.data?.[0] || error.response?.data?.message || error.message;
-      console.error('❌ Erro ao criar usuário GLPI:', errorMsg);
-      return { success: false, error: typeof errorMsg === 'string' ? errorMsg : 'Falha ao criar usuário' };
+      console.error('❌ Erro ao criar usuário GLPI:');
+      console.error('  Status:', error.response?.status);
+      console.error('  Data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('  Message:', error.message);
+
+      // Tentar extrair mensagem de erro do GLPI (vários formatos possíveis)
+      let errorMsg = 'Falha ao criar usuário no GLPI';
+      const data = error.response?.data;
+
+      if (typeof data === 'string') {
+        errorMsg = data;
+      } else if (Array.isArray(data) && data.length > 0) {
+        // GLPI retorna array de erros
+        if (typeof data[0] === 'string') {
+          errorMsg = data[0];
+        } else if (data[0]?.message) {
+          errorMsg = data[0].message;
+        } else if (data[1]) {
+          // Formato [code, message]
+          errorMsg = typeof data[1] === 'string' ? data[1] : JSON.stringify(data[1]);
+        }
+      } else if (data?.message) {
+        errorMsg = data.message;
+      } else if (data?.error) {
+        errorMsg = data.error;
+      }
+
+      // Traduzir mensagens comuns do GLPI
+      if (errorMsg.includes('Duplicate entry') || errorMsg.includes('already exists')) {
+        errorMsg = 'Usuário ou email já existe no GLPI';
+      } else if (errorMsg.includes('ERROR_GLPI_ADD')) {
+        errorMsg = 'Erro ao adicionar no GLPI. Verifique se o login ou email já existe.';
+      }
+
+      return { success: false, error: errorMsg };
     }
   }
 
@@ -684,28 +761,90 @@ export class GlpiService implements OnModuleInit {
     firstname?: string;
     phone?: string;
     is_active?: boolean;
+    password?: string;
   }): Promise<boolean> {
     await this.ensureSession();
 
     try {
-      await this.client.put(
+      // Construir objeto apenas com campos definidos
+      const input: Record<string, any> = {};
+
+      // Sempre inclui campos mesmo se vazios (para permitir limpar valores)
+      if (userData.realname !== undefined) {
+        input.realname = userData.realname;
+      }
+      if (userData.firstname !== undefined) {
+        input.firstname = userData.firstname;
+      }
+      if (userData.phone !== undefined) {
+        input.phone = userData.phone;
+      }
+      if (userData.is_active !== undefined) {
+        input.is_active = userData.is_active ? 1 : 0;
+      }
+      if (userData.password !== undefined && userData.password !== '') {
+        input.password = userData.password;
+        input.password2 = userData.password; // GLPI requer confirmação
+      }
+
+      // GLPI requer o id dentro do input
+      input.id = userId;
+
+      console.log(`📝 [GLPI UPDATE] Dados recebidos:`, JSON.stringify(userData, null, 2));
+      console.log(`📝 [GLPI UPDATE] Input enviado para GLPI #${userId}:`, JSON.stringify(input, null, 2));
+
+      if (Object.keys(input).length === 1) { // Só tem o id
+        console.log('⚠️ [GLPI UPDATE] Nenhum campo para atualizar');
+        return true;
+      }
+
+      const response = await this.client.put(
         `/User/${userId}`,
-        {
-          input: {
-            realname: userData.realname,
-            firstname: userData.firstname,
-            phone: userData.phone,
-            is_active: userData.is_active !== undefined ? (userData.is_active ? 1 : 0) : undefined,
-          },
-        },
+        { input },
         { headers: this.getHeaders() },
       );
 
-      console.log(`✅ Usuário GLPI #${userId} atualizado`);
+      console.log(`📝 [GLPI UPDATE] Resposta completa:`, JSON.stringify(response.data, null, 2));
+      console.log(`📝 [GLPI UPDATE] Status HTTP:`, response.status);
+
+      // Verificar se GLPI retornou o ID atualizado (indica sucesso)
+      if (response.data && (response.data[userId] === true || response.data.id === userId)) {
+        console.log(`✅ [GLPI UPDATE] Usuário #${userId} atualizado com sucesso`);
+        return true;
+      }
+
+      // Se chegou aqui sem erro, assume sucesso
+      console.log(`✅ [GLPI UPDATE] Usuário #${userId} presumivelmente atualizado`);
       return true;
     } catch (error: any) {
-      console.error('❌ Erro ao atualizar usuário GLPI:', error.response?.data || error.message);
+      console.error('❌ [GLPI UPDATE] Erro ao atualizar usuário GLPI:');
+      console.error('  Status:', error.response?.status);
+      console.error('  Data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('  Message:', error.message);
       return false;
+    }
+  }
+
+  /**
+   * Excluir usuário do GLPI
+   */
+  async deleteUser(userId: number): Promise<{ success: boolean; error?: string }> {
+    await this.ensureSession();
+
+    try {
+      await this.client.delete(`/User/${userId}`, {
+        headers: this.getHeaders(),
+        params: {
+          force_purge: true,
+        },
+      });
+
+      console.log(`✅ Usuário GLPI #${userId} excluído`);
+      return { success: true };
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.[0] || error.response?.data?.message || error.message;
+      console.error('❌ Erro ao excluir usuário GLPI:', errorMsg);
+      return { success: false, error: typeof errorMsg === 'string' ? errorMsg : 'Falha ao excluir usuário' };
     }
   }
 }

@@ -150,22 +150,6 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
           })}
         </nav>
 
-        {/* Profile Switcher (Dev Tools) */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900">
-          <label className="block text-xs font-medium text-slate-500 mb-2 uppercase tracking-wider">
-            Simular Perfil
-          </label>
-          <select
-            value={profile}
-            onChange={(e) => setProfile(e.target.value as UserProfile)}
-            className="w-full bg-slate-800 text-slate-200 text-sm rounded-lg p-2.5 border border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
-          >
-            <option value="admin">Administrador</option>
-            <option value="tech_ti">Técnico TI</option>
-            <option value="tech_elect">Técnico Elétrica</option>
-            <option value="manager">Gestor</option>
-          </select>
-        </div>
       </aside>
     </>
   );

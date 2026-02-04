@@ -1,17 +1,9 @@
-import { Users, Plus, Search, Edit2, Trash2, Mail, Phone, Shield, X, Check, LayoutDashboard, Briefcase, BarChart3, Package, FileText, HelpCircle, MessageSquare, Bot, Printer, CheckSquare, Square } from 'lucide-react';
+import { Users, Plus, Search, Mail, Shield, X, Check, LayoutDashboard, Briefcase, BarChart3, Package, FileText, HelpCircle, MessageSquare, Bot, Printer, Edit2, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
-import { usersApi, type User as ApiUser, type GlpiUser } from '@/app/services/api';
-
-interface User extends Omit<ApiUser, 'role'> {
-  role: 'Admin' | 'Técnico' | 'Usuário';
-  status: 'active' | 'inactive';
-  tickets: number; // Extended for UI
-  lastAccess: string;
-  permissions: string[];
-}
+import { usersApi, type GlpiUser } from '@/app/services/api';
 
 const ALL_MODULES = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,9 +20,7 @@ const ALL_MODULES = [
 
 export default function UsersView() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'local' | 'glpi'>('local');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -41,85 +31,51 @@ export default function UsersView() {
     department: '',
     role: 'Usuário',
     password: '',
-    permissions: ['dashboard', 'chat'] // Default permissions
+    permissions: ['dashboard', 'chat'], // Default permissions
+    groupId: '' // GLPI Group ID
   });
 
-  const [users, setUsers] = useState<User[]>([]);
   const [glpiUsers, setGlpiUsers] = useState<GlpiUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [glpiLoading, setGlpiLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [accessDenied, setAccessDenied] = useState(false);
+  const [glpiGroups, setGlpiGroups] = useState<{ id: number; name: string; completename: string }[]>([]);
 
-  const fetchUsers = async () => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchGlpiUsers = async () => {
     setLoading(true);
     setError(null);
-    setAccessDenied(false);
     try {
-      const data = await usersApi.getAll();
-      const mapped: User[] = data.map(u => ({
-        ...u,
-        role: u.role === 'ADMIN' ? 'Admin' : u.role === 'AGENT' ? 'Técnico' : 'Usuário',
-        status: u.active ? 'active' : 'inactive',
-        tickets: 0,
-        lastAccess: 'N/A',
-        permissions: u.role === 'ADMIN' ? ALL_MODULES.map(m => m.id) : ((u as any).permissions || ['dashboard', 'chat']),
-        phone: u.phone || (u as any).phoneNumber || '',
-        department: u.department || (u as any).department || ''
-      }));
-      setUsers(mapped);
+      const data = await usersApi.getGlpiUsers();
+      const groups = await usersApi.getGroups();
+      setGlpiUsers(data);
+      setGlpiGroups(groups);
     } catch (err: any) {
-      console.error('Failed to fetch users', err);
-      if (err.message?.includes('403') || err.message?.includes('Forbidden') || err.message?.includes('admins')) {
-        setAccessDenied(true);
-      } else {
-        setError('Erro ao carregar usuários');
-        toast.error('Erro ao carregar usuários');
-      }
+      console.error('Failed to fetch GLPI users', err);
+      setError('Erro ao carregar usuários do GLPI');
+      toast.error('Erro ao carregar usuários do GLPI');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchGlpiUsers = async () => {
-    setGlpiLoading(true);
-    try {
-      const data = await usersApi.getGlpiUsers();
-      setGlpiUsers(data);
-    } catch (err: any) {
-      console.error('Failed to fetch GLPI users', err);
-      toast.error('Erro ao carregar usuários do GLPI');
-    } finally {
-      setGlpiLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchUsers();
+    fetchGlpiUsers();
   }, []);
 
-  useEffect(() => {
-    if (activeTab === 'glpi' && glpiUsers.length === 0) {
-      fetchGlpiUsers();
-    }
-  }, [activeTab]);
+  // Usuários de sistema que não devem aparecer na lista
+  const systemUsers = ['glpi', 'glpi-system', 'post-only', 'tech', 'normal'];
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.department && user.department.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredUsers = glpiUsers.filter(user => {
+    // Filtra usuários de sistema
+    if (systemUsers.includes(user.name.toLowerCase())) return false;
 
-    const matchesRole = filterRole === 'all' || user.role === filterRole;
-
-    return matchesSearch && matchesRole;
+    const fullName = user.firstname && user.realname
+      ? `${user.firstname} ${user.realname}`
+      : user.name;
+    return fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.name.toLowerCase().includes(searchTerm.toLowerCase());
   });
-
-  const roleColors = {
-    Admin: 'bg-red-500/20 text-red-400 border-red-500/30',
-    Técnico: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    Usuário: 'bg-slate-600/20 text-slate-400 border-slate-600/30',
-  };
 
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
@@ -132,17 +88,23 @@ export default function UsersView() {
 
     try {
       if (editingUserId) {
-        // Mode: Edit
-        await usersApi.update(editingUserId, {
-          name: formData.name,
-          email: formData.email,
+        // Mode: Edit - Atualizar no GLPI e local
+        const nameParts = formData.name.split(' ');
+        // Map frontend role to backend format
+        const backendRole = formData.role === 'Admin' ? 'ADMIN' : 'AGENT';
+
+        await usersApi.updateGlpiUser(editingUserId, {
+          firstname: nameParts[0],
+          realname: nameParts.slice(1).join(' '),
           phone: formData.phone,
-          role: formData.role === 'Admin' ? 'ADMIN' : 'AGENT',
+          email: formData.email,
           department: formData.department,
+          role: backendRole,
           permissions: formData.permissions,
-          ...(formData.password ? { password: formData.password } : {})
+          password: formData.password || undefined, // Só envia se tiver senha
+          groupId: formData.groupId ? Number(formData.groupId) : undefined
         });
-        toast.success('Usuário atualizado com sucesso!');
+        toast.success('Usuário atualizado com sucesso no GLPI!');
       } else {
         if (!formData.password) {
           toast.error('Senha é obrigatória para novos usuários');
@@ -153,53 +115,33 @@ export default function UsersView() {
           return;
         }
         // Mode: Create
+        // Map frontend role to backend format
+        const backendRole = formData.role === 'Admin' ? 'ADMIN' : 'AGENT';
+
         await usersApi.createGlpiUser({
-          login: formData.username, // Usa o username personalizado
+          login: formData.username,
           password: formData.password,
           firstName: formData.name.split(' ')[0],
           lastName: formData.name.split(' ').slice(1).join(' '),
           email: formData.email,
           phone: formData.phone,
           department: formData.department,
-          permissions: formData.permissions
+          permissions: formData.permissions,
+          role: backendRole,
+          groupId: formData.groupId ? Number(formData.groupId) : undefined
         });
-        toast.success('Usuário criado com sucesso (GLPI + Local)!');
+        toast.success('Usuário criado com sucesso no GLPI!');
       }
 
       setIsModalOpen(false);
-      fetchUsers();
+      fetchGlpiUsers();
       resetForm();
-    } catch (err) {
-      toast.error(editingUserId ? 'Erro ao atualizar usuário' : 'Erro ao criar usuário');
-      console.error(err);
-    }
-  };
-
-  const handleEditUser = (user: User) => {
-    setEditingUserId(user.id);
-    setFormData({
-      name: user.name,
-      username: user.email.split('@')[0], // Extrai username do email como fallback
-      email: user.email,
-      phone: user.phone || '',
-      department: user.department || '',
-      role: user.role, // 'Admin' | 'Técnico' | 'Usuário' matches select options
-      password: '', // Don't allow editing password directly here, only via new input
-      permissions: user.permissions
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleDeleteUser = async (user: User) => {
-    if (!confirm(`Tem certeza que deseja excluir o usuário ${user.name}?`)) return;
-
-    try {
-      await usersApi.delete(user.id);
-      toast.success('Usuário excluído com sucesso');
-      fetchUsers();
-    } catch (error) {
-      console.error(error);
-      toast.error('Erro ao excluir usuário');
+    } catch (err: any) {
+      // Tentar extrair mensagem de erro do backend
+      const errorMessage = err?.message || err?.error ||
+        (editingUserId ? 'Erro ao atualizar usuário' : 'Erro ao criar usuário');
+      toast.error(errorMessage);
+      console.error('Erro:', err);
     }
   };
 
@@ -213,7 +155,8 @@ export default function UsersView() {
       department: '',
       role: 'Usuário',
       password: '',
-      permissions: ['dashboard', 'chat']
+      permissions: ['dashboard', 'chat'],
+      groupId: ''
     });
   };
 
@@ -226,26 +169,46 @@ export default function UsersView() {
     }));
   };
 
+  const handleEditUser = (user: GlpiUser) => {
+    setEditingUserId(String(user.id));
+    const fullName = user.firstname && user.realname
+      ? `${user.firstname} ${user.realname}`
+      : user.name;
+    setFormData({
+      name: fullName,
+      username: user.name,
+      email: user.email || '',
+      phone: user.phone || '',
+      department: '',
+      role: 'Usuário',
+      password: '',
+      permissions: ['dashboard', 'chat'],
+      groupId: ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteUser = async (user: GlpiUser) => {
+    const fullName = user.firstname && user.realname
+      ? `${user.firstname} ${user.realname}`
+      : user.name;
+    if (!confirm(`Tem certeza que deseja excluir o usuário ${fullName}?`)) return;
+
+    try {
+      await usersApi.deleteGlpiUser(String(user.id));
+      toast.success('Usuário excluído com sucesso do GLPI');
+      fetchGlpiUsers();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao excluir usuário do GLPI');
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  // Access denied state
-  if (accessDenied) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-full">
-          <Shield className="text-red-500" size={48} />
-        </div>
-        <h2 className="text-xl font-bold text-white">Acesso Restrito</h2>
-        <p className="text-slate-400 text-center max-w-md">
-          Você não tem permissão para acessar esta página. Apenas administradores podem gerenciar usuários.
-        </p>
       </div>
     );
   }
@@ -260,7 +223,7 @@ export default function UsersView() {
         <h2 className="text-xl font-bold text-white">Erro ao carregar</h2>
         <p className="text-slate-400">{error}</p>
         <button
-          onClick={fetchUsers}
+          onClick={fetchGlpiUsers}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
         >
           Tentar novamente
@@ -295,7 +258,7 @@ export default function UsersView() {
             <Users className="text-blue-500" size={24} />
             <div className="text-slate-400 text-sm">Total</div>
           </div>
-          <div className="text-3xl font-bold text-white">{users.length}</div>
+          <div className="text-3xl font-bold text-white">{glpiUsers.length}</div>
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
@@ -303,48 +266,24 @@ export default function UsersView() {
             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
             <div className="text-slate-400 text-sm">Ativos</div>
           </div>
-          <div className="text-3xl font-bold text-green-500">{users.filter(u => u.status === 'active').length}</div>
+          <div className="text-3xl font-bold text-green-500">{glpiUsers.filter(u => u.is_active).length}</div>
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-2">
-            <Shield className="text-blue-500" size={24} />
-            <div className="text-slate-400 text-sm">Técnicos</div>
+            <div className="w-3 h-3 bg-slate-500 rounded-full"></div>
+            <div className="text-slate-400 text-sm">Inativos</div>
           </div>
-          <div className="text-3xl font-bold text-white">{users.filter(u => u.role === 'Técnico').length}</div>
+          <div className="text-3xl font-bold text-slate-400">{glpiUsers.filter(u => !u.is_active).length}</div>
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-2">
-            <Shield className="text-red-500" size={24} />
-            <div className="text-slate-400 text-sm">Admins</div>
+            <Shield className="text-green-500" size={24} />
+            <div className="text-slate-400 text-sm">GLPI</div>
           </div>
-          <div className="text-3xl font-bold text-white">{users.filter(u => u.role === 'Admin').length}</div>
+          <div className="text-3xl font-bold text-green-500">{glpiUsers.length}</div>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-800 pb-4">
-        <button
-          onClick={() => setActiveTab('local')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            activeTab === 'local'
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-          }`}
-        >
-          Usuários Locais ({users.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('glpi')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            activeTab === 'glpi'
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-          }`}
-        >
-          Usuários GLPI ({glpiUsers.length})
-        </button>
       </div>
 
       {/* Filters */}
@@ -361,60 +300,47 @@ export default function UsersView() {
             />
           </div>
 
-          {activeTab === 'local' && (
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="bg-slate-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">Todas as Funções</option>
-              <option value="Admin">Admin</option>
-              <option value="Técnico">Técnico</option>
-              <option value="Usuário">Usuário</option>
-            </select>
-          )}
-
-          {activeTab === 'glpi' && (
-            <button
-              onClick={fetchGlpiUsers}
-              disabled={glpiLoading}
-              className="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-4 py-3 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-            >
-              {glpiLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Shield size={18} /> Atualizar do GLPI
-                </>
-              )}
-            </button>
-          )}
+          <button
+            onClick={fetchGlpiUsers}
+            disabled={loading}
+            className="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-4 py-3 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <Shield size={18} /> Atualizar do GLPI
+              </>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Users List - Local */}
-      {activeTab === 'local' && (
-      <>
+      {/* Users List */}
       <div className="space-y-4">
         {filteredUsers.map((user) => (
           <div
             key={user.id}
             className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 hover:border-slate-700/50 transition-all group"
           >
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between">
               <div className="flex items-start gap-4 flex-1">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg">
-                  {user.name.charAt(0)}
+                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg">
+                  {(user.firstname || user.name || '?').charAt(0).toUpperCase()}
                 </div>
 
                 <div className="flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                    <h3 className="text-white font-semibold text-lg">{user.name}</h3>
+                    <h3 className="text-white font-semibold text-lg">
+                      {user.firstname && user.realname
+                        ? `${user.firstname} ${user.realname}`
+                        : user.name}
+                    </h3>
                     <div className="flex gap-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${roleColors[user.role]}`}>
-                        {user.role}
+                      <span className="px-3 py-1 rounded-full text-xs font-medium border bg-green-500/20 text-green-400 border-green-500/30">
+                        GLPI
                       </span>
-                      {user.status === 'active' ? (
+                      {user.is_active ? (
                         <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
                           <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div> Ativo
                         </span>
@@ -426,44 +352,18 @@ export default function UsersView() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Users size={16} />
+                      <span>Login: {user.name}</span>
+                    </div>
                     <div className="flex items-center gap-2 text-slate-400">
                       <Mail size={16} />
-                      <span className="truncate">{user.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <Phone size={16} />
-                      <span>{user.phone}</span>
+                      <span className="truncate">{user.email || 'Sem email'}</span>
                     </div>
                     <div className="text-slate-400">
-                      <span className="text-slate-500 font-medium">Dept:</span> {user.department}
+                      <span className="text-slate-500 font-medium">ID GLPI:</span> {user.id}
                     </div>
-                    <div className="text-slate-400">
-                      <span className="text-slate-500 font-medium">Tickets:</span> {user.tickets}
-                    </div>
-                  </div>
-
-                  {/* Permissions Chips */}
-                  {user.permissions && (
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {user.permissions.slice(0, 5).map(perm => {
-                        const module = ALL_MODULES.find(m => m.id === perm);
-                        return module ? (
-                          <span key={perm} className="text-[10px] px-2 py-0.5 bg-slate-800 text-slate-400 rounded border border-slate-700">
-                            {module.label}
-                          </span>
-                        ) : null;
-                      })}
-                      {user.permissions.length > 5 && (
-                        <span className="text-[10px] px-2 py-0.5 bg-slate-800 text-slate-500 rounded border border-slate-700">
-                          +{user.permissions.length - 5}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="text-xs text-slate-500 mt-2">
-                    Último acesso: {user.lastAccess}
                   </div>
                 </div>
               </div>
@@ -471,109 +371,29 @@ export default function UsersView() {
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleEditUser(user)}
-                  className="p-2 bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg transition-colors text-slate-400">
+                  className="p-2 bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg transition-colors text-slate-400"
+                >
                   <Edit2 size={18} />
                 </button>
                 <button
                   onClick={() => handleDeleteUser(user)}
-                  className="p-2 bg-slate-800 hover:bg-red-600 hover:text-white rounded-lg transition-colors text-slate-400">
+                  className="p-2 bg-slate-800 hover:bg-red-600 hover:text-white rounded-lg transition-colors text-slate-400"
+                >
                   <Trash2 size={18} />
                 </button>
               </div>
             </div>
           </div>
         ))}
+
+        {filteredUsers.length === 0 && (
+          <div className="text-center py-12">
+            <Users className="mx-auto text-slate-600 mb-4" size={48} />
+            <p className="text-slate-400">Nenhum usuário encontrado no GLPI</p>
+            <p className="text-slate-500 text-sm mt-2">Verifique a conexão com o GLPI</p>
+          </div>
+        )}
       </div>
-
-      {filteredUsers.length === 0 && (
-        <div className="text-center py-12">
-          <Users className="mx-auto text-slate-600 mb-4" size={48} />
-          <p className="text-slate-400">Nenhum usuário encontrado</p>
-        </div>
-      )}
-      </>
-      )}
-
-      {/* Users List - GLPI */}
-      {activeTab === 'glpi' && (
-        <>
-          {glpiLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {glpiUsers
-                .filter(u =>
-                  u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  u.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  u.realname?.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map((user) => (
-                <div
-                  key={user.id}
-                  className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 hover:border-slate-700/50 transition-all"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg">
-                        {(user.firstname || user.name || '?').charAt(0).toUpperCase()}
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                          <h3 className="text-white font-semibold text-lg">
-                            {user.firstname && user.realname
-                              ? `${user.firstname} ${user.realname}`
-                              : user.name}
-                          </h3>
-                          <div className="flex gap-2">
-                            <span className="px-3 py-1 rounded-full text-xs font-medium border bg-green-500/20 text-green-400 border-green-500/30">
-                              GLPI
-                            </span>
-                            {user.is_active ? (
-                              <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
-                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div> Ativo
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-700/50 text-slate-400 border border-slate-600/50">
-                                <div className="w-1.5 h-1.5 bg-slate-500 rounded-full"></div> Inativo
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                          <div className="flex items-center gap-2 text-slate-400">
-                            <Users size={16} />
-                            <span>Login: {user.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-slate-400">
-                            <Mail size={16} />
-                            <span className="truncate">{user.email || 'Sem email'}</span>
-                          </div>
-                          <div className="text-slate-400">
-                            <span className="text-slate-500 font-medium">ID GLPI:</span> {user.id}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {glpiUsers.length === 0 && (
-                <div className="text-center py-12">
-                  <Users className="mx-auto text-slate-600 mb-4" size={48} />
-                  <p className="text-slate-400">Nenhum usuário encontrado no GLPI</p>
-                  <p className="text-slate-500 text-sm mt-2">Verifique a conexão com o GLPI</p>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
 
       {/* CREATE USER MODAL */}
       <AnimatePresence>
@@ -699,6 +519,22 @@ export default function UsersView() {
                             <option value="Admin">Admin</option>
                           </select>
                         </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-300">Grupo GLPI</label>
+                        <select
+                          value={formData.groupId}
+                          onChange={e => setFormData({ ...formData, groupId: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
+                        >
+                          <option value="">Selecione um grupo...</option>
+                          {glpiGroups.map(group => (
+                            <option key={group.id} value={group.id}>
+                              {group.completename}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
