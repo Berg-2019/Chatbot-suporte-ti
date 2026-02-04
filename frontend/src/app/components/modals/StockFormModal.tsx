@@ -152,7 +152,7 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
                                 <label className="text-sm font-medium text-slate-300">Tipo de Estoque</label>
                                 <select
                                     value={formData.stockType}
-                                    onChange={(e) => setFormData({ ...formData, stockType: e.target.value })}
+                                    onChange={(e) => setFormData({ ...formData, stockType: e.target.value as "TI" | "ELECTRIC" })}
                                     disabled={!!initialData}
                                     className={`w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${initialData ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >

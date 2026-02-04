@@ -205,7 +205,7 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
               </div>
             </div>
             <div className="flex flex-col items-end">
-              <span className="text-[10px] text-slate-500">{format(new Date(item.date), 'HH:mm')}</span>
+              <span className="text-[10px] text-slate-500">{format(new Date(item.createdAt), 'HH:mm')}</span>
               <span className="text-[10px] text-slate-600 bg-slate-900 px-1.5 rounded mt-1">#{item.ticketNumber.split('-')[2]}</span>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { UserPlus, Check } from 'lucide-react';
 interface TicketItemProps {
   category: string;
   title: string;
-  date: string;
+  createdAt: string;
   status: 'NEW' | 'ASSIGNED' | 'IN_PROGRESS' | 'WAITING_CLIENT' | 'RESOLVED' | 'CLOSED';
   onClick?: () => void;
   showAssignButton?: boolean;
@@ -20,7 +20,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   CLOSED: { label: 'FECHADO', color: 'bg-slate-600/20 text-slate-400 border-slate-600/30' },
 };
 
-export default function TicketItem({ category, title, date, status, onClick, showAssignButton, isActive, ticketNumber }: TicketItemProps) {
+export default function TicketItem({ category, title, createdAt, status, onClick, showAssignButton, isActive, ticketNumber }: TicketItemProps) {
   const statusInfo = statusConfig[status] || { label: status || 'DESCONHECIDO', color: 'bg-slate-600/20 text-slate-400 border-slate-600/30' };
 
   return (
@@ -37,7 +37,7 @@ export default function TicketItem({ category, title, date, status, onClick, sho
           <span className={`text-sm truncate ${isActive ? 'text-white' : 'text-slate-300'}`}>{title}</span>
         </div>
         <div className={`${isActive ? 'text-blue-300' : 'text-slate-500'} text-xs flex items-center gap-2`}>
-          <span>{date}</span>
+          <span>{new Date(createdAt).toLocaleString('pt-BR')}</span>
         </div>
       </div>
 

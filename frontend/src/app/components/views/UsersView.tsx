@@ -153,7 +153,7 @@ export default function UsersView() {
     setFormData({
       name: user.name,
       email: user.email,
-      phone: user.phone,
+      phone: user.phone || '',
       department: user.department || '',
       role: user.role, // 'Admin' | 'Técnico' | 'Usuário' matches select options
       password: '', // Don't allow editing password directly here, only via new input

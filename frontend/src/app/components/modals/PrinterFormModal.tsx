@@ -25,7 +25,7 @@ export default function PrinterFormModal({ isOpen, onClose, onConfirm, initialDa
                 name: initialData.name,
                 ip: initialData.ip,
                 port: initialData.port || 161,
-                location: initialData.location,
+                location: initialData.location || '',
                 community: 'public', // Default/hidden for now unless it's in the interface
             });
         } else {

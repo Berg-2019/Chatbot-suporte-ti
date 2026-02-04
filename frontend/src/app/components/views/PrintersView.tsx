@@ -70,7 +70,7 @@ export default function PrintersView() {
 
   const filteredPrinters = printers.filter(printer =>
     printer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    printer.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (printer.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (printer.status.model || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -172,7 +172,7 @@ export default function PrintersView() {
             <div>
               <h3 className="text-yellow-500 font-semibold">Atenção: {stats.warning} impressora(s) com nível de tinta baixo</h3>
               <p className="text-yellow-500/80 text-sm">
-                Verifique: {printers.filter(p => p.status === 'warning').map(p => p.name).join(', ')}
+                Verifique: {printers.filter(p => p.status.status === 'warning').map(p => p.name).join(', ')}
               </p>
             </div>
           </div>

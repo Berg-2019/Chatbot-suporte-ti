@@ -21,7 +21,7 @@ export class UsersService {
         department: true,
         permissions: true,
         phoneNumber: true,
-      },
+      } as any,
       orderBy: { name: 'asc' },
     });
   }

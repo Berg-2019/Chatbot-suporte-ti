@@ -354,7 +354,7 @@ export interface Ticket {
     description: string;
     technician?: string;
     phoneNumber?: string;
-    date: string;
+    createdAt: string;
     priority?: number;
 }
 

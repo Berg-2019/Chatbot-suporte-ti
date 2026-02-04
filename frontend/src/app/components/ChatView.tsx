@@ -192,7 +192,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/50" style={{ backgroundImage: 'radial-gradient(circle at center, #1e293b 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
         <div className="text-center text-xs text-slate-600 my-4">
-          <span>Chamado iniciado em {ticket.date}</span>
+          <span>Chamado iniciado em {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}</span>
         </div>
 
         {messages.map((msg) => (

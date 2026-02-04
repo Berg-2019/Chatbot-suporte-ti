@@ -69,7 +69,7 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
 
   const metrics = [
     { icon: FolderOpen, value: tickets.filter(t => t.status !== 'CLOSED').length, label: 'Tickets', sublabel: 'Abertos', iconColor: 'bg-yellow-600' },
-    { icon: Calendar, value: tickets.filter(t => t.date && parseISO(t.date).getDate() === new Date().getDate()).length, label: 'Novos', sublabel: 'Hoje', iconColor: 'bg-blue-600' },
+    { icon: Calendar, value: tickets.filter(t => t.createdAt && parseISO(t.createdAt).getDate() === new Date().getDate()).length, label: 'Novos', sublabel: 'Hoje', iconColor: 'bg-blue-600' },
     { icon: Clock, value: tickets.filter(t => t.status === 'WAITING_CLIENT').length, label: 'Aguardando', sublabel: '', iconColor: 'bg-orange-600' },
     { icon: Timer, value: '45min', label: 'Tempo', sublabel: 'Médio', iconColor: 'bg-purple-600' },
   ];

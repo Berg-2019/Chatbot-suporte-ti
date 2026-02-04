@@ -23,8 +23,74 @@ export class BotController {
     private redis: RedisService,
     private prisma: PrismaService,
     private config: ConfigService,
-    private alertService: AlertService, // Injetar AlertService
+    private alertService: AlertService,
   ) { }
+
+  @Get('status')
+  async getStatus() {
+    try {
+      const response = await axios.get(`${BOT_API_URL}/api/status`);
+      return response.data;
+    } catch (e) {
+      // Se não conseguir conectar, retorna status disconnected em vez de erro 500
+      return {
+        status: 'disconnected',
+        uptime: 0,
+        messagesReceived: 0,
+        messagesSent: 0
+      };
+    }
+  }
+
+  @Get('qr')
+  async getQRCode() {
+    try {
+      const response = await axios.get(`${BOT_API_URL}/api/qr`);
+      return response.data;
+    } catch (e) {
+      throw new HttpException('Falha ao obter QR Code', HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('pairing-code')
+  async generatePairingCode(@Body() body: { phoneNumber: string }) {
+    try {
+      const response = await axios.post(`${BOT_API_URL}/api/pairing-code`, body);
+      return response.data;
+    } catch (e) {
+      throw new HttpException(e.response?.data?.error || 'Falha ao gerar código', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Post('disconnect')
+  async disconnect() {
+    try {
+      const response = await axios.post(`${BOT_API_URL}/api/disconnect`);
+      return response.data;
+    } catch (e) {
+      throw new HttpException('Falha ao desconectar', HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('restart')
+  async restart() {
+    try {
+      const response = await axios.post(`${BOT_API_URL}/api/restart`);
+      return response.data;
+    } catch (e) {
+      throw new HttpException('Falha ao reiniciar', HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('logout')
+  async logout() {
+    try {
+      const response = await axios.post(`${BOT_API_URL}/api/logout`);
+      return response.data;
+    } catch (e) {
+      throw new HttpException('Falha ao fazer logout', HttpStatus.BAD_GATEWAY);
+    }
+  }
 
   // ...
 
