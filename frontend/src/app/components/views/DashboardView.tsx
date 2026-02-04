@@ -18,29 +18,21 @@ import {
   ListVideo,
   CheckCircle2,
   CalendarClock,
-  XCircle,
-  MessageCircle,
-  Clock as ClockIcon,
   LayoutDashboard,
-  ListTodo
+  ListTodo,
+  Plus,
+  X,
+  Ticket as TicketIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBadges } from '../../hooks/useBadges';
 import { toast } from 'sonner';
-import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'motion/react';
-import { reservationApi, ticketsApi, printerApi, type Reservation as ApiReservation, type Ticket, type Printer } from '../../services/api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { reservationApi, ticketsApi, printerApi, type Reservation as ApiReservation, type Ticket, type Printer, type CreateTicketDto } from '../../services/api';
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-interface Reservation {
-  id: number;
-  assetName: string;
-  requester: string;
-  dateStart: string;
-  dateEnd: string;
-  status: 'pending' | 'approved' | 'active' | 'completed';
-}
+import { playNotificationSound } from '../../utils/sound';
 
 interface DashboardViewProps {
   onTicketClick: (ticket: Ticket) => void;
@@ -51,6 +43,7 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
   const { profile, user } = useAuth();
   const badges = useBadges(); // Hook de badges
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const previousTicketIdsRef = useRef<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeReservationChat, setActiveReservationChat] = useState<{ requester: string, assetName: string, id: number } | null>(null);
@@ -67,6 +60,18 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
   const [reservations, setReservations] = useState<ApiReservation[]>([]);
   const [reservationsLoading, setReservationsLoading] = useState(false);
 
+  // New Ticket Modal
+  const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
+  const [newTicketForm, setNewTicketForm] = useState({
+    title: '',
+    description: '',
+    category: 'TI',
+    priority: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
+    customerName: '',
+    sector: '',
+  });
+  const [creatingTicket, setCreatingTicket] = useState(false);
+
   const metrics = [
     { icon: FolderOpen, value: tickets.filter(t => t.status !== 'CLOSED').length, label: 'Tickets', sublabel: 'Abertos', iconColor: 'bg-yellow-600' },
     { icon: Calendar, value: tickets.filter(t => t.createdAt && parseISO(t.createdAt).getDate() === new Date().getDate()).length, label: 'Novos', sublabel: 'Hoje', iconColor: 'bg-blue-600' },
@@ -78,9 +83,9 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
   const fetchReservations = useCallback(async () => {
     setReservationsLoading(true);
     try {
-      const data = await reservationApi.getAll({ status: 'PENDING' });
+      const data = await reservationApi.getAll({ status: 'PENDING', stockType: 'TI' });
       // Also get approved ones
-      const approved = await reservationApi.getAll({ status: 'APPROVED' });
+      const approved = await reservationApi.getAll({ status: 'APPROVED', stockType: 'TI' });
       setReservations([...data, ...approved.slice(0, 5)]);
     } catch (err) {
       console.error('Error fetching reservations:', err);
@@ -123,6 +128,33 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
     });
   };
 
+  const handleCreateTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingTicket(true);
+
+    try {
+      const ticketData: CreateTicketDto = {
+        title: newTicketForm.title,
+        description: newTicketForm.description,
+        category: newTicketForm.category,
+        priority: newTicketForm.priority,
+        customerName: newTicketForm.customerName || undefined,
+        sector: newTicketForm.sector || undefined,
+      };
+
+      await ticketsApi.create(ticketData);
+      toast.success('Chamado criado com sucesso!');
+      setIsNewTicketModalOpen(false);
+      setNewTicketForm({ title: '', description: '', category: 'TI', priority: 'MEDIUM', customerName: '', sector: '' });
+      fetchTickets(); // Refresh the list
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      toast.error('Erro ao criar chamado');
+    } finally {
+      setCreatingTicket(false);
+    }
+  };
+
   const fetchPrinters = useCallback(async () => {
     setPrintersLoading(true);
     try {
@@ -137,13 +169,37 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
     }
   }, []);
 
+
   const fetchTickets = async (isAutoRefresh = false) => {
     if (isAutoRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const response = await ticketsApi.getAll();
-      setTickets(response.tickets);
+      // Buscar tickets que NÃO são de Elétrica (TI recebe tudo exceto elétrica)
+      const response = await ticketsApi.getAll({});
+      // Filtrar para excluir tickets de Elétrica
+      const newTickets = response.tickets.filter(t => {
+        const cat = (t.category || '').toLowerCase();
+        const sec = (t.sector || '').toLowerCase();
+        return !cat.includes('elétrica') && !cat.includes('eletrica') &&
+               !sec.includes('elétrica') && !sec.includes('eletrica');
+      });
+
+      // Check for new tickets to play sound
+      if (isAutoRefresh && newTickets.length > 0) {
+        const currentIds = new Set(newTickets.map(t => t.id));
+        const hasNewTickets = newTickets.some(t => !previousTicketIdsRef.current.has(t.id));
+
+        if (hasNewTickets) {
+          playNotificationSound();
+        }
+        previousTicketIdsRef.current = currentIds;
+      } else if (!isAutoRefresh) {
+        // Initial load, just sync ref
+        previousTicketIdsRef.current = new Set(newTickets.map(t => t.id));
+      }
+
+      setTickets(newTickets);
     } catch (error) {
       console.error('Erro ao buscar tickets:', error);
       toast.error('Erro ao atualizar tickets');
@@ -372,6 +428,12 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
         </div>
         <div className="flex gap-2">
           {refreshing && <span className="text-xs text-slate-500 animate-pulse self-center mr-2">Atualizando...</span>}
+          <button
+            onClick={() => setIsNewTicketModalOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-600/20"
+          >
+            <Plus size={20} /> <span className="hidden sm:inline">Novo Chamado</span>
+          </button>
           <button onClick={() => fetchTickets(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors" title="Atualizar Tickets">
             <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
           </button>
@@ -446,6 +508,123 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
           reservationId={activeReservationChat.id}
         />
       )}
+
+      {/* Modal Novo Chamado */}
+      <AnimatePresence>
+        {isNewTicketModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
+              onClick={() => setIsNewTicketModalOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95%] max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <TicketIcon className="text-blue-500" /> Novo Chamado
+                </h3>
+                <button
+                  onClick={() => setIsNewTicketModalOpen(false)}
+                  className="p-2 hover:bg-slate-800 rounded-lg text-slate-400"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleCreateTicket} className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-400">Solicitante</label>
+                    <input
+                      type="text"
+                      placeholder="Nome do solicitante"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500/50"
+                      value={newTicketForm.customerName}
+                      onChange={(e) => setNewTicketForm(prev => ({ ...prev, customerName: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-400">Setor</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Financeiro"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500/50"
+                      value={newTicketForm.sector}
+                      onChange={(e) => setNewTicketForm(prev => ({ ...prev, sector: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-400">Categoria</label>
+                    <select
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500/50"
+                      value={newTicketForm.category}
+                      onChange={(e) => setNewTicketForm(prev => ({ ...prev, category: e.target.value }))}
+                    >
+                      <option value="TI">TI</option>
+                      <option value="Hardware">Hardware</option>
+                      <option value="Software">Software</option>
+                      <option value="Rede">Rede</option>
+                      <option value="Impressora">Impressora</option>
+                      <option value="Acesso">Acesso</option>
+                      <option value="Outros">Outros</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-400">Prioridade</label>
+                    <select
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500/50"
+                      value={newTicketForm.priority}
+                      onChange={(e) => setNewTicketForm(prev => ({ ...prev, priority: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' }))}
+                    >
+                      <option value="LOW">Baixa</option>
+                      <option value="MEDIUM">Normal</option>
+                      <option value="HIGH">Alta</option>
+                      <option value="URGENT">Urgente</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400">Título</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Computador não liga"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500/50"
+                    value={newTicketForm.title}
+                    onChange={(e) => setNewTicketForm(prev => ({ ...prev, title: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400">Descrição</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Descreva o problema..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white outline-none resize-none focus:border-blue-500/50"
+                    value={newTicketForm.description}
+                    onChange={(e) => setNewTicketForm(prev => ({ ...prev, description: e.target.value }))}
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold mt-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={creatingTicket}
+                >
+                  {creatingTicket ? 'Criando...' : 'Criar Chamado'}
+                </button>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -30,6 +30,13 @@ export class ReservationService {
             where.stockItemId = query.stockItemId;
         }
 
+        if (query.stockType) {
+            where.stockItem = {
+                // @ts-ignore
+                stockType: query.stockType
+            };
+        }
+
         if (query.status) {
             where.status = query.status;
         }
@@ -224,19 +231,28 @@ export class ReservationService {
     /**
      * Timeline para um período (usado no cronograma)
      */
-    async getTimeline(startDate: Date, endDate: Date) {
+    async getTimeline(startDate: Date, endDate: Date, stockType?: 'TI' | 'ELECTRIC') {
+        const where: Prisma.ReservationWhereInput = {
+            status: { in: ['PENDING', 'APPROVED', 'IN_USE'] },
+            OR: [
+                {
+                    startTime: { gte: startDate, lte: endDate },
+                },
+                {
+                    endTime: { gte: startDate, lte: endDate },
+                },
+            ],
+        };
+
+        if (stockType) {
+            where.stockItem = {
+                // @ts-ignore
+                stockType: stockType
+            };
+        }
+
         return this.prisma.reservation.findMany({
-            where: {
-                status: { in: ['PENDING', 'APPROVED', 'IN_USE'] },
-                OR: [
-                    {
-                        startTime: { gte: startDate, lte: endDate },
-                    },
-                    {
-                        endTime: { gte: startDate, lte: endDate },
-                    },
-                ],
-            },
+            where,
             include: {
                 stockItem: {
                     select: {

@@ -33,6 +33,7 @@ export class TicketsService {
   async findAll(filters?: {
     status?: TicketStatus;
     assignedToId?: string;
+    category?: string;
     page?: number;
     limit?: number;
   }) {
@@ -42,6 +43,12 @@ export class TicketsService {
     const where: any = {};
     if (filters?.status) where.status = filters.status;
     if (filters?.assignedToId) where.assignedToId = filters.assignedToId;
+    if (filters?.category) {
+      where.category = {
+        contains: filters.category,
+        mode: 'insensitive'
+      };
+    }
 
     const [tickets, total] = await Promise.all([
       this.prisma.ticket.findMany({

@@ -27,6 +27,7 @@ const STATES = {
   WAITING_TECHNICIAN: 'waiting_technician',
   RATING_TICKET: 'rating_ticket',  // Aguardando avaliação 1-5
   // Reservation states
+  SELECT_EQUIPMENT_TYPE: 'select_equipment_type',
   SELECT_EQUIPMENT: 'select_equipment',
   ASK_RESERVATION_START: 'ask_reservation_start',
   ASK_RESERVATION_END: 'ask_reservation_end',
@@ -301,6 +302,10 @@ class FlowHandler {
         break;
 
       // Reservation flow states
+      case STATES.SELECT_EQUIPMENT_TYPE:
+        await this.handleSelectEquipmentType(sock, from, normalizedText, session);
+        break;
+
       case STATES.SELECT_EQUIPMENT:
         await this.handleSelectEquipment(sock, from, normalizedText, session);
         break;
@@ -423,7 +428,7 @@ class FlowHandler {
         break;
 
       case '5': // Reservar equipamento
-        const hasDataReserv = await this.ensureUserData(sock, from, session, STATES.SELECT_EQUIPMENT);
+        const hasDataReserv = await this.ensureUserData(sock, from, session, STATES.SELECT_EQUIPMENT_TYPE);
 
         if (!hasDataReserv) {
           // Dados sendo coletados, salvar contexto
@@ -432,28 +437,10 @@ class FlowHandler {
           return;
         }
 
-        // Dados já disponíveis, buscar equipamentos
-        try {
-          const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-          const equipRes = await axios.get(`${backendUrl}/api/stock?category=ASSET&assetStatus=AVAILABLE`, {
-            timeout: 5000,
-          });
-
-          const availableItems = equipRes.data.items || equipRes.data || [];
-
-          if (availableItems.length === 0) {
-            await this.sendMessage(sock, from, config.messages.noEquipmentsAvailable);
-            break;
-          }
-
-          session.data.availableEquipments = availableItems;
-          session.state = STATES.SELECT_EQUIPMENT;
-          await redisService.setSession(phone, session);
-          await this.sendMessage(sock, from, config.messages.askEquipmentList(availableItems));
-        } catch (e) {
-          console.error('Erro ao buscar equipamentos:', e.message);
-          await this.sendMessage(sock, from, '❌ Erro ao buscar equipamentos. Tente novamente mais tarde.');
-        }
+        // Dados já disponíveis, perguntar tipo de equipamento
+        session.state = STATES.SELECT_EQUIPMENT_TYPE;
+        await redisService.setSession(phone, session);
+        await this.sendMessage(sock, from, config.messages.askEquipmentType);
         break;
 
       default:
@@ -562,28 +549,9 @@ class FlowHandler {
         null,
         { phone, message: `${session.data.contactName} (${session.data.sector}) solicitou atendimento humano` }
       );
-    } else if (nextState === STATES.SELECT_EQUIPMENT) {
-      // Buscar equipamentos para reserva
-      try {
-        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-        const equipRes = await axios.get(`${backendUrl}/api/stock?category=ASSET&assetStatus=AVAILABLE`, {
-          timeout: 5000,
-        });
-
-        const availableItems = equipRes.data.items || equipRes.data || [];
-
-        if (availableItems.length === 0) {
-          await this.sendMessage(sock, from, config.messages.noEquipmentsAvailable || '❌ Nenhum equipamento disponível.');
-          return;
-        }
-
-        session.data.availableEquipments = availableItems;
-        await redisService.setSession(phone, session);
-        await this.sendMessage(sock, from, config.messages.askEquipmentList(availableItems));
-      } catch (e) {
-        console.error('Erro ao buscar equipamentos:', e.message);
-        await this.sendMessage(sock, from, '❌ Erro ao buscar equipamentos. Tente novamente mais tarde.');
-      }
+    } else if (nextState === STATES.SELECT_EQUIPMENT_TYPE) {
+      // Perguntar tipo de equipamento
+      await this.sendMessage(sock, from, config.messages.askEquipmentType);
     }
   }
 
@@ -956,6 +924,50 @@ class FlowHandler {
       date.getMonth() === parseInt(month) - 1 &&
       date.getDate() === parseInt(day)
     );
+  }
+
+  /**
+   * Handle equipment type selection (TI or Electric)
+   */
+  async handleSelectEquipmentType(sock, from, text, session) {
+    const phone = from.split('@')[0];
+
+    let stockType;
+    if (text === '1') {
+      stockType = 'TI';
+    } else if (text === '2') {
+      stockType = 'ELECTRIC';
+    } else {
+      await this.sendMessage(sock, from, '❌ Opção inválida. Digite *1* para TI ou *2* para Elétrica:');
+      return;
+    }
+
+    session.data.equipmentStockType = stockType;
+
+    // Buscar equipamentos filtrados por tipo
+    try {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+      const equipRes = await axios.get(`${backendUrl}/api/stock?category=ASSET&assetStatus=AVAILABLE&stockType=${stockType}`, {
+        timeout: 5000,
+      });
+
+      const availableItems = equipRes.data.items || equipRes.data || [];
+
+      if (availableItems.length === 0) {
+        await this.sendMessage(sock, from, config.messages.noEquipmentsAvailable);
+        session.state = STATES.MENU;
+        await redisService.setSession(phone, session);
+        return;
+      }
+
+      session.data.availableEquipments = availableItems;
+      session.state = STATES.SELECT_EQUIPMENT;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, config.messages.askEquipmentList(availableItems));
+    } catch (e) {
+      console.error('Erro ao buscar equipamentos:', e.message);
+      await this.sendMessage(sock, from, '❌ Erro ao buscar equipamentos. Tente novamente mais tarde.');
+    }
   }
 
   /**

@@ -3,13 +3,14 @@ import MetricCard from '../MetricCard';
 import ReservationChat from '../ReservationChat';
 import MobileFloatingMenu from '../MobileFloatingMenu';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, isSameDay, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useBadges } from '../../hooks/useBadges';
-import { ticketsApi, reservationApi, type Ticket, type Reservation } from '../../services/api';
+import { ticketsApi, reservationApi, type Ticket, type Reservation, type CreateTicketDto } from '../../services/api';
+import { playNotificationSound } from '../../utils/sound';
 
 const data = [
   { name: 'Seg', chamados: 4 },
@@ -42,13 +43,47 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
   const [requests, setRequests] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  // Form states for new order
+  const [newOrderForm, setNewOrderForm] = useState({
+    location: '',
+    priority: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
+    title: '',
+    description: '',
+  });
+  const [creatingOrder, setCreatingOrder] = useState(false);
+
+  // Track previous IDs for sound notification
+  const previousTicketIdsRef = useRef<Set<string>>(new Set());
+
+  const fetchData = async (isAutoRefresh = false) => {
     try {
       const [ticketsRes, reservationsAll] = await Promise.all([
-        ticketsApi.getAll({ category: 'Elétrica' }),
-        reservationApi.getAll()
+        ticketsApi.getAll({}), // Buscar todos e filtrar no frontend
+        reservationApi.getAll({ stockType: 'ELECTRIC' })
       ]);
-      setRequests(ticketsRes.tickets);
+
+      // Filtrar apenas tickets de Elétrica (por category OU sector)
+      const newTickets = ticketsRes.tickets.filter(t => {
+        const cat = (t.category || '').toLowerCase();
+        const sec = (t.sector || '').toLowerCase();
+        return cat.includes('elétrica') || cat.includes('eletrica') ||
+               sec.includes('elétrica') || sec.includes('eletrica');
+      });
+
+      // Sound Notification Logic
+      if (isAutoRefresh && newTickets.length > 0) {
+        const currentIds = new Set(newTickets.map(t => t.id));
+        const hasNewTickets = newTickets.some(t => !previousTicketIdsRef.current.has(t.id));
+
+        if (hasNewTickets) {
+          playNotificationSound();
+        }
+        previousTicketIdsRef.current = currentIds;
+      } else if (!isAutoRefresh) {
+        previousTicketIdsRef.current = new Set(newTickets.map(t => t.id));
+      }
+
+      setRequests(newTickets);
       setReservations(reservationsAll);
 
       // Simple timeline mapping or separate fetch
@@ -102,10 +137,30 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
     });
   };
 
-  const handleCreateOrder = (e: React.FormEvent) => {
+  const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Ordem de Serviço criada com sucesso!');
-    setIsNewOrderModalOpen(false);
+    setCreatingOrder(true);
+
+    try {
+      const ticketData: CreateTicketDto = {
+        title: newOrderForm.title,
+        description: `Local: ${newOrderForm.location}\n\n${newOrderForm.description}`,
+        category: 'Elétrica',
+        priority: newOrderForm.priority,
+        sector: newOrderForm.location,
+      };
+
+      await ticketsApi.create(ticketData);
+      toast.success('Ordem de Serviço criada com sucesso!');
+      setIsNewOrderModalOpen(false);
+      setNewOrderForm({ location: '', priority: 'MEDIUM', title: '', description: '' });
+      fetchData(); // Refresh the list
+    } catch (error) {
+      console.error('Error creating order:', error);
+      toast.error('Erro ao criar ordem de serviço');
+    } finally {
+      setCreatingOrder(false);
+    }
   };
 
   // Render Functions for Components
@@ -206,7 +261,7 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
             </div>
             <div className="flex flex-col items-end">
               <span className="text-[10px] text-slate-500">{format(new Date(item.createdAt), 'HH:mm')}</span>
-              <span className="text-[10px] text-slate-600 bg-slate-900 px-1.5 rounded mt-1">#{item.ticketNumber.split('-')[2]}</span>
+              <span className="text-[10px] text-slate-600 bg-slate-900 px-1.5 rounded mt-1">#{item.ticketNumber ? item.ticketNumber.split('-')[2] : item.id.slice(-4)}</span>
             </div>
           </div>
         ))}
@@ -342,22 +397,58 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-400">Local</label>
-                    <input type="text" placeholder="Ex: Sala 302" className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none" required />
+                    <input
+                      type="text"
+                      placeholder="Ex: Sala 302"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-yellow-500/50"
+                      value={newOrderForm.location}
+                      onChange={(e) => setNewOrderForm(prev => ({ ...prev, location: e.target.value }))}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-400">Prioridade</label>
-                    <select className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none"><option value="normal">Normal</option><option value="high">Alta</option></select>
+                    <select
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-yellow-500/50"
+                      value={newOrderForm.priority}
+                      onChange={(e) => setNewOrderForm(prev => ({ ...prev, priority: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' }))}
+                    >
+                      <option value="LOW">Baixa</option>
+                      <option value="MEDIUM">Normal</option>
+                      <option value="HIGH">Alta</option>
+                      <option value="URGENT">Urgente</option>
+                    </select>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400">Título</label>
-                  <input type="text" placeholder="Ex: Troca de disjuntor" className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none" required />
+                  <input
+                    type="text"
+                    placeholder="Ex: Troca de disjuntor"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-yellow-500/50"
+                    value={newOrderForm.title}
+                    onChange={(e) => setNewOrderForm(prev => ({ ...prev, title: e.target.value }))}
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400">Descrição</label>
-                  <textarea rows={3} placeholder="Descreva o problema..." className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white outline-none resize-none" required />
+                  <textarea
+                    rows={3}
+                    placeholder="Descreva o problema..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white outline-none resize-none focus:border-yellow-500/50"
+                    value={newOrderForm.description}
+                    onChange={(e) => setNewOrderForm(prev => ({ ...prev, description: e.target.value }))}
+                    required
+                  />
                 </div>
-                <button type="submit" className="w-full py-3 bg-yellow-500 text-black rounded-xl font-bold mt-2">Criar Ordem</button>
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-black rounded-xl font-bold mt-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={creatingOrder}
+                >
+                  {creatingOrder ? 'Criando...' : 'Criar Ordem'}
+                </button>
               </form>
             </motion.div>
           </>

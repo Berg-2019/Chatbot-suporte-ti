@@ -58,6 +58,14 @@ export class UsersController {
     return this.glpiService.getGroups();
   }
 
+  @Get('glpi')
+  async getGlpiUsers(@Request() req: any) {
+    if (req.user.role !== 'ADMIN') {
+      throw new ForbiddenException('Apenas admins');
+    }
+    return this.glpiService.getUsers();
+  }
+
   @Post('glpi')
   async createGlpiUser(@Body() dto: CreateGlpiUserDto, @Request() req: any) {
     if (req.user.role !== 'ADMIN') {

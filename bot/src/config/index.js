@@ -123,6 +123,8 @@ Um técnico entrará em contato em breve.`,
     invalidOption: '❓ Opção inválida. Por favor, escolha uma das opções disponíveis.',
 
     // Reservation messages
+    askEquipmentType: `📦 *Reserva de Equipamento*\n\nQual tipo de equipamento você deseja reservar?\n\n1️⃣ TI (notebooks, projetores, etc.)\n2️⃣ Elétrica (ferramentas, instrumentos, etc.)\n\nDigite o número:`,
+
     askEquipmentList: (items) => `📦 *Equipamentos disponíveis para reserva:*\n\n${items.map((item, i) => `${i + 1}️⃣ ${item.name} (${item.assetTag || 'S/N'})`).join('\n')}\n\nDigite o número do equipamento:`,
 
     askReservationDate: '📅 Quando você precisa do equipamento?\n\nDigite a *data de início* no formato:\n`DD/MM/AAAA HH:MM`\n\nExemplo: 30/01/2026 14:00',

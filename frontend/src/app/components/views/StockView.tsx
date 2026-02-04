@@ -49,11 +49,14 @@ export default function StockView() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Determine stock type based on profile
-  const getStockTypeFilter = useCallback(() => {
-    if (profile === 'tech_ti') return 'TI';
-    if (profile === 'tech_elect') return 'ELECTRIC';
-    return undefined; // Admin sees all
+  // Department Filter State
+  const [selectedDept, setSelectedDept] = useState<'TI' | 'ELECTRIC' | 'ALL'>('ALL');
+
+  // Initialize filter based on profile
+  useEffect(() => {
+    if (profile === 'tech_ti') setSelectedDept('TI');
+    else if (profile === 'tech_elect') setSelectedDept('ELECTRIC');
+    else setSelectedDept('ALL');
   }, [profile]);
 
   // Fetch Stock Data
@@ -61,7 +64,7 @@ export default function StockView() {
     setIsLoading(true);
     setError(null);
     try {
-      const stockType = getStockTypeFilter();
+      const stockType = selectedDept === 'ALL' ? undefined : selectedDept;
 
       const [stockResponse, stockStats] = await Promise.all([
         stockApi.getAll({ stockType: stockType as any, search: searchTerm || undefined }),
@@ -71,7 +74,8 @@ export default function StockView() {
       // Handle paginated response
       const items = stockResponse.items || [];
       setStockItems(items);
-      setStats(stockStats || { total: 0, lowStock: 0, assets: 0, supplies: 0 });
+      const defaultStats = { total: 0, lowStock: 0, assets: 0, supplies: 0 };
+      setStats(stockStats || defaultStats);
     } catch (err) {
       console.error('Error fetching stock:', err);
       setError('Erro ao carregar estoque');
@@ -79,7 +83,7 @@ export default function StockView() {
     } finally {
       setIsLoading(false);
     }
-  }, [getStockTypeFilter, searchTerm]);
+  }, [selectedDept, searchTerm]);
 
   const handleSave = async (data: Partial<StockItem>) => {
     try {
@@ -108,12 +112,13 @@ export default function StockView() {
   const fetchReservations = useCallback(async () => {
     try {
       const endOfWeek = addDays(currentWeekStart, 7);
-      const data = await reservationApi.getTimeline(currentWeekStart, endOfWeek);
+      const stockType = selectedDept === 'ALL' ? undefined : selectedDept;
+      const data = await reservationApi.getTimeline(currentWeekStart, endOfWeek, stockType);
       setReservations(data);
     } catch (err) {
       console.error('Error fetching reservations:', err);
     }
-  }, [currentWeekStart]);
+  }, [currentWeekStart, selectedDept]);
 
   // Initial load
   useEffect(() => {
@@ -224,6 +229,31 @@ export default function StockView() {
           </h1>
           <p className="text-slate-400">Controle de insumos e equipamentos</p>
         </div>
+
+        {/* Department Filter for Admins */}
+        {profile !== 'tech_ti' && profile !== 'tech_elect' && (
+          <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+            <button
+              onClick={() => setSelectedDept('ALL')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedDept === 'ALL' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              Todos
+            </button>
+            <button
+              onClick={() => setSelectedDept('TI')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedDept === 'TI' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              TI
+            </button>
+            <button
+              onClick={() => setSelectedDept('ELECTRIC')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedDept === 'ELECTRIC' ? 'bg-yellow-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              Elétrica
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2 w-full sm:w-auto">
           <button
             onClick={() => fetchStockData()}
@@ -609,7 +639,7 @@ export default function StockView() {
         onClose={() => setIsModalOpen(false)}
         onConfirm={handleSave}
         initialData={editingItem}
-        defaultType={profile === 'tech_elect' ? 'ELECTRIC' : 'TI'}
+        defaultType={selectedDept === 'ELECTRIC' ? 'ELECTRIC' : 'TI'}
       />
     </div>
   );

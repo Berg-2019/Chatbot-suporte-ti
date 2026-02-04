@@ -80,4 +80,8 @@ export class ReservationQueryDto {
     @IsOptional()
     @IsDateString()
     endDate?: string;
+
+    @IsOptional()
+    @IsString()
+    stockType?: 'TI' | 'ELECTRIC';
 }

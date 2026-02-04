@@ -58,10 +58,12 @@ export class ReservationController {
     async getTimeline(
         @Query('startDate') startDate: string,
         @Query('endDate') endDate: string,
+        @Query('stockType') stockType?: 'TI' | 'ELECTRIC',
     ) {
         return this.reservationService.getTimeline(
             new Date(startDate),
             new Date(endDate),
+            stockType,
         );
     }
 

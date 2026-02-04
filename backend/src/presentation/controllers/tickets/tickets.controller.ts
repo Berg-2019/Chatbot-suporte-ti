@@ -27,12 +27,14 @@ export class TicketsController {
   async findAll(
     @Query('status') status?: TicketStatus,
     @Query('assignedTo') assignedToId?: string,
+    @Query('category') category?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.ticketsService.findAll({
       status,
       assignedToId,
+      category,
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
     });

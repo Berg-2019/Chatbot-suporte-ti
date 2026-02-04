@@ -170,6 +170,7 @@ export interface ReservationFilters {
     status?: string;
     startDate?: string;
     endDate?: string;
+    stockType?: 'TI' | 'ELECTRIC';
 }
 
 export const reservationApi = {
@@ -180,17 +181,19 @@ export const reservationApi = {
         if (filters?.status) params.set('status', filters.status);
         if (filters?.startDate) params.set('startDate', filters.startDate);
         if (filters?.endDate) params.set('endDate', filters.endDate);
+        if (filters?.stockType) params.set('stockType', filters.stockType);
 
         const query = params.toString();
         return apiFetch<Reservation[]>(`/reservations${query ? `?${query}` : ''}`);
     },
 
     // Get timeline for a date range
-    getTimeline: (startDate: Date, endDate: Date): Promise<Reservation[]> => {
+    getTimeline: (startDate: Date, endDate: Date, stockType?: 'TI' | 'ELECTRIC'): Promise<Reservation[]> => {
         const params = new URLSearchParams({
             startDate: startDate.toISOString(),
             endDate: endDate.toISOString(),
         });
+        if (stockType) params.set('stockType', stockType);
         return apiFetch<Reservation[]>(`/reservations/timeline?${params}`);
     },
 
@@ -310,9 +313,26 @@ export interface User {
     department?: string;
 }
 
+export interface GlpiUser {
+    id: number;
+    name: string;
+    realname: string;
+    firstname: string;
+    email: string;
+    is_active: boolean;
+}
+
 export const usersApi = {
     getAll: (): Promise<User[]> => {
         return apiFetch<User[]>('/users');
+    },
+
+    getGlpiUsers: (): Promise<GlpiUser[]> => {
+        return apiFetch<GlpiUser[]>('/users/glpi');
+    },
+
+    getGroups: (): Promise<{ id: number; name: string; completename: string; level: number }[]> => {
+        return apiFetch('/users/groups');
     },
 
     getTechnicians: (): Promise<User[]> => {
@@ -375,18 +395,37 @@ export interface TicketFilters {
     limit?: number;
 }
 
+export interface CreateTicketDto {
+    title: string;
+    description: string;
+    phoneNumber?: string;
+    customerName?: string;
+    sector?: string;
+    category?: string;
+    priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+}
+
 export const ticketsApi = {
     // Get all tickets
     getAll: (filters?: TicketFilters): Promise<TicketsResponse> => {
         const params = new URLSearchParams();
         if (filters?.status) params.set('status', filters.status);
         if (filters?.technician) params.set('technician', filters.technician);
+        if (filters?.category) params.set('category', filters.category);
         if (filters?.search) params.set('search', filters.search);
         if (filters?.page) params.set('page', filters.page.toString());
         if (filters?.limit) params.set('limit', filters.limit.toString());
 
         const query = params.toString();
         return apiFetch<TicketsResponse>(`/tickets${query ? `?${query}` : ''}`);
+    },
+
+    // Create new ticket (manual)
+    create: (data: CreateTicketDto): Promise<Ticket> => {
+        return apiFetch<Ticket>('/tickets', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
     },
 
     // Get single ticket

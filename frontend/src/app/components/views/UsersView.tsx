@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
-import { usersApi, type User as ApiUser } from '@/app/services/api';
+import { usersApi, type User as ApiUser, type GlpiUser } from '@/app/services/api';
 
 interface User extends Omit<ApiUser, 'role'> {
   role: 'Admin' | 'Técnico' | 'Usuário';
@@ -30,10 +30,12 @@ export default function UsersView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'local' | 'glpi'>('local');
 
   // Form State
   const [formData, setFormData] = useState({
     name: '',
+    username: '', // Login/username personalizado
     email: '',
     phone: '',
     department: '',
@@ -43,7 +45,9 @@ export default function UsersView() {
   });
 
   const [users, setUsers] = useState<User[]>([]);
+  const [glpiUsers, setGlpiUsers] = useState<GlpiUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [glpiLoading, setGlpiLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
 
@@ -77,9 +81,28 @@ export default function UsersView() {
     }
   };
 
+  const fetchGlpiUsers = async () => {
+    setGlpiLoading(true);
+    try {
+      const data = await usersApi.getGlpiUsers();
+      setGlpiUsers(data);
+    } catch (err: any) {
+      console.error('Failed to fetch GLPI users', err);
+      toast.error('Erro ao carregar usuários do GLPI');
+    } finally {
+      setGlpiLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'glpi' && glpiUsers.length === 0) {
+      fetchGlpiUsers();
+    }
+  }, [activeTab]);
 
   const filteredUsers = users.filter(user => {
     const matchesSearch =
@@ -125,9 +148,13 @@ export default function UsersView() {
           toast.error('Senha é obrigatória para novos usuários');
           return;
         }
+        if (!formData.username) {
+          toast.error('Username é obrigatório para novos usuários');
+          return;
+        }
         // Mode: Create
         await usersApi.createGlpiUser({
-          login: formData.email.split('@')[0],
+          login: formData.username, // Usa o username personalizado
           password: formData.password,
           firstName: formData.name.split(' ')[0],
           lastName: formData.name.split(' ').slice(1).join(' '),
@@ -152,6 +179,7 @@ export default function UsersView() {
     setEditingUserId(user.id);
     setFormData({
       name: user.name,
+      username: user.email.split('@')[0], // Extrai username do email como fallback
       email: user.email,
       phone: user.phone || '',
       department: user.department || '',
@@ -179,6 +207,7 @@ export default function UsersView() {
     setEditingUserId(null);
     setFormData({
       name: '',
+      username: '',
       email: '',
       phone: '',
       department: '',
@@ -294,6 +323,30 @@ export default function UsersView() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-800 pb-4">
+        <button
+          onClick={() => setActiveTab('local')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            activeTab === 'local'
+              ? 'bg-blue-600 text-white'
+              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          }`}
+        >
+          Usuários Locais ({users.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('glpi')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            activeTab === 'glpi'
+              ? 'bg-blue-600 text-white'
+              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          }`}
+        >
+          Usuários GLPI ({glpiUsers.length})
+        </button>
+      </div>
+
       {/* Filters */}
       <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -308,20 +361,40 @@ export default function UsersView() {
             />
           </div>
 
-          <select
-            value={filterRole}
-            onChange={(e) => setFilterRole(e.target.value)}
-            className="bg-slate-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">Todas as Funções</option>
-            <option value="Admin">Admin</option>
-            <option value="Técnico">Técnico</option>
-            <option value="Usuário">Usuário</option>
-          </select>
+          {activeTab === 'local' && (
+            <select
+              value={filterRole}
+              onChange={(e) => setFilterRole(e.target.value)}
+              className="bg-slate-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Todas as Funções</option>
+              <option value="Admin">Admin</option>
+              <option value="Técnico">Técnico</option>
+              <option value="Usuário">Usuário</option>
+            </select>
+          )}
+
+          {activeTab === 'glpi' && (
+            <button
+              onClick={fetchGlpiUsers}
+              disabled={glpiLoading}
+              className="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-4 py-3 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+            >
+              {glpiLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Shield size={18} /> Atualizar do GLPI
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Users List */}
+      {/* Users List - Local */}
+      {activeTab === 'local' && (
+      <>
       <div className="space-y-4">
         {filteredUsers.map((user) => (
           <div
@@ -418,6 +491,89 @@ export default function UsersView() {
           <p className="text-slate-400">Nenhum usuário encontrado</p>
         </div>
       )}
+      </>
+      )}
+
+      {/* Users List - GLPI */}
+      {activeTab === 'glpi' && (
+        <>
+          {glpiLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {glpiUsers
+                .filter(u =>
+                  u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  u.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  u.realname?.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .map((user) => (
+                <div
+                  key={user.id}
+                  className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 hover:border-slate-700/50 transition-all"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg">
+                        {(user.firstname || user.name || '?').charAt(0).toUpperCase()}
+                      </div>
+
+                      <div className="flex-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                          <h3 className="text-white font-semibold text-lg">
+                            {user.firstname && user.realname
+                              ? `${user.firstname} ${user.realname}`
+                              : user.name}
+                          </h3>
+                          <div className="flex gap-2">
+                            <span className="px-3 py-1 rounded-full text-xs font-medium border bg-green-500/20 text-green-400 border-green-500/30">
+                              GLPI
+                            </span>
+                            {user.is_active ? (
+                              <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
+                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div> Ativo
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-700/50 text-slate-400 border border-slate-600/50">
+                                <div className="w-1.5 h-1.5 bg-slate-500 rounded-full"></div> Inativo
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <Users size={16} />
+                            <span>Login: {user.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <Mail size={16} />
+                            <span className="truncate">{user.email || 'Sem email'}</span>
+                          </div>
+                          <div className="text-slate-400">
+                            <span className="text-slate-500 font-medium">ID GLPI:</span> {user.id}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {glpiUsers.length === 0 && (
+                <div className="text-center py-12">
+                  <Users className="mx-auto text-slate-600 mb-4" size={48} />
+                  <p className="text-slate-400">Nenhum usuário encontrado no GLPI</p>
+                  <p className="text-slate-500 text-sm mt-2">Verifique a conexão com o GLPI</p>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
 
       {/* CREATE USER MODAL */}
       <AnimatePresence>
@@ -452,15 +608,33 @@ export default function UsersView() {
                     <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Dados Básicos</h4>
 
                     <div className="grid grid-cols-1 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-300">Nome Completo *</label>
-                        <input
-                          type="text"
-                          value={formData.name}
-                          onChange={e => setFormData({ ...formData, name: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
-                          placeholder="Ex: João Silva"
-                        />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-300">Nome Completo *</label>
+                          <input
+                            type="text"
+                            value={formData.name}
+                            onChange={e => setFormData({ ...formData, name: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
+                            placeholder="Ex: João Silva"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-300">
+                            Username (Login) {!editingUserId && '*'}
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.username}
+                            onChange={e => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s/g, '') })}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
+                            placeholder="Ex: joao.silva"
+                            disabled={!!editingUserId}
+                          />
+                          {!editingUserId && (
+                            <p className="text-xs text-slate-500">Nome de usuário para login no GLPI</p>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
