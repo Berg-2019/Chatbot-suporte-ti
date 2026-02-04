@@ -34,6 +34,7 @@ export class UsersService {
         email: true,
         name: true,
         role: true,
+        active: true,
       },
       orderBy: { name: 'asc' },
     });
