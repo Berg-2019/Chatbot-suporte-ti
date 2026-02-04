@@ -1,6 +1,7 @@
 import { Send, Users, Paperclip, Smile } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { teamChatApi, type TeamMessage } from '@/app/services/api';
+import { teamChatApi, usersApi, type TeamMessage, type User } from '@/app/services/api';
+import { playWhatsappSound } from '@/app/utils/sound';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 
@@ -8,6 +9,7 @@ export default function TeamChatView() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<TeamMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null); // Ideally get from context/auth
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -25,9 +27,10 @@ export default function TeamChatView() {
     }
   }, []);
 
-  // Fetch initial messages and connect socket
+  // Fetch initial messages, users and connect socket
   useEffect(() => {
     loadMessages();
+    loadUsers();
     connectSocket();
 
     return () => {
@@ -36,6 +39,17 @@ export default function TeamChatView() {
       }
     };
   }, []);
+
+  // ... (auto scroll and loadMessages remain same)
+
+  const loadUsers = async () => {
+    try {
+      const data = await usersApi.getTechnicians();
+      setUsers(data);
+    } catch (error) {
+      console.error("Error loading users", error);
+    }
+  };
 
   // Auto scroll
   useEffect(() => {
@@ -67,31 +81,44 @@ export default function TeamChatView() {
     socketRef.current = io(`${SOCKET_URL}/team-chat`, {
       auth: { token },
       transports: ['websocket'],
-    });
+    } as any);
 
-    socketRef.current.on('connect', () => {
+    (socketRef.current as any).on('connect', () => {
       console.log('Connected to Team Chat');
     });
 
-    socketRef.current.on('newMessage', (newMessage: TeamMessage) => {
+    (socketRef.current as any).on('newMessage', (newMessage: TeamMessage) => {
       setMessages((prev) => {
-        // Avoid duplicates if we handled optimistic update (though we aren't here for simplicity)
+        // Avoid duplicates
         if (prev.some(m => m.id === newMessage.id)) return prev;
+
+        // Play sound if not my own message
+        // We need to access the LATEST value of currentUser. 
+        // Since we are in a closure created at mount, 'currentUser' might be stale if it wasn't a ref or dependency.
+        // However, 'currentUser' is state. To be safe, let's parse token again or check senderId against local storage directly if needed.
+        // Or simpler: check against the ID stored in localStorage if we have it? 
+        // Actually, let's just play it for now. The check `!isOwn` in render uses `currentUser`. 
+        // To do it correctly inside this callback which is bound once:
+        const token = localStorage.getItem('authToken');
+        let myId = '';
+        if (token) {
+          try { myId = JSON.parse(atob(token.split('.')[1])).id; } catch { }
+        }
+
+        if (newMessage.senderId !== myId) {
+          playWhatsappSound();
+        }
+
         return [...prev, newMessage];
       });
     });
 
-    socketRef.current.on('error', (err: any) => {
+    (socketRef.current as any).on('error', (err: any) => {
       console.error('Socket error:', err);
     });
   };
 
-  const teamMembers = [
-    { name: 'Matheus Soares', status: 'online', role: 'Admin' },
-    { name: 'Robison TI', status: 'online', role: 'Técnico' },
-    { name: 'Carlos Oliveira', status: 'busy', role: 'Técnico' },
-    { name: 'Ana Paula Santos', status: 'offline', role: 'Suporte' },
-  ];
+
 
   const handleSendMessage = async () => {
     if (!message.trim()) return;
@@ -162,8 +189,8 @@ export default function TeamChatView() {
                     )}
                     <div
                       className={`rounded-lg px-4 py-3 ${isOwn
-                          ? 'bg-blue-600 text-white rounded-tr-none'
-                          : 'bg-slate-800 text-white rounded-tl-none'
+                        ? 'bg-blue-600 text-white rounded-tr-none'
+                        : 'bg-slate-800 text-white rounded-tl-none'
                         }`}
                     >
                       <p className="text-sm">{msg.content}</p>
@@ -212,27 +239,26 @@ export default function TeamChatView() {
         <h3 className="text-lg font-semibold text-white mb-6">Membros da Equipe</h3>
 
         <div className="space-y-3">
-          {teamMembers.map((member, index) => (
+          {users.map((user) => (
             <div
-              key={index}
+              key={user.id}
               className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800/50 transition-colors cursor-pointer"
             >
               <div className="relative">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                  {member.name.charAt(0)}
+                  {user.name.charAt(0).toUpperCase()}
                 </div>
-                <div className={`absolute bottom-0 right-0 w-3 h-3 ${getStatusColor(member.status)} rounded-full border-2 border-slate-900`}></div>
+                {/* Assuming all active users are online for now, or we can check last activity later */}
+                <div className={`absolute bottom-0 right-0 w-3 h-3 ${user.active ? 'bg-green-500' : 'bg-slate-600'} rounded-full border-2 border-slate-900`}></div>
               </div>
 
               <div className="flex-1">
-                <div className="text-white font-medium text-sm">{member.name}</div>
-                <div className="text-slate-400 text-xs">{member.role}</div>
+                <div className="text-white font-medium text-sm">{user.name}</div>
+                <div className="text-slate-400 text-xs">{user.role}</div>
               </div>
 
               <div className="text-xs text-slate-500 capitalize">
-                {member.status === 'online' && '🟢'}
-                {member.status === 'busy' && '🟡'}
-                {member.status === 'offline' && '⚫'}
+                {user.active ? '🟢' : '⚫'}
               </div>
             </div>
           ))}

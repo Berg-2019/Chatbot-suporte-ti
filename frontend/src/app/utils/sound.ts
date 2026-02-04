@@ -27,6 +27,8 @@ export const playNotificationSound = () => {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext) {
             const audioCtx = new AudioContext();
+
+            // Create a "pop" sound similar to WhatsApp
             const oscillator = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
 
@@ -34,16 +36,21 @@ export const playNotificationSound = () => {
             gainNode.connect(audioCtx.destination);
 
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // 800Hz
-            oscillator.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.1);
+            // Start at 800Hz and drop quickly to 500Hz
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(500, audioCtx.currentTime + 0.1);
 
-            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            // Envelope: Attack (fast) -> Decay (fast)
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
 
-            oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.1);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
         }
     } catch (err) {
         console.error('Error playing sound:', err);
     }
 };
+
+export const playWhatsappSound = playNotificationSound;
