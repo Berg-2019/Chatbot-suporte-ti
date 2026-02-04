@@ -84,7 +84,7 @@ export default function ReportsView() {
       ['SLA Compliance', `${Math.round(metrics.slaCompliance)}%`]
     ];
 
-    autoTable(doc, {
+    autoTable(doc as any, {
       startY: 50,
       head: [['Métrica', 'Valor']],
       body: summaryData,
@@ -93,14 +93,14 @@ export default function ReportsView() {
     });
 
     // Categories
-    const categoriesData = metrics.ticketsByCategory.map(c => [c.name, c.value]);
+    const categoriesData = metrics.ticketsByCategory.map(c => [c.name, c.value.toString()]);
 
     // Check if previous table exists to position correctly
     const finalY = (doc as any).lastAutoTable.finalY || 100;
 
     doc.text('Tickets por Categoria', 14, finalY + 15);
 
-    autoTable(doc, {
+    autoTable(doc as any, {
       startY: finalY + 20,
       head: [['Categoria', 'Quantidade']],
       body: categoriesData,
