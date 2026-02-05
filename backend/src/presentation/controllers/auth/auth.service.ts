@@ -78,6 +78,11 @@ function determineProfile(groups: string[]): UserProfile {
   return 'tech_ti';
 }
 
+// Determine sector based on profile
+function determineSector(profile: UserProfile): string {
+  return profile === 'tech_elect' ? 'ELECTRIC' : 'TI';
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -171,7 +176,7 @@ export class AuthService {
 
     // Listas estritas de grupos
     const STRICT_ADMIN_GROUPS = ['admin', 'administradores', 'administrador', 'super-admin', 'gestores', 'gestão'];
-    const STRICT_TECH_GROUPS = ['tecnico', 'tecnicos', 'técnicos', 'suporte', 'support', 'helpdesk', 'ti', 'n1', 'n2', 'n3', 'l1', 'l2', 'l3'];
+    const STRICT_TECH_GROUPS = ['tecnico', 'tecnicos', 'técnicos', 'suporte', 'support', 'helpdesk', 'ti', 'n1', 'n2', 'n3', 'l1', 'l2', 'l3', 'eletrica', 'elétrica', 'eletricista', 'manutencao eletrica', 'manutenção elétrica'];
 
     // Normalizar nomes dos grupos do usuário
     const userGroupsLower = groupNames; // Já estão em lower (line 131)
@@ -221,6 +226,10 @@ export class AuthService {
       console.log('Creating new user');
       const randomPassword = await bcrypt.hash(Math.random().toString(36), 12);
 
+      // Determine sector from profile (set after Step 4 for new users)
+      const profile = determineProfile(groupNames);
+      const sector = determineSector(profile);
+
       user = await this.prisma.user.create({
         data: {
           email: authResult.user.email || `${dto.login}@glpi.local`,
@@ -230,12 +239,16 @@ export class AuthService {
           glpiUserId: authResult.user.id,
           technicianLevel,
           phoneNumber: authResult.user.phone || null,
+          sector,
         },
       });
-      console.log(`✅ Usuário GLPI sincronizado: ${user.name} (${role})`);
+      console.log(`✅ Usuário GLPI sincronizado: ${user.name} (${role}, sector: ${sector})`);
     } else {
       // Atualizar dados se mudaram
       console.log('Updating existing user');
+      const profile = determineProfile(groupNames);
+      const sector = determineSector(profile);
+
       user = await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -243,6 +256,7 @@ export class AuthService {
           role,
           technicianLevel,
           phoneNumber: authResult.user.phone || user.phoneNumber,
+          sector,
         },
       });
     }
@@ -262,6 +276,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       glpiId: user.glpiUserId,
+      sector: user.sector,
     });
     console.log('Step 6 success: Token generated');
 
@@ -328,6 +343,7 @@ export class AuthService {
       name: user.name,
       role: user.role,
       technicianLevel: user.technicianLevel,
+      sector: user.sector,
     };
   }
 }

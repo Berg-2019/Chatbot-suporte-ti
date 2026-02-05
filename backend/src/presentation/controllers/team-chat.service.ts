@@ -5,9 +5,10 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 export class TeamChatService {
     constructor(private prisma: PrismaService) { }
 
-    async getMessages() {
-        // Buscar últimas 50 mensagens
+    async getMessages(sector: string = 'TI') {
+        // Buscar últimas 50 mensagens do setor específico
         const messages = await this.prisma.teamMessage.findMany({
+            where: { sector },
             orderBy: { createdAt: 'desc' },
             take: 50,
             include: {
@@ -16,6 +17,7 @@ export class TeamChatService {
                         id: true,
                         name: true,
                         role: true,
+                        sector: true,
                     },
                 },
             },
@@ -25,11 +27,12 @@ export class TeamChatService {
         return messages.reverse();
     }
 
-    async saveMessage(userId: string, content: string) {
+    async saveMessage(userId: string, content: string, sector: string = 'TI') {
         return this.prisma.teamMessage.create({
             data: {
                 content,
                 senderId: userId,
+                sector,
             },
             include: {
                 sender: {
@@ -37,6 +40,7 @@ export class TeamChatService {
                         id: true,
                         name: true,
                         role: true,
+                        sector: true,
                     },
                 },
             },

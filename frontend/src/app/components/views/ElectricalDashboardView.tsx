@@ -67,7 +67,7 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
         const cat = (t.category || '').toLowerCase();
         const sec = (t.sector || '').toLowerCase();
         return cat.includes('elétrica') || cat.includes('eletrica') ||
-               sec.includes('elétrica') || sec.includes('eletrica');
+          sec.includes('elétrica') || sec.includes('eletrica');
       });
 
       // Sound Notification Logic
@@ -224,7 +224,7 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
     <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800/50">
       <h3 className="text-lg font-semibold text-white mb-4">Volume (Semana)</h3>
       <div className="h-[250px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorElect" x1="0" y1="0" x2="0" y2="1">

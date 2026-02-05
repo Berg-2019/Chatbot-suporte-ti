@@ -185,7 +185,17 @@ export default function TeamChatView() {
                 >
                   <div className={`max-w-[70%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
                     {!isOwn && (
-                      <div className="text-xs text-slate-400 mb-1 px-1">{msg.sender.name}</div>
+                      <div className="text-xs text-slate-400 mb-1 px-1">
+                        {msg.sender.name}
+                        {msg.sender.sector && (
+                          <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${msg.sender.sector === 'ELECTRIC'
+                              ? 'bg-yellow-500/20 text-yellow-400'
+                              : 'bg-blue-500/20 text-blue-400'
+                            }`}>
+                            {msg.sender.sector === 'ELECTRIC' ? 'Elétrica' : 'TI'}
+                          </span>
+                        )}
+                      </div>
                     )}
                     <div
                       className={`rounded-lg px-4 py-3 ${isOwn

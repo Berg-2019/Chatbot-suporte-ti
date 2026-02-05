@@ -56,17 +56,14 @@ export class UsersController {
 
   @Get('groups')
   async getGroups(@Request() req: any) {
-    if (req.user.role !== 'ADMIN') {
-      throw new ForbiddenException('Apenas admins');
-    }
+    // Allow all authenticated users to view groups
     return this.glpiService.getGroups();
   }
 
   @Get('glpi')
   async getGlpiUsers(@Request() req: any) {
-    if (req.user.role !== 'ADMIN') {
-      throw new ForbiddenException('Apenas admins');
-    }
+    // Allow all authenticated users to view GLPI users
+    // TODO: Filter by user's sector when sector isolation is complete
     return this.glpiService.getUsers();
   }
 

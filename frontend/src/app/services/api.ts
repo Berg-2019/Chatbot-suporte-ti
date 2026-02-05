@@ -688,6 +688,7 @@ export interface TeamMessage {
         id: string;
         name: string;
         role: 'ADMIN' | 'AGENT';
+        sector?: string;
     };
     createdAt: string;
 }

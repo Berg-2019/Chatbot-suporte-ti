@@ -19,6 +19,7 @@ const STATES = {
   SELECT_SECTOR_TI: 'select_sector_ti',
   SELECT_SECTOR_ELECTRIC: 'select_sector_electric',
   SELECT_SECTOR_GENERIC: 'select_sector_generic', // Para fluxos genéricos (técnico, reserva)
+  ASK_DEPARTMENT: 'ask_department', // Departamento do solicitante (ex: Financeiro, RH)
   ASK_NAME: 'ask_name',
   DESCRIBE_PROBLEM: 'describe_problem',
   CHECK_FAQ: 'check_faq',
@@ -273,6 +274,10 @@ class FlowHandler {
         await this.handleSelectSectorElectric(sock, from, normalizedText, session);
         break;
 
+      case STATES.ASK_DEPARTMENT:
+        await this.handleAskDepartment(sock, from, text, session);
+        break;
+
       case STATES.SELECT_SECTOR_GENERIC:
         await this.handleSelectSectorGeneric(sock, from, text, session);
         break;
@@ -347,12 +352,13 @@ class FlowHandler {
 
           if (contactRes?.data) {
             const contact = contactRes.data;
-            // Contato existe! Pular seleção de setor
-            session.data.sector = contact.sector;
+            // Contato existe! Usar departamento salvo e ir para seleção de categoria
+            session.data.userDepartment = contact.sector;  // Departamento salvo
             session.data.contactName = contact.name;
-            session.state = STATES.DESCRIBE_PROBLEM;
+            session.data.ticketType = 'ti';
+            session.state = STATES.SELECT_SECTOR_TI;
             await redisService.setSession(phone, session);
-            await this.sendMessage(sock, from, `👋 Olá *${contact.name}*! (${contact.sector})\n\n${config.messages.askProblem}`);
+            await this.sendMessage(sock, from, `👋 Olá *${contact.name}*! (${contact.sector})\n\n${config.messages.askSectorTI}`);
             break;
           }
         } catch (e) {
@@ -411,10 +417,11 @@ class FlowHandler {
           if (contactRes?.data) {
             const contact = contactRes.data;
             session.data.contactName = contact.name;
+            session.data.userDepartment = contact.sector;  // Departamento salvo
             session.data.ticketType = 'electric';
             session.state = STATES.SELECT_SECTOR_ELECTRIC;
             await redisService.setSession(phone, session);
-            await this.sendMessage(sock, from, `👋 Olá *${contact.name}*!\n\n${config.messages.askSectorElectric}`);
+            await this.sendMessage(sock, from, `👋 Olá *${contact.name}*! (${contact.sector})\n\n${config.messages.askSectorElectric}`);
             break;
           }
         } catch (e) {
@@ -468,14 +475,32 @@ class FlowHandler {
     }
 
     // Fluxo normal de ticket (TI ou Elétrica)
+    // Agora vamos perguntar o departamento do usuário primeiro
+    session.state = STATES.ASK_DEPARTMENT;
+    await redisService.setSession(phone, session);
+    await this.sendMessage(sock, from, `Obrigado, ${name}!\n\n${config.messages.askDepartment}`);
+  }
+
+  async handleAskDepartment(sock, from, text, session) {
+    const phone = from.split('@')[0];
+    const department = text.trim();
+
+    if (department.length < 2) {
+      await this.sendMessage(sock, from, 'Por favor, informe seu setor/departamento (ex: Financeiro, RH, Produção):');
+      return;
+    }
+
+    session.data.userDepartment = department;
+
+    // Agora perguntar a categoria do problema (TI ou Elétrica)
     if (session.data.ticketType === 'electric') {
       session.state = STATES.SELECT_SECTOR_ELECTRIC;
       await redisService.setSession(phone, session);
-      await this.sendMessage(sock, from, `Obrigado, ${name}!\n\n${config.messages.askSectorElectric}`);
+      await this.sendMessage(sock, from, config.messages.askSectorElectric);
     } else {
       session.state = STATES.SELECT_SECTOR_TI;
       await redisService.setSession(phone, session);
-      await this.sendMessage(sock, from, `Obrigado, ${name}!\n\n${config.messages.askSectorTI}`);
+      await this.sendMessage(sock, from, config.messages.askSectorTI);
     }
   }
 
@@ -488,8 +513,8 @@ class FlowHandler {
       return;
     }
 
-    session.data.sector = config.sectorsTI[sectorIndex].name;
-    session.data.sectorId = config.sectorsTI[sectorIndex].id;
+    session.data.category = config.sectorsTI[sectorIndex].name;
+    session.data.categoryId = config.sectorsTI[sectorIndex].id;
     session.state = STATES.DESCRIBE_PROBLEM;
     await redisService.setSession(phone, session);
     await this.sendMessage(sock, from, config.messages.askProblem);
@@ -504,8 +529,8 @@ class FlowHandler {
       return;
     }
 
-    session.data.sector = config.sectorsElectric[sectorIndex].name;
-    session.data.sectorId = config.sectorsElectric[sectorIndex].id;
+    session.data.category = config.sectorsElectric[sectorIndex].name;
+    session.data.categoryId = config.sectorsElectric[sectorIndex].id;
     session.state = STATES.DESCRIBE_PROBLEM;
     await redisService.setSession(phone, session);
     await this.sendMessage(sock, from, config.messages.askProblem);
@@ -671,13 +696,15 @@ class FlowHandler {
     if (['sim', 's', 'yes', 'confirmar', 'confirmo'].includes(text)) {
       // Criar ticket via RabbitMQ
       // IMPORTANTE: usar 'from' completo (com @s.whatsapp.net) para envio funcionar
+      const category = session.data.category || session.data.sector || 'Geral';
+      const userDepartment = session.data.userDepartment || session.data.sector || 'Não informado';
       const ticketData = {
         phoneNumber: from,  // JID completo para envio funcionar
-        title: `[${session.data.sector}] ${session.data.contactName} - ${session.data.problem.substring(0, 30)}${session.data.problem.length > 30 ? '...' : ''}`,
+        title: `[${category}] ${session.data.contactName} - ${session.data.problem.substring(0, 30)}${session.data.problem.length > 30 ? '...' : ''}`,
         description: session.data.problem,
-        sector: session.data.sector,
+        sector: userDepartment,  // Departamento do solicitante (ex: Financeiro)
         location: session.data.location,
-        category: session.data.sector,
+        category: category,  // Categoria do problema (ex: Elétrica - Tomadas)
         customerName: session.data.contactName,
       };
 

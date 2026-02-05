@@ -66,6 +66,7 @@ function MainContent() {
       case 'estoque':
         return <StockView />;
       case 'usuarios':
+        if (profile === 'tech_elect') return <UsersView />;
         return <UsersView />;
       case 'chat':
         return <TeamChatView />;

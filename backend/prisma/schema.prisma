@@ -37,6 +37,7 @@ model User {
   receiveAlerts Boolean           @default(true)
   department    String?
   permissions   String[]          @default([]) // Array de IDs dos módulos
+  sector        String            @default("TI")  // TI ou ELECTRIC
 
   tickets   Ticket[]
   messages  Message[]
@@ -372,10 +373,12 @@ model TeamMessage {
   content   String
   senderId  String
   sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sector    String   @default("TI")  // TI ou ELECTRIC
   createdAt DateTime @default(now())
 
   @@map("team_messages")
   @@index([createdAt])
+  @@index([sector])
 }
 
 // ===========================================================================

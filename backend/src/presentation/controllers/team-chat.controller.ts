@@ -12,18 +12,21 @@ export class TeamChatController {
     ) { }
 
     @Get()
-    async getMessages() {
-        return this.service.getMessages();
+    async getMessages(@Req() req: any) {
+        // Filter messages by user's sector
+        const sector = req.user.sector || 'TI';
+        return this.service.getMessages(sector);
     }
 
     @Post()
     async sendMessage(@Body() dto: { content: string }, @Req() req: any) {
-        // userId comes from JWT guard (req.user)
+        // userId and sector come from JWT guard (req.user)
         const userId = req.user.id;
-        const message = await this.service.saveMessage(userId, dto.content);
+        const sector = req.user.sector || 'TI';
+        const message = await this.service.saveMessage(userId, dto.content, sector);
 
-        // Notify via WebSocket
-        this.gateway.server.emit('newMessage', message);
+        // Notify via WebSocket - emit to sector-specific room
+        this.gateway.server.to(`team-chat:${sector}`).emit('newMessage', message);
 
         return message;
     }

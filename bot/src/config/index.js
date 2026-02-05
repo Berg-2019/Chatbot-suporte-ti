@@ -97,13 +97,16 @@ Digite o número:`,
 
 Digite o número:`,
 
+    askDepartment: '🏢 Em qual *setor/departamento* você trabalha?\n\nExemplo: Financeiro, RH, Produção, Administrativo, etc.',
+
     askProblem: '📝 Descreva brevemente o seu problema:',
 
     askLocation: '📍 Qual sua localização? (Setor/Sala)',
 
     confirmTicket: (data) => `✅ Vou criar seu chamado com os dados:
 
-📋 **Área:** ${data.sector}
+🏢 **Setor do Solicitante:** ${data.userDepartment || data.sector}
+📋 **Categoria:** ${data.category || data.sector}
 📝 **Problema:** ${data.problem}
 📍 **Local:** ${data.location}
 

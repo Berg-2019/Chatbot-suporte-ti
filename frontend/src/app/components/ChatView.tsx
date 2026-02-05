@@ -149,6 +149,14 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
               <div className="flex items-center text-xs text-slate-400 gap-2">
                 <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">#{ticket.ticketNumber || '0000'}</span>
                 <span>• {ticket.category || 'Geral'}</span>
+                {ticket.sector && (
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${ticket.sector.toLowerCase().includes('elétrica') || ticket.sector.toLowerCase().includes('eletrica')
+                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                    : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                    }`}>
+                    {ticket.sector}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -166,9 +174,16 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
             </p>
           </div>
           <div className="flex gap-4 mt-2 text-xs text-blue-300/70">
-            <span className="flex items-center gap-1"><Briefcase size={12} /> {ticket.sector || 'Geral'}</span>
-            {/* hidden location for now as it's not in the interface, or could be part of description */}
-            {/* <span className="flex items-center gap-1"><MapPin size={12} /> Sala 302</span> */}
+            <span className="flex items-center gap-1">
+              <User size={12} />
+              <span className="text-slate-400">Setor:</span>
+              <span className="font-medium text-blue-200">{ticket.sector || 'Não informado'}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <Briefcase size={12} />
+              <span className="text-slate-400">Categoria:</span>
+              <span className="font-medium text-blue-200">{ticket.category || 'Geral'}</span>
+            </span>
           </div>
         </div>
 

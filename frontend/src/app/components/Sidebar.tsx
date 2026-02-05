@@ -1,11 +1,11 @@
-import { 
-  LayoutDashboard, 
-  BarChart3, 
-  Bot, 
-  FileText, 
-  HelpCircle, 
-  Package, 
-  Users, 
+import {
+  LayoutDashboard,
+  BarChart3,
+  Bot,
+  FileText,
+  HelpCircle,
+  Package,
+  Users,
   MessageSquare,
   Menu,
   X,
@@ -38,7 +38,7 @@ const menuItems: MenuItem[] = [
   { id: 'relatorios', label: 'Relatórios', icon: FileText, roles: ['admin', 'tech_ti', 'manager'] },
   { id: 'faq', label: 'FAQ', icon: HelpCircle, roles: ['admin', 'tech_ti'] },
   { id: 'estoque', label: 'Estoque', icon: Package, roles: ['admin', 'tech_ti', 'tech_elect'] },
-  { id: 'usuarios', label: 'Usuários', icon: Users, roles: ['admin', 'manager'] },
+  { id: 'usuarios', label: 'Usuários', icon: Users, roles: ['admin', 'manager', 'tech_elect'] },
   { id: 'chat', label: 'Chat Equipe', icon: MessageSquare, roles: ['admin', 'tech_ti', 'tech_elect', 'manager'] },
 ];
 
@@ -87,13 +87,12 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
         {/* Header */}
         <div className="p-6 border-b border-slate-800">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-              profile === 'tech_elect' ? 'bg-yellow-500' : 
-              profile === 'manager' ? 'bg-purple-600' : 'bg-blue-600'
-            }`}>
-              {profile === 'tech_elect' ? <Zap className="text-white" size={24} /> : 
-               profile === 'manager' ? <Briefcase className="text-white" size={24} /> :
-               <LayoutDashboard className="text-white" size={24} />}
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${profile === 'tech_elect' ? 'bg-yellow-500' :
+                profile === 'manager' ? 'bg-purple-600' : 'bg-blue-600'
+              }`}>
+              {profile === 'tech_elect' ? <Zap className="text-white" size={24} /> :
+                profile === 'manager' ? <Briefcase className="text-white" size={24} /> :
+                  <LayoutDashboard className="text-white" size={24} />}
             </div>
             <div>
               <h1 className="text-white font-semibold">Helpdesk</h1>
@@ -113,7 +112,7 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
             const Icon = item.icon;
             const isActive = activeItem === item.id;
             const badgeCount = getBadgeCount(item.id);
-            
+
             return (
               <button
                 key={item.id}
@@ -124,8 +123,8 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
                 className={`
                   w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium
                   transition-all duration-200
-                  ${isActive 
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                  ${isActive
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }
                 `}
@@ -137,8 +136,8 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
                 {badgeCount > 0 && (
                   <span className={`
                     flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold
-                    ${isActive 
-                      ? 'bg-white text-blue-600' 
+                    ${isActive
+                      ? 'bg-white text-blue-600'
                       : 'bg-red-500 text-white'
                     }
                   `}>
