@@ -1,6 +1,7 @@
 import { Zap, AlertTriangle, CheckCircle, Clock, Plus, X, MapPin, User, FileText, CalendarClock, MessageCircle, XCircle, CheckCircle2, LayoutDashboard, ListTodo } from 'lucide-react';
 import MetricCard from '../MetricCard';
 import ReservationChat from '../ReservationChat';
+import ServiceReportModal from '../common/ServiceReportModal';
 import MobileFloatingMenu from '../MobileFloatingMenu';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useState, useEffect, useRef } from 'react';
@@ -32,6 +33,7 @@ interface ElectricalDashboardViewProps {
 
 export default function ElectricalDashboardView({ onTicketClick, refreshTrigger }: ElectricalDashboardViewProps) {
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
+  const [isServiceReportModalOpen, setIsServiceReportModalOpen] = useState(false);
   const [activeReservationChat, setActiveReservationChat] = useState<{ requester: string, assetName: string, id: number } | null>(null);
   const badges = useBadges();
 
@@ -318,12 +320,20 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
           <h2 className="text-2xl font-bold text-white">Painel Elétrica</h2>
           <p className="text-slate-400 hidden md:block">Monitoramento de ordens de serviço e manutenção predial</p>
         </div>
-        <button
-          onClick={() => setIsNewOrderModalOpen(true)}
-          className="bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-yellow-500/20"
-        >
-          <Plus size={20} /> <span className="hidden sm:inline">Nova Ordem</span>
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsServiceReportModalOpen(true)}
+            className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 border border-slate-700"
+          >
+            <FileText size={20} /> <span className="hidden sm:inline">Relatório de Serviço</span>
+          </button>
+          <button
+            onClick={() => setIsNewOrderModalOpen(true)}
+            className="bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-yellow-500/20"
+          >
+            <Plus size={20} /> <span className="hidden sm:inline">Nova Ordem</span>
+          </button>
+        </div>
       </div>
 
       {/* DESKTOP VIEW */}
@@ -455,16 +465,25 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
         )}
       </AnimatePresence>
 
-      {/* Reservation Chat Drawer */}
-      {activeReservationChat && (
-        <ReservationChat
-          isOpen={!!activeReservationChat}
-          onClose={() => setActiveReservationChat(null)}
-          requesterName={activeReservationChat.requester}
-          assetName={activeReservationChat.assetName}
-          reservationId={activeReservationChat.id}
-        />
-      )}
-    </div>
+      {
+        activeReservationChat && (
+          <ReservationChat
+            isOpen={!!activeReservationChat}
+            onClose={() => setActiveReservationChat(null)}
+            requesterName={activeReservationChat.requester}
+            assetName={activeReservationChat.assetName}
+            reservationId={activeReservationChat.id}
+          />
+        )
+      }
+
+      {/* Service Report Modal */}
+      <ServiceReportModal
+        isOpen={isServiceReportModalOpen}
+        onClose={() => setIsServiceReportModalOpen(false)}
+        onSuccess={() => fetchData()}
+        sector="ELECTRIC"
+      />
+    </div >
   );
 }

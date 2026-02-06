@@ -253,10 +253,11 @@ export class AuthService {
         where: { id: user.id },
         data: {
           name: fullName,
-          role,
+          // role, // Não sobrescrever role existente
           technicianLevel,
           phoneNumber: authResult.user.phone || user.phoneNumber,
-          sector,
+          // sector, // Não sobrescrever setor existente
+          glpiUserId: authResult.user.id,
         },
       });
     }
@@ -344,6 +345,7 @@ export class AuthService {
       role: user.role,
       technicianLevel: user.technicianLevel,
       sector: user.sector,
+      permissions: user.permissions,
     };
   }
 }

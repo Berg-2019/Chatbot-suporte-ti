@@ -765,39 +765,39 @@ export class GlpiService implements OnModuleInit {
   }): Promise<boolean> {
     await this.ensureSession();
 
+    // Construir objeto apenas com campos definidos (fora do try para acesso no catch)
+    const input: Record<string, any> = {};
+
+    // Sempre inclui campos mesmo se vazios (para permitir limpar valores)
+    if (userData.realname !== undefined) {
+      input.realname = userData.realname;
+    }
+    if (userData.firstname !== undefined) {
+      input.firstname = userData.firstname;
+    }
+    if (userData.phone !== undefined) {
+      input.phone = userData.phone;
+    }
+    if (userData.is_active !== undefined) {
+      input.is_active = userData.is_active ? 1 : 0;
+    }
+    if (userData.password !== undefined && userData.password !== '') {
+      input.password = userData.password;
+      input.password2 = userData.password; // GLPI requer confirmação
+    }
+
+    // GLPI requer o id dentro do input
+    input.id = userId;
+
+    console.log(`📝 [GLPI UPDATE] Dados recebidos:`, JSON.stringify(userData, null, 2));
+    console.log(`📝 [GLPI UPDATE] Input enviado para GLPI #${userId}:`, JSON.stringify(input, null, 2));
+
+    if (Object.keys(input).length === 1) { // Só tem o id
+      console.log('⚠️ [GLPI UPDATE] Nenhum campo para atualizar');
+      return true;
+    }
+
     try {
-      // Construir objeto apenas com campos definidos
-      const input: Record<string, any> = {};
-
-      // Sempre inclui campos mesmo se vazios (para permitir limpar valores)
-      if (userData.realname !== undefined) {
-        input.realname = userData.realname;
-      }
-      if (userData.firstname !== undefined) {
-        input.firstname = userData.firstname;
-      }
-      if (userData.phone !== undefined) {
-        input.phone = userData.phone;
-      }
-      if (userData.is_active !== undefined) {
-        input.is_active = userData.is_active ? 1 : 0;
-      }
-      if (userData.password !== undefined && userData.password !== '') {
-        input.password = userData.password;
-        input.password2 = userData.password; // GLPI requer confirmação
-      }
-
-      // GLPI requer o id dentro do input
-      input.id = userId;
-
-      console.log(`📝 [GLPI UPDATE] Dados recebidos:`, JSON.stringify(userData, null, 2));
-      console.log(`📝 [GLPI UPDATE] Input enviado para GLPI #${userId}:`, JSON.stringify(input, null, 2));
-
-      if (Object.keys(input).length === 1) { // Só tem o id
-        console.log('⚠️ [GLPI UPDATE] Nenhum campo para atualizar');
-        return true;
-      }
-
       const response = await this.client.put(
         `/User/${userId}`,
         { input },
@@ -821,6 +821,36 @@ export class GlpiService implements OnModuleInit {
       console.error('  Status:', error.response?.status);
       console.error('  Data:', JSON.stringify(error.response?.data, null, 2));
       console.error('  Message:', error.message);
+
+      // Verificar se o erro é sobre reutilização de senha
+      const errorData = error.response?.data;
+      const errorMessage = Array.isArray(errorData) ? errorData[1] : errorData?.message || '';
+      const isPasswordReuseError =
+        (typeof errorMessage === 'string' && errorMessage.toLowerCase().includes('senha')) ||
+        (typeof errorMessage === 'string' && errorMessage.toLowerCase().includes('password'));
+
+      // Se o erro é de senha e tentamos atualizar senha, refaz sem a senha
+      if (isPasswordReuseError && userData.password) {
+        console.log('⚠️ [GLPI UPDATE] Erro de senha - tentando atualizar sem alterar a senha...');
+        try {
+          const inputWithoutPassword = { ...input };
+          delete inputWithoutPassword.password;
+          delete inputWithoutPassword.password2;
+
+          if (Object.keys(inputWithoutPassword).length > 1) { // Tem outros campos além do id
+            const retryResponse = await this.client.put(
+              `/User/${userId}`,
+              { input: inputWithoutPassword },
+              { headers: this.getHeaders() },
+            );
+            console.log(`✅ [GLPI UPDATE] Usuário #${userId} atualizado (sem senha)`);
+            return true;
+          }
+        } catch (retryError: any) {
+          console.error('❌ [GLPI UPDATE] Erro na tentativa sem senha:', retryError.message);
+        }
+      }
+
       return false;
     }
   }

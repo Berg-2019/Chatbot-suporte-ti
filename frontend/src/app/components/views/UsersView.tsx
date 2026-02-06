@@ -101,10 +101,10 @@ export default function UsersView() {
           department: formData.department,
           role: backendRole,
           permissions: formData.permissions,
-          password: formData.password || undefined, // Só envia se tiver senha
+          password: formData.password && formData.password.trim() ? formData.password : undefined, // Só envia se tiver senha não-vazia
           groupId: formData.groupId ? Number(formData.groupId) : undefined
         });
-        toast.success('Usuário atualizado com sucesso no GLPI!');
+        toast.success('Usuário atualizado com sucesso!');
       } else {
         if (!formData.password) {
           toast.error('Senha é obrigatória para novos usuários');
@@ -170,20 +170,32 @@ export default function UsersView() {
   };
 
   const handleEditUser = (user: GlpiUser) => {
+    console.log('Editing user:', user); // Debug log
     setEditingUserId(String(user.id));
     const fullName = user.firstname && user.realname
       ? `${user.firstname} ${user.realname}`
       : user.name;
+
+    // Map GLPI group to frontend role
+    let roleValue = 'Usuário';
+    if (user.groups?.some(g => g.name?.toLowerCase().includes('admin') || g.name?.toLowerCase().includes('administrador'))) {
+      roleValue = 'Admin';
+    } else if (user.groups?.some(g => g.name?.toLowerCase().includes('manager') || g.name?.toLowerCase().includes('gerente'))) {
+      roleValue = 'Gerente';
+    } else if (user.groups?.some(g => g.name?.toLowerCase().includes('tech') || g.name?.toLowerCase().includes('técnico'))) {
+      roleValue = 'Técnico';
+    }
+
     setFormData({
       name: fullName,
       username: user.name,
       email: user.email || '',
       phone: user.phone || '',
-      department: '',
-      role: 'Usuário',
+      department: user.department || '',
+      role: roleValue,
       password: '',
-      permissions: ['dashboard', 'chat'],
-      groupId: ''
+      permissions: user.permissions || ['dashboard', 'chat'],
+      groupId: user.groups?.[0]?.id ? String(user.groups[0].id) : ''
     });
     setIsModalOpen(true);
   };
@@ -484,6 +496,7 @@ export default function UsersView() {
                         <label className="text-sm font-medium text-slate-300">Senha {editingUserId && <span className="text-xs text-slate-500 font-normal">(deixe em branco para manter)</span>}</label>
                         <input
                           type="password"
+                          autoComplete="new-password"
                           value={formData.password || ''}
                           onChange={e => setFormData({ ...formData, password: e.target.value })}
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-white outline-none focus:border-blue-500 transition-colors"
@@ -516,6 +529,7 @@ export default function UsersView() {
                           >
                             <option value="Usuário">Usuário</option>
                             <option value="Técnico">Técnico</option>
+                            <option value="Gerente">Gerente</option>
                             <option value="Admin">Admin</option>
                           </select>
                         </div>
@@ -635,7 +649,7 @@ export default function UsersView() {
                 </button>
                 <button
                   onClick={handleSaveUser}
-                  disabled={!formData.name || !formData.email}
+                  disabled={!formData.name || (!editingUserId && !formData.email)}
                   className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <Check size={18} /> {editingUserId ? 'Salvar Alterações' : 'Criar Usuário'}

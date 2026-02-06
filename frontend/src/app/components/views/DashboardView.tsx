@@ -22,8 +22,10 @@ import {
   ListTodo,
   Plus,
   X,
-  Ticket as TicketIcon
+  Ticket as TicketIcon,
+  FileText
 } from 'lucide-react';
+import ServiceReportModal from '../common/ServiceReportModal';
 import { useAuth } from '../../context/AuthContext';
 import { useBadges } from '../../hooks/useBadges';
 import { toast } from 'sonner';
@@ -62,6 +64,7 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
 
   // New Ticket Modal
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
+  const [isServiceReportModalOpen, setIsServiceReportModalOpen] = useState(false);
   const [newTicketForm, setNewTicketForm] = useState({
     title: '',
     description: '',
@@ -182,7 +185,7 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
         const cat = (t.category || '').toLowerCase();
         const sec = (t.sector || '').toLowerCase();
         return !cat.includes('elétrica') && !cat.includes('eletrica') &&
-               !sec.includes('elétrica') && !sec.includes('eletrica');
+          !sec.includes('elétrica') && !sec.includes('eletrica');
       });
 
       // Check for new tickets to play sound
@@ -434,6 +437,13 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
           >
             <Plus size={20} /> <span className="hidden sm:inline">Novo Chamado</span>
           </button>
+          
+          <button
+            onClick={() => setIsServiceReportModalOpen(true)}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-lg shadow-emerald-600/20"
+          >
+            <FileText size={20} /> <span className="hidden sm:inline">Relatório Serviço</span>
+          </button>
           <button onClick={() => fetchTickets(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors" title="Atualizar Tickets">
             <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
           </button>
@@ -625,6 +635,15 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
           </>
         )}
       </AnimatePresence>
-    </div>
+
+      <ServiceReportModal 
+        isOpen={isServiceReportModalOpen} 
+        onClose={() => setIsServiceReportModalOpen(false)}
+        onSuccess={() => {
+          fetchTickets();
+          toast.success("Relatório salvo e métricas atualizadas!");
+        }}
+      />
+    </div >
   );
 }

@@ -13,10 +13,13 @@ import {
   UseGuards,
   Request,
   SetMetadata,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { TicketsService } from './tickets.service';
-import { TicketStatus, Priority } from '@prisma/client';
+import { TicketStatus, Priority, TicketType } from '@prisma/client';
 
 @Controller('tickets')
 @UseGuards(AuthGuard('jwt'))
@@ -30,6 +33,7 @@ export class TicketsController {
     @Query('category') category?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('type') type?: TicketType,
   ) {
     return this.ticketsService.findAll({
       status,
@@ -37,6 +41,7 @@ export class TicketsController {
       category,
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
+      type,
     });
   }
 
@@ -61,6 +66,9 @@ export class TicketsController {
       sector?: string;
       category?: string;
       priority?: Priority;
+      type?: TicketType;
+      location?: string;
+      assignedToId?: string;
     },
   ) {
     return this.ticketsService.create(dto);
@@ -129,5 +137,16 @@ export class TicketsController {
   @SetMetadata('isPublic', true)
   async findByGlpiId(@Param('glpiId') glpiId: string) {
     return this.ticketsService.findByGlpiId(parseInt(glpiId));
+  }
+
+  @Post(':id/attachments')
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAttachment(
+    @Param('id') id: string,
+    @UploadedFile() file: any, // Using explicit any to avoid lint issues with missing types
+  ) {
+    if (!file) throw new Error('Arquivo não enviado');
+    return this.ticketsService.addAttachment(id, file);
   }
 }

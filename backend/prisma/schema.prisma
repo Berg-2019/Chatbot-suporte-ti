@@ -89,6 +89,9 @@ model Ticket {
   assignedToId String?
   assignedTo   User?   @relation(fields: [assignedToId], references: [id])
 
+  type        TicketType @default(SUPPORT)
+  location    String?    // Local do serviço (ex: Filial X, Torre Y)
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   closedAt    DateTime?
@@ -104,7 +107,13 @@ model Ticket {
   @@index([glpiId])
   @@index([status, assignedToId])
   @@index([createdAt(sort: Desc)])
+  @@index([type]) // Index para relatórios
   @@index([status, createdAt(sort: Desc)])
+}
+
+enum TicketType {
+  SUPPORT         // Chamado padrão (Reativo)
+  SERVICE_REPORT  // Relatório de Serviço (Proativo/Externo)
 }
 
 enum TicketStatus {

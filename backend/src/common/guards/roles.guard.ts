@@ -4,7 +4,7 @@ import { ROLES_KEY, UserRole } from '../decorators/roles.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
@@ -22,7 +22,17 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Usuário não autenticado');
     }
 
-    const hasRole = requiredRoles.some((role) => user.role === role);
+    const hasRole = requiredRoles.some((role) => {
+      // Direct role match (ADMIN, AGENT)
+      if (user.role === role) return true;
+
+      // Map STOCK_MANAGER role to 'estoque' permission
+      if (role === 'STOCK_MANAGER' && user.permissions?.includes('estoque')) {
+        return true;
+      }
+
+      return false;
+    });
 
     if (!hasRole) {
       throw new ForbiddenException(`Acesso negado. Roles necessárias: ${requiredRoles.join(', ')}`);

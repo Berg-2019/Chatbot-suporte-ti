@@ -99,7 +99,7 @@ export class StockController {
      */
     @Delete(':id')
     @UseGuards(AuthGuard('jwt'), RolesGuard)
-    @Roles(UserRole.ADMIN)
+    @Roles(UserRole.ADMIN, UserRole.STOCK_MANAGER)
     async remove(@Param('id') id: string) {
         return this.stockService.remove(id);
     }

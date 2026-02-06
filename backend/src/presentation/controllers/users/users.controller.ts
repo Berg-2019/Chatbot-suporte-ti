@@ -62,9 +62,29 @@ export class UsersController {
 
   @Get('glpi')
   async getGlpiUsers(@Request() req: any) {
-    // Allow all authenticated users to view GLPI users
-    // TODO: Filter by user's sector when sector isolation is complete
-    return this.glpiService.getUsers();
+    // Fetch both GLPI users and local users
+    const glpiUsers = await this.glpiService.getUsers();
+    const localUsers = await this.usersService.findAll();
+
+    // Create a map of local users by glpiUserId
+    const localUserMap = new Map();
+    for (const user of localUsers as any[]) {
+      if (user.glpiUserId) {
+        localUserMap.set(user.glpiUserId, user);
+      }
+    }
+
+    // Merge local data into GLPI users
+    return glpiUsers.map(glpiUser => {
+      const localUser = localUserMap.get(glpiUser.id);
+      return {
+        ...glpiUser,
+        department: localUser?.department || '',
+        permissions: localUser?.permissions || [],
+        groups: [], // Will be populated if needed
+        localUserId: localUser?.id || null,
+      };
+    });
   }
 
   @Post('glpi')
@@ -141,9 +161,8 @@ export class UsersController {
       realname?: string;
       phone?: string;
       is_active?: boolean;
-      // Local fields
       department?: string;
-      role?: 'ADMIN' | 'AGENT';
+      role?: 'ADMIN' | 'AGENT' | 'STOCK_MANAGER';
       permissions?: string[];
       password?: string;
       email?: string;

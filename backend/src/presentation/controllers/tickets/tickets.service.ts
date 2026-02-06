@@ -6,7 +6,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { GlpiService } from '../../../infrastructure/external/glpi.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
-import { TicketStatus, Priority } from '@prisma/client';
+import { TicketStatus, Priority, TicketType } from '@prisma/client';
 
 interface CreateTicketDto {
   title: string;
@@ -16,6 +16,9 @@ interface CreateTicketDto {
   sector?: string;
   category?: string;
   priority?: Priority;
+  type?: TicketType;
+  location?: string;
+  assignedToId?: string;
 }
 
 interface AssignTicketDto {
@@ -36,6 +39,7 @@ export class TicketsService {
     category?: string;
     page?: number;
     limit?: number;
+    type?: TicketType;
   }) {
     const page = filters?.page || 1;
     const limit = filters?.limit || 50;
@@ -49,6 +53,7 @@ export class TicketsService {
         mode: 'insensitive'
       };
     }
+    if (filters?.type) where.type = filters.type;
 
     const [tickets, total] = await Promise.all([
       this.prisma.ticket.findMany({
@@ -135,9 +140,17 @@ export class TicketsService {
         sector: dto.sector,
         category: dto.category,
         priority: dto.priority || 'NORMAL',
-        status: 'NEW',
+
+        status: dto.type === 'SERVICE_REPORT' ? 'RESOLVED' : 'NEW', // Relatórios já nascem resolvidos
+        type: dto.type || 'SUPPORT',
+        location: dto.location,
+        assignedToId: dto.assignedToId,
       },
     });
+
+    // Se for um Service Report, não precisa de integração GLPI imediata ou pode ser diferente
+    // Mas se quiser registrar no GLPI como chamado fechado, mantém.
+    // Por enquanto, vamos manter a integração padrão para criar o registro lá também.
 
     // Criar no GLPI (async via RabbitMQ para não bloquear)
     await this.rabbitmq.publishCreateTicket({
@@ -561,5 +574,20 @@ export class TicketsService {
     });
 
     return ticket;
+  }
+
+  async addAttachment(ticketId: string, file: any) {
+    const attachment = await this.prisma.attachment.create({
+      data: {
+        ticketId,
+        filename: file.originalname,
+        path: file.path,
+        mimeType: file.mimetype,
+        size: file.size,
+      },
+    });
+
+    console.log(`📎 Anexo adicionado ao ticket ${ticketId}: ${file.originalname}`);
+    return attachment;
   }
 }

@@ -323,6 +323,9 @@ export interface GlpiUser {
     email: string;
     phone: string;
     is_active: boolean;
+    department?: string;
+    permissions?: string[];
+    groups?: { id: number; name: string }[];
 }
 
 export const usersApi = {
@@ -390,6 +393,8 @@ export interface Ticket {
     phoneNumber?: string;
     createdAt: string;
     priority?: number;
+    type?: 'SUPPORT' | 'SERVICE_REPORT';
+    location?: string;
 }
 
 export interface TicketsResponse {
@@ -416,7 +421,11 @@ export interface CreateTicketDto {
     customerName?: string;
     sector?: string;
     category?: string;
-    priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    priority?: 'LOW' | 'NORMAL' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    type?: 'SUPPORT' | 'SERVICE_REPORT';
+    location?: string;
+    assignedToId?: string;
+    files?: File[];
 }
 
 export const ticketsApi = {
@@ -439,6 +448,16 @@ export const ticketsApi = {
         return apiFetch<Ticket>('/tickets', {
             method: 'POST',
             body: JSON.stringify(data),
+        });
+    },
+
+    // Upload attachment
+    uploadAttachment: (ticketId: string, file: File): Promise<any> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiFetch<any>(`/tickets/${ticketId}/attachments`, {
+            method: 'POST',
+            body: formData,
         });
     },
 
