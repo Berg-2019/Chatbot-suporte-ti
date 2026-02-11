@@ -50,15 +50,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-      // Try regular login first
-      let response = await fetch(`${API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      // Determine if input is email
+      const isEmail = email.includes('@');
+      let response;
 
-      // If regular login fails, try GLPI login
-      if (!response.ok) {
+      if (isEmail) {
+        // Try regular login first (only if it looks like an email)
+        response = await fetch(`${API_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+      }
+
+      // If regular login failed or wasn't attempted (username), try GLPI login
+      if (!response || !response.ok) {
+        console.log(`Trying GLPI login for: ${email} (isEmail: ${isEmail})`);
         response = await fetch(`${API_URL}/api/auth/glpi-login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

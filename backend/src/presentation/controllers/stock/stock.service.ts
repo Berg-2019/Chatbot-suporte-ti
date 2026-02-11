@@ -123,15 +123,8 @@ export class StockService {
             }
         }
 
-        // Verificar patrimônio duplicado se fornecido
-        if (dto.assetTag) {
-            const existing = await this.prisma.stockItem.findUnique({
-                where: { assetTag: dto.assetTag },
-            });
-            if (existing) {
-                throw new BadRequestException(`Patrimônio ${dto.assetTag} já existe`);
-            }
-        }
+        // Nota: A unicidade é validada pelo índice composto (assetTag + location)
+        // O Prisma retornará erro P2002 automaticamente se já existir patrimônio no mesmo local
 
         try {
             return await this.prisma.stockItem.create({
@@ -230,9 +223,13 @@ export class StockService {
                 }),
             ]);
 
-            // Contar lowStock buscando todos itens e filtrando
+            // Contar lowStock buscando todos itens EXCETO patrimônios (ASSET)
+            // Patrimônios são itens únicos e não devem gerar alertas de estoque baixo
             const allItems = await this.prisma.stockItem.findMany({
-                where,
+                where: {
+                    ...where,
+                    category: { not: 'ASSET' },
+                },
                 select: { quantity: true, minQuantity: true },
             });
 

@@ -373,38 +373,7 @@ class FlowHandler {
         break;
 
 
-      case '4': // Falar com técnico
-        session.data.requestedHuman = true;
-        const hasData = await this.ensureUserData(sock, from, session, STATES.WAITING_TECHNICIAN);
 
-        if (!hasData) {
-          // Dados sendo coletados, fluxo continua em handleAskName
-          return;
-        }
-
-        // Dados já disponíveis, continuar para técnico
-        session.state = STATES.WAITING_TECHNICIAN;
-        await redisService.setSession(phone, session);
-        await this.sendMessage(sock, from, config.messages.transferToHuman);
-
-        // Criar ticket com dados reais
-        await rabbitmqService.publishCreateTicket({
-          phoneNumber: from,
-          title: "Falar com Técnico",
-          description: "Solicitação direta de atendimento humano via menu do bot.",
-          sector: session.data.sector,
-          category: "Suporte",
-          customerName: session.data.contactName,
-          priority: "HIGH"
-        });
-
-        // Notificar painel
-        await rabbitmqService.publishNotification(
-          'human_requested',
-          null,
-          { phone, message: `${session.data.contactName} (${session.data.sector}) solicitou atendimento humano` }
-        );
-        break;
 
       case '2': // Abrir chamado de Elétrica (NOVA OPÇÃO)
         // Verificar contato existente
@@ -434,7 +403,7 @@ class FlowHandler {
         await this.sendMessage(sock, from, 'Olá! Antes de começarmos, qual é o seu *nome*?');
         break;
 
-      case '5': // Reservar equipamento
+      case '4': // Reservar equipamento
         const hasDataReserv = await this.ensureUserData(sock, from, session, STATES.SELECT_EQUIPMENT_TYPE);
 
         if (!hasDataReserv) {

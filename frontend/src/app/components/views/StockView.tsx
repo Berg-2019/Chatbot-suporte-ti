@@ -510,7 +510,12 @@ export default function StockView() {
               </div>
 
               <div>
-                <h3 className="text-white font-semibold text-lg">{asset.name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-white font-semibold text-lg">{asset.name}</h3>
+                  <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-sm font-medium">
+                    {Number(asset.quantity)} un
+                  </span>
+                </div>
                 <p className="text-slate-500 text-sm font-mono">{asset.assetTag || asset.code}</p>
               </div>
 

@@ -502,14 +502,14 @@ model StockItem {
   unitCost    Decimal?      @db.Decimal(10,2)
   
   // Localização
-  location    String?       // "Almoxarifado A", "Armário TI"
+  location    String?       // "Almoxarifado A", "Armário TI", ou Filial
   
   // Específico de Tintas
   printerModel String?      // Para qual impressora serve
   inkColor     InkColor?    // CYAN, MAGENTA, YELLOW, BLACK
   
   // Específico de Patrimônio
-  assetTag     String?      @unique  // Plaqueta de patrimônio
+  assetTag     String?      // Plaqueta de patrimônio (pode repetir por local)
   assetStatus  AssetStatus  @default(AVAILABLE)
   isReservable Boolean      @default(false) // Pode ser reservado?
   
@@ -521,6 +521,7 @@ model StockItem {
   reservations Reservation[]
 
   @@map("stock_items")
+  @@unique([assetTag, location])  // Patrimônio único por localização/filial
   @@index([stockType])
   @@index([category])
   @@index([assetStatus])

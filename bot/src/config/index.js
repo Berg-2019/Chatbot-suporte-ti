@@ -73,8 +73,7 @@ Como posso ajudar você hoje?
 1️⃣ Abrir chamado de TI
 2️⃣ Abrir chamado de Elétrica
 3️⃣ Consultar status de chamado
-4️⃣ Falar com um técnico
-5️⃣ Reservar equipamento 📦
+4️⃣ Reservar equipamento 📦
 
 Digite o número da opção desejada:`,
 

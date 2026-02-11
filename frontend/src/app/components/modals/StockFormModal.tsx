@@ -130,11 +130,9 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
                                         setFormData(prev => ({
                                             ...prev,
                                             category: newCategory,
-                                            // Se for patrimônio, força unidade UN, qtd 1 e min 0
+                                            // Se for patrimônio, força unidade UN apenas
                                             ...(newCategory === 'ASSET' ? {
                                                 unit: 'UN',
-                                                quantity: '1',
-                                                minQuantity: '0'
                                             } : {})
                                         }));
                                     }}
@@ -213,19 +211,19 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
                             </div>
                         </div>
 
-                        {/* Quantidades (Apenas para não-patrimônio) */}
-                        {formData.category !== 'ASSET' && (
-                            <div className="grid grid-cols-2 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-slate-300">Quantidade Atual</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={formData.quantity}
-                                        onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
-                                </div>
+                        {/* Quantidades */}
+                        <div className={`grid gap-6 ${formData.category === 'ASSET' ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-slate-300">Quantidade Atual</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={formData.quantity}
+                                    onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            {formData.category !== 'ASSET' && (
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-300">Qtd. Mínima (Alerta)</label>
                                     <input
@@ -236,8 +234,8 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
                                         className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
                                     />
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         {/* Campos Específicos: Tintas */}
                         {formData.category === 'INK' && (
@@ -273,13 +271,9 @@ export default function StockFormModal({ isOpen, onClose, onConfirm, initialData
                         {/* Campos Específicos: Patrimônio */}
                         {formData.category === 'ASSET' && (
                             <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-medium text-slate-400">Detalhes do Patrimônio</h3>
-                                    <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
-                                        Item Único
-                                    </span>
-                                </div>
+                                <h3 className="text-sm font-medium text-slate-400">Detalhes do Patrimônio</h3>
                                 <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-300">Código do Patrimônio</label>
                                     <input
                                         type="text"
                                         value={formData.assetTag}
