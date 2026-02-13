@@ -110,9 +110,8 @@ export class AlertService {
 
         console.log(`📢 Enviando alerta para ${technicians.length} técnicos ${level}`);
 
-        for (const tech of technicians) {
-            await this.sendAlertToUser(tech.id, payload);
-        }
+        // Otimização: Enviar em paralelo para não bloquear o bot por muito tempo
+        await Promise.all(technicians.map(tech => this.sendAlertToUser(tech.id, payload)));
     }
 
     /**

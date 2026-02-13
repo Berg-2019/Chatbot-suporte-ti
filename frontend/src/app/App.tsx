@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from '@/app/context/AuthContext';
 import { Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogOut } from 'lucide-react';
+
 import { Ticket } from '@/app/services/api';
 
 // Lazy load view components for better performance
@@ -112,6 +113,8 @@ function MainContent() {
             <LogOut size={20} />
           </button>
         </div>
+
+
 
         <div className={isManagerTvMode ? 'h-full' : 'p-6 lg:p-8 pt-16 lg:pt-8'}>
           <Suspense fallback={<LoadingFallback />}>

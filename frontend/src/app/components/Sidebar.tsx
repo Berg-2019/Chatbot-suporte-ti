@@ -44,10 +44,18 @@ const menuItems: MenuItem[] = [
 
 export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const { profile, setProfile } = useAuth();
+  const { profile, user } = useAuth();
   const badges = useBadges();
 
-  const filteredItems = menuItems.filter(item => item.roles.includes(profile));
+  // Filtragem inteligente de itens:
+  // 1. Se o usuário tem permissões específicas no banco, usa elas.
+  // 2. Senão, usa as permissões padrão do Perfil (Admin, TI, Elétrica, Gestão).
+  const filteredItems = menuItems.filter(item => {
+    if (user?.permissions && user.permissions.length > 0) {
+      return user.permissions.includes(item.id);
+    }
+    return item.roles.includes(profile);
+  });
 
   const getBadgeCount = (id: string) => {
     switch (id) {
@@ -88,7 +96,7 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
         <div className="p-6 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${profile === 'tech_elect' ? 'bg-yellow-500' :
-                profile === 'manager' ? 'bg-purple-600' : 'bg-blue-600'
+              profile === 'manager' ? 'bg-purple-600' : 'bg-blue-600'
               }`}>
               {profile === 'tech_elect' ? <Zap className="text-white" size={24} /> :
                 profile === 'manager' ? <Briefcase className="text-white" size={24} /> :

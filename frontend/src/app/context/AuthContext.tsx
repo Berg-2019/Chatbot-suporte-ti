@@ -7,6 +7,7 @@ interface User {
   email: string;
   avatar: string;
   token?: string;
+  permissions?: string[];
 }
 
 interface AuthContextType {
@@ -81,11 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const token = data.token || data.access_token; // Handle both formats
 
-      const newUser = {
+      const newUser: User = {
         name: data.user?.name || email.split('@')[0],
         email: data.user?.email || email,
         avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
         token: token,
+        permissions: data.user?.permissions || [],
       };
 
       setUser(newUser);

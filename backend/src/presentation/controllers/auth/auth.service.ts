@@ -41,18 +41,16 @@ const LEVEL_MAPPING = {
   L1: ['l1', 'n1', 'tecnico l1', 'nivel 1', 'nível 1', 'tecnico', 'tecnicos', 'técnicos'],
 };
 
-// Mapeamento de perfis baseado em grupos GLPI
-// Define qual tela/dashboard o usuário verá após login
+// Mapeamento de perfis baseado nos 4 grupos específicos do GLPI
 const PROFILE_GROUPS = {
-  admin: ['admin', 'administradores', 'administrators', 'super-admin'],
-  manager: ['gestores', 'gestão', 'gerentes', 'coordenadores', 'diretoria'],
-  tech_elect: ['eletrica', 'elétrica', 'eletricista', 'manutencao eletrica', 'manutenção elétrica'],
-  stock: ['almoxarifado', 'estoque', 'almoxarife', 'suprimentos'],
-  tech_ti: ['ti', 'tecnico', 'tecnicos', 'técnicos', 'suporte', 'helpdesk', 'infraestrutura', 'support', 'n1', 'n2', 'n3', 'l1', 'l2', 'l3'],
+  admin: ['admin'],
+  manager: ['gestao', 'gestão'],
+  tech_elect: ['eletrica', 'elétrica'],
+  tech_ti: ['tecnico ti', 'técnico ti', 'ti'],
 };
 
 // Tipos de perfil disponíveis
-type UserProfile = 'admin' | 'manager' | 'tech_elect' | 'stock' | 'tech_ti';
+type UserProfile = 'admin' | 'manager' | 'tech_elect' | 'tech_ti';
 
 /**
  * Determina o perfil do usuário baseado nos grupos GLPI
@@ -70,9 +68,6 @@ function determineProfile(groups: string[]): UserProfile {
   }
   if (groupsLower.some(g => PROFILE_GROUPS.tech_elect.some(pg => g.includes(pg)))) {
     return 'tech_elect';
-  }
-  if (groupsLower.some(g => PROFILE_GROUPS.stock.some(pg => g.includes(pg)))) {
-    return 'stock';
   }
   // Default: técnico TI
   return 'tech_ti';
@@ -175,8 +170,9 @@ export class AuthService {
     console.log('Step 3: Determining role and level (Strict Mode)');
 
     // Listas estritas de grupos
-    const STRICT_ADMIN_GROUPS = ['admin', 'administradores', 'administrador', 'super-admin', 'gestores', 'gestão'];
-    const STRICT_TECH_GROUPS = ['tecnico', 'tecnicos', 'técnicos', 'suporte', 'support', 'helpdesk', 'ti', 'n1', 'n2', 'n3', 'l1', 'l2', 'l3', 'eletrica', 'elétrica', 'eletricista', 'manutencao eletrica', 'manutenção elétrica'];
+    // Listas simplificadas de grupos baseadas na solicitação do usuário
+    const STRICT_ADMIN_GROUPS = ['admin', 'gestao', 'gestão'];
+    const STRICT_TECH_GROUPS = ['tecnico ti', 'técnico ti', 'ti', 'eletrica', 'elétrica'];
 
     // Normalizar nomes dos grupos do usuário
     const userGroupsLower = groupNames; // Já estão em lower (line 131)
@@ -292,9 +288,8 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
-        technicianLevel: user.technicianLevel,
-        groups: groupNames,
-        profile, // Perfil para redirecionamento: admin, manager, tech_elect, stock, tech_ti
+        profile, // Perfil para redirecionamento: admin, manager, tech_elect, tech_ti
+        permissions: user.permissions || [],
       },
     };
   }
@@ -338,14 +333,18 @@ export class AuthService {
       throw new UnauthorizedException('Usuário inválido');
     }
 
+    // Determinar perfil baseado no setor/role para o frontend
+    const profile: UserProfile = user.role === 'ADMIN' ? 'admin' :
+      user.sector === 'ELECTRIC' ? 'tech_elect' :
+        user.department?.toLowerCase().includes('gestao') ? 'manager' : 'tech_ti';
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
-      technicianLevel: user.technicianLevel,
-      sector: user.sector,
-      permissions: user.permissions,
+      profile,
+      permissions: user.permissions || [],
     };
   }
 }

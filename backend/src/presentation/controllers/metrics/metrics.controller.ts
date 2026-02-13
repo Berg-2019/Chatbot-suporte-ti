@@ -5,9 +5,12 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { MetricsService } from './metrics.service';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 
 @Controller('metrics')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.AGENT, UserRole.VIEWER)
 export class MetricsController {
     constructor(private metricsService: MetricsService) { }
 

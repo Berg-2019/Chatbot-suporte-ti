@@ -10,6 +10,13 @@ import { config } from '../config/index.js';
 import { redisService } from '../services/redis.js';
 import { rabbitmqService } from '../services/rabbitmq.js';
 import { intentService } from '../services/intent.js';
+import { existsSync, mkdirSync } from 'fs';
+
+// Garantir que diretório de uploads existe
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!existsSync(uploadsDir)) {
+  mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Estados do fluxo
 const STATES = {
@@ -549,9 +556,21 @@ class FlowHandler {
     }
   }
 
-  async handleDescribeProblem(sock, from, text, session) {
+  async handleDescribeProblem(sock, from, text, session, msg) {
     const phone = from.split('@')[0];
-    session.data.problem = text;
+
+    // Verificar se é mídia
+    const messageType = Object.keys(msg.message || {})[0];
+    const isMedia = ['imageMessage', 'audioMessage', 'videoMessage', 'documentMessage'].includes(messageType);
+
+    if (isMedia) {
+      await this.handleMediaReceived(sock, from, msg, session, messageType);
+      // Se for imagem, a legenda vira o texto do problema se existir
+      const caption = msg.message[messageType]?.caption;
+      if (caption) text = caption;
+    }
+
+    session.data.problem = text || (isMedia ? '[Mídia enviada]' : '');
 
     // Buscar FAQs relacionadas
     try {

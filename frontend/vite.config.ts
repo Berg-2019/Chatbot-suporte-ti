@@ -21,4 +21,7 @@ export default defineConfig({
     port: 5173,
     allowedHosts: true,
   },
+  optimizeDeps: {
+    include: ['socket.io-parser'],
+  },
 })

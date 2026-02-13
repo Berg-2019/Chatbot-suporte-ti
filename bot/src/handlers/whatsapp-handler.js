@@ -173,9 +173,14 @@ class WhatsAppHandler {
       }
 
       // Processar com o flow handler
-      if (text) {
+      const hasMedia = msg.message?.imageMessage ||
+        msg.message?.audioMessage ||
+        msg.message?.videoMessage ||
+        msg.message?.documentMessage;
+
+      if (text || hasMedia) {
         try {
-          await flowHandler.handleMessage(this.sock, from, text, msg);
+          await flowHandler.handleMessage(this.sock, from, text || '', msg);
         } catch (error) {
           console.error('❌ Erro ao processar mensagem:', error.message);
           await this.sendMessage(from, config.messages.error);

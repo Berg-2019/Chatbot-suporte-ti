@@ -48,6 +48,8 @@ export class GlpiService implements OnModuleInit {
       },
     });
 
+    console.log(`🔍 GLPI Config: URL=${baseURL}, AppTokenLength=${this.appToken?.length}, UserTokenLength=${this.userToken?.length}`);
+    console.log(`🔍 AppToken Preview: ${this.appToken?.substring(0, 5)}...${this.appToken?.substring(this.appToken?.length - 5)}`);
     console.log('✅ GLPI Service inicializado');
   }
 
@@ -875,6 +877,59 @@ export class GlpiService implements OnModuleInit {
       const errorMsg = error.response?.data?.[0] || error.response?.data?.message || error.message;
       console.error('❌ Erro ao excluir usuário GLPI:', errorMsg);
       return { success: false, error: typeof errorMsg === 'string' ? errorMsg : 'Falha ao excluir usuário' };
+    }
+  }
+  // ============================================================
+  // ADMIN / SYNC METHODS
+  // ============================================================
+
+  /**
+   * Obtém token de sessão de Admin (configurado no .env)
+   */
+  async getAdminSession(): Promise<string> {
+    const adminUser = this.config.get<string>('GLPI_ADMIN_USER');
+    const adminPass = this.config.get<string>('GLPI_ADMIN_PASSWORD');
+
+    if (!adminUser || !adminPass) {
+      throw new Error('Credenciais de Admin GLPI não configuradas (.env)');
+    }
+
+    const credentials = Buffer.from(`${adminUser}:${adminPass}`).toString('base64');
+
+    try {
+      const response = await this.client.get('/initSession', {
+        headers: { Authorization: `Basic ${credentials}` }
+      });
+      return response.data.session_token;
+    } catch (error: any) {
+      console.error('❌ Falha ao iniciar sessão Admin GLPI:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Buscar tickets mais recentes (Admin Session)
+   */
+  async fetchLatestTickets(sessionToken: string, limit: number = 50): Promise<any[]> {
+    try {
+      // Usar endpoint /Ticket com sort por ID DESC é mais seguro que /search/Ticket
+      const response = await this.client.get('/Ticket', {
+        headers: {
+          'App-Token': this.appToken,
+          'Session-Token': sessionToken
+        },
+        params: {
+          range: `0-${limit}`,
+          sort: 'id',
+          order: 'DESC',
+          expand_dropdowns: 'true',
+          get_hateoas: false
+        }
+      });
+      return response.data || [];
+    } catch (error: any) {
+      console.error('❌ Falha ao listar tickets recentes:', error.message);
+      return [];
     }
   }
 }

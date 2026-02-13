@@ -11,6 +11,7 @@ import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { AlertService } from '../../../infrastructure/services/alert.service';
+import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://bot:3002';
 
@@ -24,6 +25,7 @@ export class BotController {
     private prisma: PrismaService,
     private config: ConfigService,
     private alertService: AlertService,
+    private rabbitmq: RabbitMQService, // Injected RabbitMQService
   ) { }
 
   @Get('status')
@@ -128,6 +130,9 @@ export class BotController {
     console.log(`✅ Ticket criado via bot: ${ticket.id} (GLPI #${dto.glpiId})`);
 
     // ALERTAR TÉCNICOS N1
+    // Using Promise.all so we don't block the response significantly if alerts take time
+    // though alertService.sendAlertToLevel is async, we await it.
+    // We should ensure this doesn't timeout the bot.
     await this.alertService.sendAlertToLevel('N1', {
       ticketId: ticket.id,
       glpiId: ticket.glpiId ?? undefined,
@@ -135,6 +140,13 @@ export class BotController {
       title: '🎫 Novo Chamado (Bot)',
       message: `Novo chamado GLPI #${dto.glpiId}: ${dto.title}\nCliente: ${dto.customerName || 'N/A'}\nSetor: ${dto.sector || 'N/A'}`,
       priority: 'NORMAL',
+    });
+
+    // NOTIFICAR DASHBOARD (CRITICAL FIX: This was missing!)
+    await this.rabbitmq.publishNotification({
+      type: 'ticket_created',
+      ticketId: ticket.id,
+      payload: ticket,
     });
 
     return ticket;

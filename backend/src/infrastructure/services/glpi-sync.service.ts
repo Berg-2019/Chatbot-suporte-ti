@@ -38,6 +38,12 @@ export class GlpiSyncService implements OnModuleInit {
         this.logger.log(`   ⚡ Warning em ${this.slaConfig.warningPercent}% do SLA`);
         this.logger.log(`   ⬆️ Escalar N2 em ${this.slaConfig.escalateToN2Percent}%`);
         this.logger.log(`   🔺 Escalar N3 em ${this.slaConfig.escalateToN3Percent}%`);
+
+        // Executar sincronização inicial após 5 segundos (para não bloquear boot)
+        setTimeout(() => {
+            this.syncRecentTickets();
+            this.syncGlpiGroups();
+        }, 5000);
     }
 
     /**
@@ -349,6 +355,97 @@ export class GlpiSyncService implements OnModuleInit {
             this.logger.log('✅ Sincronização de grupos concluída');
         } catch (error) {
             this.logger.error('❌ Erro ao sincronizar grupos:', error.message);
+        }
+    }
+    /**
+     * Sincronizar tickets recentes do GLPI (Executar na inicialização e cron)
+     * Importa novos tickets que foram criados diretamente no GLPI
+     */
+    @Cron(CronExpression.EVERY_10_MINUTES)
+    async syncRecentTickets() {
+        this.logger.log('🔄 Sincronizando tickets recentes do GLPI...');
+        try {
+            const adminSession = await this.glpi.getAdminSession();
+            // Buscar últimos 50 tickets
+            const tickets = await this.glpi.fetchLatestTickets(adminSession, 50);
+
+            let syncedCount = 0;
+            let updatedCount = 0;
+
+            for (const t of tickets) {
+                // Mapear Status
+                let status: any = 'NEW';
+                switch (Number(t.status)) {
+                    case 1: status = 'NEW'; break; // New
+                    case 2: status = 'ASSIGNED'; break; // Processing (assigned)
+                    case 3: status = 'IN_PROGRESS'; break; // Processing (planned)
+                    case 4: status = 'WAITING_CLIENT'; break; // Pending
+                    case 5: status = 'RESOLVED'; break; // Solved
+                    case 6: status = 'CLOSED'; break; // Closed
+                    default: status = 'NEW';
+                }
+
+                // Mapear Prioridade
+                let priority: any = 'NORMAL';
+                switch (Number(t.priority)) {
+                    case 1:
+                    case 2: priority = 'LOW'; break;
+                    case 3: priority = 'NORMAL'; break;
+                    case 4: priority = 'HIGH'; break;
+                    case 5:
+                    case 6: priority = 'URGENT'; break;
+                    default: priority = 'NORMAL';
+                }
+
+                const existing = await this.prisma.ticket.findUnique({
+                    where: { glpiId: t.id }
+                });
+
+                if (!existing) {
+                    // Criar novo ticket localmente
+                    // Note: content pode ser HTML, e phoneNumber é obrigatório.
+                    await this.prisma.ticket.create({
+                        data: {
+                            glpiId: t.id,
+                            title: t.name || 'Sem título',
+                            description: t.content ? String(t.content).substring(0, 3000) : '-', // Limitar tamanho
+                            status,
+                            priority,
+                            phoneNumber: '0000000000', // Placeholder para tickets via WEB
+                            type: 'SUPPORT',
+
+                            createdAt: new Date(t.date_creation),
+                            updatedAt: new Date(t.date_mod)
+                        }
+                    });
+                    syncedCount++;
+                } else {
+                    // Atualizar se houver mudança de status ou prioridade
+                    if (existing.status !== status || existing.priority !== priority) {
+                        await this.prisma.ticket.update({
+                            where: { id: existing.id },
+                            data: {
+                                status,
+                                priority,
+                                updatedAt: new Date()
+                            }
+                        });
+                        updatedCount++;
+                    }
+                }
+            }
+
+            if (syncedCount > 0 || updatedCount > 0) {
+                this.logger.log(`✅ Sincronização concluída: ${syncedCount} novos, ${updatedCount} atualizados.`);
+            } else {
+                this.logger.log('✅ Sincronização concluída (sem alterações).');
+            }
+
+            // Encerrar sessão admin
+            await this.glpi.killSession(adminSession);
+
+        } catch (error) {
+            this.logger.error('❌ Erro na sincronização de tickets:', error.message);
         }
     }
 }

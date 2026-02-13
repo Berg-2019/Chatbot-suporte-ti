@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { io, Socket } from 'socket.io-client';
 import {
   Send,
   X,
@@ -26,42 +27,76 @@ interface ChatViewProps {
 }
 
 interface Message {
-  id: number | string;
-  text: string;
-  sender: 'me' | 'other';
-  time: string;
-  status?: 'sent' | 'delivered' | 'read';
-  type?: 'TEXT' | 'IMAGE' | 'AUDIO';
+  id: string; // Changed to string to match waMessageId/backend ID
+  content: string; // Changed from text to content to match backend
+  type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'DOCUMENT' | 'VIDEO'; // Explicitly allow all types from backend
+  direction: 'INCOMING' | 'OUTGOING'; // Matches backend
+  createdAt: string; // Matches backend
+  sender?: {
+    id: string;
+    name: string;
+  };
 }
 
 export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewProps) {
-  const [message, setMessage] = useState('');
+  const [messageInput, setMessageInput] = useState(''); // Renamed to avoid conflict with `messages` state
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
 
-  const fetchMessages = async () => {
-    if (!ticket.id) return;
-    try {
-      const data = await ticketsApi.getMessages(ticket.id.toString());
-      const mapped: Message[] = data.map(m => ({
-        id: m.id,
-        text: m.content,
-        sender: m.direction === 'OUTGOING' ? 'me' : 'other',
-        time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'read',
-        type: m.type as 'TEXT' | 'IMAGE' | 'AUDIO', // Casting since exact enum might vary slightly
-      }));
-      setMessages(mapped);
-    } catch (err) {
-      console.error('Failed to load messages', err);
-    }
-  };
-
+  // --- Socket.IO setup ---
   useEffect(() => {
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 3000); // Polling every 3s
-    return () => clearInterval(interval);
-  }, [ticket.id]);
+    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    socketRef.current = io(SOCKET_URL, {
+      transports: ['websocket'],
+      auth: { token: localStorage.getItem('authToken') },
+    });
+
+    socketRef.current.on('connect', () => {
+      console.log(`Connected to Socket.IO for ticket ${ticket.id}`);
+      // Join the ticket-specific room
+      socketRef.current?.emit('ticket:subscribe', ticket.id);
+    });
+
+    socketRef.current.on('message:new', (newMessage: Message) => {
+      console.log('Received new message:', newMessage);
+      setMessages((prevMessages) => {
+        // Prevent duplicates - check by ID
+        if (prevMessages.some(msg => msg.id === newMessage.id)) {
+          return prevMessages;
+        }
+        return [...prevMessages, newMessage];
+      });
+    });
+
+    socketRef.current.on('disconnect', () => {
+      console.log('Disconnected from Socket.IO');
+    });
+
+    // Cleanup on unmount or ticket change
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.emit('ticket:unsubscribe', ticket.id);
+        socketRef.current.disconnect();
+      }
+    };
+  }, [ticket.id]); // Reconnect if ticket.id changes
+
+  // --- Fetch initial messages (only once on mount) ---
+  useEffect(() => {
+    const fetchInitialMessages = async () => {
+      if (!ticket.id) return;
+      try {
+        const data = await ticketsApi.getMessages(ticket.id.toString());
+        // Backend Message type is compatible with our local Message interface
+        setMessages(data as Message[]);
+      } catch (err) {
+        console.error('Failed to load initial messages', err);
+        toast.error('Erro ao carregar mensagens iniciais.');
+      }
+    };
+    fetchInitialMessages();
+  }, [ticket.id]); // Fetch only when ticket.id changes
 
   // Modal States
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
@@ -77,14 +112,28 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!messageInput.trim()) return;
+
+    const tempId = `temp-${Date.now()}`;
 
     try {
-      await ticketsApi.sendMessage(ticket.id.toString(), message);
-      setMessage('');
-      fetchMessages(); // Refresh immediately
+      // Optimistic update: Add message to state immediately
+      const newMessage: Message = {
+        id: tempId,
+        content: messageInput,
+        direction: 'OUTGOING',
+        type: 'TEXT',
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, newMessage]);
+      scrollToBottom();
+
+      await ticketsApi.sendMessage(ticket.id.toString(), messageInput);
+      setMessageInput('');
     } catch (err) {
       toast.error('Erro ao enviar mensagem');
+      // Revert optimistic update if API fails
+      setMessages((prev) => prev.filter(msg => msg.id !== tempId));
     }
   };
 
@@ -184,6 +233,13 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
               <span className="text-slate-400">Categoria:</span>
               <span className="font-medium text-blue-200">{ticket.category || 'Geral'}</span>
             </span>
+            {ticket.location && (
+              <span className="flex items-center gap-1">
+                <MapPin size={12} />
+                <span className="text-slate-400">Local:</span>
+                <span className="font-medium text-blue-200">{ticket.location}</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -210,45 +266,61 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
           <span>Chamado iniciado em {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}</span>
         </div>
 
-        {messages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${msg.sender === 'me'
-                ? 'bg-blue-600 text-white rounded-tr-none'
-                : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
-                }`}
-            >
-              {msg.type === 'IMAGE' ? (
-                <div className="space-y-2">
-                  <img src={msg.text} alt="Imagem enviada" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.text, '_blank')} />
-                </div>
-              ) : msg.type === 'AUDIO' ? (
-                <div className="flex items-center gap-2 min-w-[200px]">
-                  <audio controls src={msg.text} className="w-full h-8" />
-                </div>
-              ) : (
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-              )}
+        {messages.map((msg) => {
+          const isOutgoing = msg.direction === 'OUTGOING';
+          const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+          // Prepend API URL if the content is a relative path (e.g., /api/bot/media/...)
+          const mediaSrc = msg.content.startsWith('/api/bot/media') ? `${apiUrl}${msg.content}` : msg.content;
 
-              <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${msg.sender === 'me' ? 'text-blue-200' : 'text-slate-500'
-                }`}>
-                {msg.time}
-                {msg.sender === 'me' && (
-                  <span>
-                    {msg.status === 'sent' && '✓'}
-                    {msg.status === 'delivered' && '✓✓'}
-                    {msg.status === 'read' && <span className="text-blue-200">✓✓</span>}
-                  </span>
+          return (
+            <motion.div
+              key={msg.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${isOutgoing
+                  ? 'bg-blue-600 text-white rounded-tr-none'
+                  : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
+                  }`}
+              >
+                {!isOutgoing && msg.sender?.name && (
+                  <div className="text-xs text-slate-400 mb-1 px-1">
+                    {msg.sender.name}
+                  </div>
                 )}
+                {msg.type === 'IMAGE' ? (
+                  <div className="space-y-2">
+                    <img src={mediaSrc} alt="Imagem enviada" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(mediaSrc, '_blank')} />
+                  </div>
+                ) : msg.type === 'AUDIO' ? (
+                  <div className="flex items-center gap-2 min-w-[200px]">
+                    <audio controls src={mediaSrc} className="w-full h-8" />
+                  </div>
+                ) : msg.type === 'VIDEO' ? ( // Handle video type
+                  <div className="space-y-2">
+                    <video controls src={mediaSrc} className="rounded-lg max-w-full max-h-60 object-cover" />
+                  </div>
+                ) : msg.type === 'DOCUMENT' ? ( // Handle document type
+                  <a href={mediaSrc} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-400 hover:underline">
+                    <Paperclip size={16} />
+                    <span>Download Anexo</span> {/* You might want to extract filename from URL or message for better display */}
+                  </a>
+                ) : (
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                )}
+
+                <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isOutgoing ? 'text-blue-200' : 'text-slate-500'
+                  }`}>
+                  {time}
+                  {/* Status indicators can be added here if needed, e.g., '✓✓' for delivered */}
+                </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
@@ -267,8 +339,8 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
           <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl flex items-center px-4 py-2 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/50 transition-all">
             <input
               type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
               placeholder="Digite sua mensagem..."
               className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder-slate-500 h-10" // h-10 to match height properly
             />
@@ -276,7 +348,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
 
           <button
             type="submit"
-            disabled={!message.trim()}
+            disabled={!messageInput.trim()}
             className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20 transition-all hover:scale-105"
           >
             <Send size={20} />
