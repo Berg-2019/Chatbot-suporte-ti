@@ -519,6 +519,7 @@ model StockItem {
   updatedAt   DateTime      @updatedAt
 
   reservations Reservation[]
+  movements    StockMovement[]
 
   @@map("stock_items")
   @@unique([assetTag, location])  // Patrimônio único por localização/filial
@@ -562,6 +563,35 @@ enum AssetStatus {
   RESERVED     // Reservado
   IN_USE       // Em uso
   MAINTENANCE  // Em manutenção
+}
+
+// ===========================================================================
+// Stock Movements - Log de Entrada/Saída de Estoque
+// ===========================================================================
+
+model StockMovement {
+  id          String        @id @default(uuid())
+  
+  stockItemId String
+  stockItem   StockItem     @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  
+  type        MovementType  // IN (entrada) ou OUT (saída)
+  quantity    Decimal       @db.Decimal(10,2)
+  reason      String?       // Motivo (ex: "Reposição", "Uso em ticket #123")
+  performedBy String?       // Nome/ID de quem realizou
+  
+  createdAt   DateTime      @default(now())
+
+  @@map("stock_movements")
+  @@index([stockItemId])
+  @@index([createdAt])
+  @@index([type])
+  @@index([stockItemId, createdAt])
+}
+
+enum MovementType {
+  IN   // Entrada
+  OUT  // Saída
 }
 
 // ===========================================================================

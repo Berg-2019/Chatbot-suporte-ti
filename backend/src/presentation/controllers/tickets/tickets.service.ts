@@ -370,7 +370,16 @@ export class TicketsService {
       contactDepartment?: string;
       contactRamal?: string;
     },
+    userId?: string,
   ) {
+    // Se o ticket não tem técnico atribuído, atribuir o usuário que está fechando
+    const currentTicket = await this.prisma.ticket.findUnique({
+      where: { id },
+      select: { assignedToId: true },
+    });
+
+    const assignToId = currentTicket?.assignedToId || userId || null;
+
     // Atualizar ticket com solução
     const ticket = await this.prisma.ticket.update({
       where: { id },
@@ -380,6 +389,7 @@ export class TicketsService {
         solution: closeData?.solution,
         solutionType: closeData?.solutionType,
         timeWorked: closeData?.timeWorked,
+        assignedToId: assignToId,
       },
       include: {
         assignedTo: { select: { id: true, name: true } },

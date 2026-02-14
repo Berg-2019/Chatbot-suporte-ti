@@ -41,4 +41,4 @@ RUN mkdir -p /app/logs
 EXPOSE 3000
 
 # Migrar banco e iniciar
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main"]

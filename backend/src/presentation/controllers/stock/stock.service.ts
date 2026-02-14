@@ -169,7 +169,7 @@ export class StockService {
     }
 
     /**
-     * Registra movimento de estoque (entrada/saída)
+     * Registra movimento de estoque (entrada/saída) com log
      */
     async registerMovement(id: string, dto: StockMovementDto) {
         const item = await this.findOne(id);
@@ -182,12 +182,26 @@ export class StockService {
             );
         }
 
-        return this.prisma.stockItem.update({
-            where: { id },
-            data: {
-                quantity: newQuantity,
-            },
-        });
+        // Transaction: atualizar quantidade + criar log de movimentação
+        const [updatedItem] = await this.prisma.$transaction([
+            this.prisma.stockItem.update({
+                where: { id },
+                data: {
+                    quantity: newQuantity,
+                },
+            }),
+            this.prisma.stockMovement.create({
+                data: {
+                    stockItemId: id,
+                    type: dto.quantity > 0 ? 'IN' : 'OUT',
+                    quantity: Math.abs(dto.quantity),
+                    reason: dto.reason || (dto.quantity > 0 ? 'Entrada de estoque' : 'Saída de estoque'),
+                    performedBy: dto.ticketId ? `Ticket #${dto.ticketId}` : undefined,
+                },
+            }),
+        ]);
+
+        return updatedItem;
     }
 
     /**

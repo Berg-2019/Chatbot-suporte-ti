@@ -738,6 +738,90 @@ export interface ReportRecipient {
     active: boolean;
 }
 
+// Ticket closure report types
+export interface TicketClosureReport {
+    tickets: {
+        id: string;
+        title: string;
+        category: string | null;
+        priority: string;
+        status: string;
+        customerName: string | null;
+        sector: string | null;
+        solution: string | null;
+        solutionType: string | null;
+        timeWorked: number | null;
+        rating: number | null;
+        createdAt: string;
+        closedAt: string | null;
+        assignedTo: { id: string; name: string; email: string } | null;
+        partUsages: { partName: string; quantity: number; unitCost: number; purchased: boolean }[];
+    }[];
+    summary: {
+        totalClosed: number;
+        totalTimeWorked: number;
+        avgTimeWorked: number;
+        avgRating: number;
+        ratedCount: number;
+    };
+    aggregates: {
+        byTechnician: { name: string; count: number; avgTime: number }[];
+        bySolutionType: { name: string; count: number }[];
+        byCategory: { name: string; count: number }[];
+        byDay: { date: string; total: number }[];
+    };
+}
+
+export interface TicketReportFilters {
+    startDate?: string;
+    endDate?: string;
+    technicianId?: string;
+    category?: string;
+    solutionType?: string;
+}
+
+// Stock movement report types
+export interface StockMovementReport {
+    movements: {
+        id: string;
+        type: 'IN' | 'OUT';
+        quantity: number;
+        reason: string | null;
+        performedBy: string | null;
+        createdAt: string;
+        stockItem: {
+            id: string;
+            name: string;
+            code: string | null;
+            stockType: string;
+            category: string;
+            unit: string;
+            location: string | null;
+            printerModel: string | null;
+            inkColor: string | null;
+            assetTag: string | null;
+        };
+    }[];
+    summary: {
+        totalMovements: number;
+        totalIn: number;
+        totalOut: number;
+        netBalance: number;
+    };
+    aggregates: {
+        byItem: { name: string; totalIn: number; totalOut: number; net: number }[];
+        byDay: { date: string; totalIn: number; totalOut: number }[];
+    };
+}
+
+export interface StockReportFilters {
+    startDate?: string;
+    endDate?: string;
+    stockType?: string;
+    category?: string;
+    movementType?: string;
+}
+
 export const reportsApi = {
     // Get all recipients
     getRecipients: (): Promise<ReportRecipient[]> => {
@@ -750,6 +834,30 @@ export const reportsApi = {
             method: 'POST',
             body: JSON.stringify(data),
         });
+    },
+
+    // Ticket closure report
+    getTicketReport: (filters?: TicketReportFilters): Promise<TicketClosureReport> => {
+        const params = new URLSearchParams();
+        if (filters?.startDate) params.set('startDate', filters.startDate);
+        if (filters?.endDate) params.set('endDate', filters.endDate);
+        if (filters?.technicianId) params.set('technicianId', filters.technicianId);
+        if (filters?.category) params.set('category', filters.category);
+        if (filters?.solutionType) params.set('solutionType', filters.solutionType);
+        const query = params.toString();
+        return apiFetch<TicketClosureReport>(`/reports/tickets${query ? `?${query}` : ''}`);
+    },
+
+    // Stock movement report
+    getStockReport: (filters?: StockReportFilters): Promise<StockMovementReport> => {
+        const params = new URLSearchParams();
+        if (filters?.startDate) params.set('startDate', filters.startDate);
+        if (filters?.endDate) params.set('endDate', filters.endDate);
+        if (filters?.stockType) params.set('stockType', filters.stockType);
+        if (filters?.category) params.set('category', filters.category);
+        if (filters?.movementType) params.set('movementType', filters.movementType);
+        const query = params.toString();
+        return apiFetch<StockMovementReport>(`/reports/stock${query ? `?${query}` : ''}`);
     },
 };
 

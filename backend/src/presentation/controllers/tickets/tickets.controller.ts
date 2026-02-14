@@ -99,6 +99,7 @@ export class TicketsController {
   @Post(':id/close')
   async close(
     @Param('id') id: string,
+    @Request() req: any,
     @Body()
     closeData?: {
       solution?: string;
@@ -113,7 +114,7 @@ export class TicketsController {
       }>;
     },
   ) {
-    return this.ticketsService.close(id, closeData);
+    return this.ticketsService.close(id, closeData, req.user?.id);
   }
 
   // === Novos endpoints para bot ===

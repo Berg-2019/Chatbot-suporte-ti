@@ -27,7 +27,7 @@ import { MetricsModule } from './presentation/controllers/metrics/metrics.module
 import { ContactsModule } from './presentation/controllers/contacts/contacts.module';
 import { TeamChatModule } from './presentation/controllers/team-chat.module';
 import { PurchasesModule } from './presentation/controllers/purchases/purchases.module';
-import { ReportRecipientsModule } from './presentation/controllers/reports/report-recipients.module';
+import { ReportsModule } from './presentation/controllers/reports/reports.module';
 import { StockModule } from './presentation/controllers/stock/stock.module';
 import { ReservationModule } from './presentation/controllers/reservations/reservation.module';
 import { PrinterModule } from './presentation/controllers/printers/printer.module';
@@ -70,7 +70,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     ContactsModule,
     TeamChatModule,
     PurchasesModule,
-    ReportRecipientsModule,
+    ReportsModule,
     StockModule,
     ReservationModule,
     PrinterModule,
