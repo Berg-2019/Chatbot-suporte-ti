@@ -20,7 +20,9 @@ model User {
   email     String   @unique
   password  String
   name      String
-  role      Role     @default(AGENT)
+  role      Role     @default(AGENT) // Campo original mantido
+  roleId    String?  // ✅ NOVO: Referência para role customizável
+  customRole CustomRole? @relation(fields: [roleId], references: [id])
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -28,25 +30,50 @@ model User {
   // Integração GLPI
   glpiUserId    Int?              // ID do usuário no GLPI
   glpiGroupId   Int?              // ID do grupo no GLPI (N1, N2, N3)
-  
+
   // Nível técnico
   technicianLevel TechnicianLevel @default(N1)
-  
+
   // Alertas
   phoneNumber   String?           // WhatsApp para receber alertas
   receiveAlerts Boolean           @default(true)
   department    String?
-  permissions   String[]          @default([]) // Array de IDs dos módulos
+  permissions   String[]          @default([]) // DEPRECATED: usar role.permissions
   sector        String            @default("TI")  // TI ou ELECTRIC
 
   tickets   Ticket[]
   messages  Message[]
   alerts    TechnicianAlert[]
   teamMessages TeamMessage[]
+  csatResponses CsatResponse[]
+  cannedResponses CannedResponse[]
+  knowledgeArticles KnowledgeArticle[]
 
   @@map("users")
   @@index([role, active])
   @@index([email])
+  @@index([roleId])
+}
+
+// ✅ NOVO: Roles customizáveis
+model CustomRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+
+  // Permissões granulares (JSON array)
+  permissions Json     @default("[]")
+  // Exemplos: ["tickets:read", "tickets:write", "tickets:assign", "tickets:delete",
+  //            "stock:read", "stock:write", "users:read", "admin:settings"]
+
+  isSystem    Boolean  @default(false) // Roles do sistema não podem ser deletadas
+  users       User[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("custom_roles")
+  @@index([name])
 }
 
 enum Role {
@@ -100,6 +127,8 @@ model Ticket {
   messages    Message[]
   partUsages  PartUsage[]
   attachments Attachment[]
+  csatResponse CsatResponse?
+  labels      TicketLabel[]
 
   @@map("tickets")
   @@index([phoneNumber])
@@ -150,11 +179,16 @@ model Message {
 
   waMessageId String?   // ID da mensagem no WhatsApp
 
+  // ✅ NOVO: Notas internas e mentions (Chatwoot)
+  isInternal  Boolean  @default(false)  // Nota interna (invisível ao cliente)
+  mentions    String[] @default([])     // IDs dos usuários mencionados
+
   createdAt DateTime    @default(now())
 
   @@map("messages")
   @@index([ticketId])
   @@index([ticketId, createdAt(sort: Desc)])
+  @@index([isInternal])
 }
 
 enum MessageType {
@@ -320,25 +354,37 @@ model Attachment {
 }
 
 // ===========================================================================
-// Contacts - Contatos cadastrados por setor
+// Contacts - Contatos cadastrados por setor (Enhanced - Chatwoot Style)
 // ===========================================================================
 
 model Contact {
   id          String   @id @default(uuid())
-  
+
   jid         String   @unique  // JID completo do WhatsApp (ex: "123456789:0@s.whatsapp.net")
-  phoneNumber String?           // Número para exibição (opcional)
+  phoneNumber String?           // Número para exibição (opcional temporariamente)
   name        String            // Nome do contato
-  sector      String            // Setor do contato
+  email       String?           // Email do contato
+  sector      String            // Setor do contato (mantido obrigatório por compatibilidade)
+  company     String?           // Empresa/Organização
   department  String?           // Departamento/subdivisão
   ramal       String?           // Ramal telefônico
-  
+
+  // Custom attributes (inspirado no Chatwoot)
+  customAttributes Json? @default("{}")  // { "cargo": "Gerente", "ramal": "2045" }
+
+  // Estatísticas
+  firstContactAt DateTime @default(now())
+  lastContactAt  DateTime @default(now())
+  totalTickets   Int      @default(0)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("contacts")
   @@index([jid])
+  @@index([phoneNumber])
   @@index([sector])
+  @@index([email])
 }
 
 // ===========================================================================
@@ -641,5 +687,187 @@ enum ReservationStatus {
   IN_USE      // Em uso (retirado)
   COMPLETED   // Devolvido
   CANCELLED   // Cancelada
+}
+
+// ===========================================================================
+// FASE 1 - FEATURE ABSORPTION
+// ===========================================================================
+
+// ===========================================================================
+// CSAT - Pesquisa de Satisfação (Chatwoot)
+// ===========================================================================
+
+model CsatResponse {
+  id           String   @id @default(uuid())
+  ticketId     String   @unique
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  rating       Int      // 1-5 (😡 a 😍)
+  feedback     String?  // Texto opcional
+
+  assignedToId String?  // Técnico que atendeu
+  assignedTo   User?    @relation(fields: [assignedToId], references: [id])
+
+  respondedAt  DateTime @default(now())
+  sentAt       DateTime // Quando foi enviada
+  channel      String   // 'whatsapp', 'web', 'email'
+
+  // Review notes (do Chatwoot) — notas internas sobre o feedback
+  reviewNote   String?
+  reviewedBy   String?
+
+  @@map("csat_responses")
+  @@index([assignedToId])
+  @@index([respondedAt])
+  @@index([rating])
+  @@index([ticketId])
+}
+
+// ===========================================================================
+// Automation Rules - Engine de Automação (Chatwoot)
+// ===========================================================================
+
+model AutomationRule {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+
+  // Evento gatilho
+  event       String   // 'ticket_created', 'message_received', 'ticket_updated',
+                       // 'ticket_assigned', 'csat_received'
+
+  // Condições (JSON) — Array de condições com operador AND/OR
+  conditions  Json     // [{ field: "priority", operator: "equals", value: "URGENT" }]
+  conditionOperator String @default("AND") // AND | OR
+
+  // Ações (JSON) — Array de ações a executar
+  actions     Json     // [{ type: "assign_agent", value: "user-id" },
+                       //  { type: "add_label", value: "urgente" }]
+
+  // Auditoria
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  executionCount Int   @default(0)
+  lastExecutedAt DateTime?
+
+  @@map("automation_rules")
+  @@index([event, active])
+  @@index([active])
+}
+
+// ===========================================================================
+// Canned Responses - Respostas Prontas (Chatwoot)
+// ===========================================================================
+
+model CannedResponse {
+  id        String   @id @default(uuid())
+  shortcode String   @unique  // Ex: "saudacao", "reiniciar_pc"
+  content   String   @db.Text // Texto da resposta (suporta {{variáveis}})
+  category  String?  // "Geral", "TI", "Elétrica"
+
+  createdBy String
+  creator   User     @relation(fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("canned_responses")
+  @@index([shortcode])
+  @@index([category])
+}
+
+// ===========================================================================
+// Webhooks de Saída (Chatwoot/Peppermint)
+// ===========================================================================
+
+model Webhook {
+  id        String   @id @default(uuid())
+  url       String
+  events    String[] // ['ticket_created', 'ticket_resolved', 'message_received']
+  active    Boolean  @default(true)
+  secret    String?  // Para validar HMAC
+
+  headers   Json?    // Headers customizados
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Logs
+  logs      WebhookLog[]
+
+  @@map("webhooks")
+  @@index([active])
+}
+
+model WebhookLog {
+  id         String   @id @default(uuid())
+  webhookId  String
+  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  event      String
+  payload    Json
+  statusCode Int?
+  response   String?
+  error      String?
+
+  createdAt  DateTime @default(now())
+
+  @@map("webhook_logs")
+  @@index([webhookId, createdAt])
+  @@index([webhookId])
+  @@index([createdAt])
+}
+
+// ===========================================================================
+// Knowledge Base - Wiki/Base de Conhecimento (Peppermint)
+// ===========================================================================
+
+model KnowledgeArticle {
+  id          String   @id @default(uuid())
+  title       String
+  content     String   @db.Text // Markdown
+  category    String   // "Procedimentos", "Troubleshooting", "Onboarding"
+
+  isPublic    Boolean  @default(false) // Se true, visível no Help Center
+  isInternal  Boolean  @default(true)  // Visível apenas para agentes
+
+  tags        String[]
+
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+
+  views       Int      @default(0)
+  helpful     Int      @default(0)    // Contagem de "útil"
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("knowledge_articles")
+  @@index([category])
+  @@index([isPublic])
+  @@index([tags])
+  @@index([authorId])
+}
+
+// ===========================================================================
+// Ticket Labels/Tags (Chatwoot)
+// ===========================================================================
+
+model TicketLabel {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  label     String   // "urgente", "vip", "hardware", etc
+  color     String?  // Hex color para UI
+
+  createdAt DateTime @default(now())
+
+  @@map("ticket_labels")
+  @@unique([ticketId, label]) // Evita labels duplicadas no mesmo ticket
+  @@index([ticketId])
+  @@index([label])
 }
 

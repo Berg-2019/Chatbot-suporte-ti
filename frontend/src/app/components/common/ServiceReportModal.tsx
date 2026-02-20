@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Upload, FileText, MapPin, Camera, Check, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { ticketsApi, usersApi, type GlpiUser } from '../../services/api';
+import { ticketsApi, usersApi, type User } from '../../services/api';
 
 interface ServiceReportModalProps {
     isOpen: boolean;
@@ -13,7 +13,7 @@ interface ServiceReportModalProps {
 export default function ServiceReportModal({ isOpen, onClose, onSuccess, sector = 'TI' }: ServiceReportModalProps) {
     const [loading, setLoading] = useState(false);
     const [files, setFiles] = useState<File[]>([]);
-    const [technicians, setTechnicians] = useState<GlpiUser[]>([]);
+    const [technicians, setTechnicians] = useState<User[]>([]);
     const [formData, setFormData] = useState({
         location: '',
         category: sector === 'ELECTRIC' ? 'Elétrica' : 'Infraestrutura',
@@ -35,7 +35,7 @@ export default function ServiceReportModal({ isOpen, onClose, onSuccess, sector 
 
     const fetchTechnicians = async () => {
         try {
-            const users = await usersApi.getGlpiUsers();
+            const users = await usersApi.getTechnicians();
             setTechnicians(users);
         } catch (error) {
             console.error('Error fetching technicians:', error);
@@ -148,7 +148,7 @@ export default function ServiceReportModal({ isOpen, onClose, onSuccess, sector 
                             <option value="">Selecione quem realizou o serviço (Opcional)</option>
                             {technicians.map(tech => (
                                 <option key={tech.id} value={tech.id}>
-                                    {tech.name} {tech.realname ? `(${tech.realname})` : ''}
+                                    {tech.name}
                                 </option>
                             ))}
                         </select>
