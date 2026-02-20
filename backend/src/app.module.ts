@@ -32,6 +32,7 @@ import { StockModule } from './presentation/controllers/stock/stock.module';
 import { ReservationModule } from './presentation/controllers/reservations/reservation.module';
 import { PrinterModule } from './presentation/controllers/printers/printer.module';
 import { WebsocketModule } from './presentation/websockets/websocket.module';
+import { CannedResponsesModule } from './presentation/controllers/canned-responses/canned-responses.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -75,6 +76,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     ReservationModule,
     PrinterModule,
     WebsocketModule,
+    CannedResponsesModule,
   ],
   controllers: [HealthController],
   providers: [
