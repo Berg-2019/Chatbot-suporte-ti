@@ -1,8 +1,8 @@
 # 📊 Progresso da Implementação - Feature Absorption
 
 > **Branch**: `feature/chatbot-upgrade`
-> **Última atualização**: 2026-02-20 12:45
-> **Status Geral**: Fase 1 em andamento (2/4 features backend completas)
+> **Última atualização**: 2026-02-20 13:15
+> **Status Geral**: Fase 1 em andamento (2/4 features backend completas - 50%)
 
 ---
 
@@ -64,16 +64,49 @@ DELETE /canned-responses/:id                - Deletar (admin only)
 
 ## 🔄 Em Andamento
 
-### 📝 Feature 2/4: Webhooks de Saída
-**Status**: ⏳ Aguardando implementação
+### 📝 Feature 2/4: Webhooks de Saída (100%)
+**Status**: ✅ COMPLETO - Backend pronto para uso
 
-**Próximos passos**:
-- [ ] Criar `WebhookService`
-- [ ] Criar `WebhookController`
-- [ ] DTOs (Create, Update, Query)
-- [ ] Trigger em eventos de ticket/message
-- [ ] HMAC signature para segurança
-- [ ] Log de execuções
+#### Backend
+- ✅ `WebhookService` - CRUD + trigger + stats
+- ✅ `WebhookController` - 9 endpoints REST
+- ✅ DTOs com validação (Create, Update, Query)
+- ✅ HMAC SHA256 signature
+- ✅ Logging automático de execuções
+- ✅ Teste manual de webhooks
+- ✅ Limpeza de logs antigos
+- ✅ Registrado no AppModule
+
+#### Endpoints Disponíveis
+```
+GET    /webhooks              - Listar todos
+GET    /webhooks/:id          - Buscar por ID
+GET    /webhooks/:id/logs     - Logs de execução
+GET    /webhooks/:id/stats    - Estatísticas
+POST   /webhooks              - Criar novo
+POST   /webhooks/:id/test     - Testar webhook
+PATCH  /webhooks/:id          - Atualizar
+DELETE /webhooks/:id          - Deletar (admin only)
+```
+
+#### Eventos Suportados
+- `ticket_created`, `ticket_updated`, `ticket_assigned`
+- `ticket_resolved`, `ticket_closed`
+- `message_received`, `message_sent`
+- `csat_received`, `automation_executed`
+- `contact_created`, `contact_updated`
+
+#### Segurança
+- ✅ HMAC signature opcional
+- ✅ Custom headers
+- ✅ Timeout de 10s
+- ✅ Validação de URL
+- ✅ Logs de todas execuções
+
+#### Integração
+- ✅ Decorator `@TriggerWebhook` criado
+- ✅ Guia completo: [WEBHOOK_INTEGRATION_EXAMPLE.md](./WEBHOOK_INTEGRATION_EXAMPLE.md)
+- ✅ 3 métodos de integração documentados
 
 ### 📝 Feature 3/4: Contact Unificado
 **Status**: ✅ Schema pronto / ⏳ Service pendente
@@ -137,19 +170,22 @@ DELETE /canned-responses/:id                - Deletar (admin only)
 ### Código Escrito
 | Categoria | Arquivos | Linhas |
 |-----------|----------|--------|
-| Services | 1 | ~300 |
-| Controllers | 1 | ~120 |
-| DTOs | 3 | ~60 |
-| Modules | 1 | ~15 |
-| **Total** | **6** | **~495** |
+| Services | 2 | ~850 |
+| Controllers | 2 | ~230 |
+| DTOs | 7 | ~140 |
+| Modules | 2 | ~30 |
+| Decorators | 1 | ~15 |
+| Docs | 1 | ~450 |
+| **Total** | **15** | **~1,715** |
 
 ### Commits
 - ✅ Schema + Seed da Fase 1
-- ✅ Documentação completa
+- ✅ Documentação completa (PROGRESS, README_UPGRADE, FASE1_IMPLEMENTATION)
 - ✅ Implementação Canned Responses
+- ✅ Implementação Webhooks + guia de integração
 
 ### Coverage
-- **Backend**: 1/4 features da Fase 1 (25%)
+- **Backend**: 2/4 features da Fase 1 (50%)
 - **Frontend**: 0/4 features (0%)
 - **Bot**: 0/4 features (0%)
 
@@ -159,15 +195,17 @@ DELETE /canned-responses/:id                - Deletar (admin only)
 
 ### Imediato (Hoje)
 1. ✅ ~~Implementar Canned Responses backend~~
-2. ⏳ Implementar Webhook Service
-3. ⏳ Implementar Webhook Controller
-4. ⏳ Testar endpoints manualmente
+2. ✅ ~~Implementar Webhook Service~~
+3. ✅ ~~Implementar Webhook Controller~~
+4. ⏳ Contact Service melhorado
+5. ⏳ RBAC Service
 
 ### Esta Semana
-1. Completar Webhooks backend
-2. Completar Contact Service melhorado
-3. Completar RBAC Service
-4. Iniciar frontend para Canned Responses
+1. ✅ ~~Completar Webhooks backend~~
+2. ⏳ Completar Contact Service melhorado
+3. ⏳ Completar RBAC Service
+4. ⏳ Iniciar frontend para Canned Responses
+5. ⏳ Integrar webhooks com TicketsService
 
 ### Próxima Semana
 1. Fase 2: CSAT Service
