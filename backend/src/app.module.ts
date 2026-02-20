@@ -34,6 +34,7 @@ import { PrinterModule } from './presentation/controllers/printers/printer.modul
 import { WebsocketModule } from './presentation/websockets/websocket.module';
 import { CannedResponsesModule } from './presentation/controllers/canned-responses/canned-responses.module';
 import { WebhooksModule } from './presentation/controllers/webhooks/webhooks.module';
+import { RolesModule } from './presentation/controllers/roles/roles.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -79,6 +80,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     WebsocketModule,
     CannedResponsesModule,
     WebhooksModule,
+    RolesModule,
   ],
   controllers: [HealthController],
   providers: [
