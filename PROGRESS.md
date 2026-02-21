@@ -218,9 +218,10 @@ DELETE /roles/:id                     - Deletar
 | Controllers | 4 | ~460 |
 | DTOs | 14 | ~280 |
 | Modules | 4 | ~60 |
-| Decorators | 1 | ~15 |
-| Docs | 1 | ~450 |
-| **Total** | **28** | **~3,265** |
+| Guards | 2 | ~120 |
+| Decorators | 4 | ~80 |
+| Docs | 5 | ~900 |
+| **Total** | **37** | **~3,900** |
 
 ### Commits
 - ✅ Schema + Seed da Fase 1 (9 models, 7 roles, 10 canned responses)
@@ -247,14 +248,19 @@ DELETE /roles/:id                     - Deletar
 4. ✅ Implementar RBAC Service completo
 5. ✅ **FASE 1 - FUNDAÇÃO: 100% BACKEND COMPLETO!**
 
+### ✅ Concluído Agora
+1. ✅ Criar decorator @RequirePermissions() (3 variantes)
+2. ✅ Implementar PermissionsGuard (novo sistema)
+3. ✅ Atualizar RolesGuard com deprecation notice
+4. ✅ Criar GUARDS_USAGE_GUIDE.md completo
+
 ### Próximos (Esta Semana)
-1. ⏳ Atualizar RolesGuard para permissões granulares
-2. ⏳ Criar decorator @RequirePermissions()
-3. ⏳ Frontend: CRUD de Canned Responses
-4. ⏳ Frontend: Dropdown de Canned Responses no chat
-5. ⏳ Frontend: Gerenciamento de Webhooks
-6. ⏳ Frontend: Sidebar de Contact com histórico
-7. ⏳ Frontend: Gerenciamento de Roles
+1. ⏳ Frontend: CRUD de Canned Responses
+2. ⏳ Frontend: Dropdown de Canned Responses no chat
+3. ⏳ Frontend: Gerenciamento de Webhooks
+4. ⏳ Frontend: Sidebar de Contact com histórico
+5. ⏳ Frontend: Gerenciamento de Roles
+6. ⏳ Migrar controllers existentes para PermissionsGuard
 
 ### Próxima Semana (Fase 2)
 1. ⏳ CSAT Service (pesquisa satisfação)

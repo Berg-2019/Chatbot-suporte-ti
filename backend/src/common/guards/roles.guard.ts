@@ -2,9 +2,26 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, UserRole } from '../decorators/roles.decorator';
 
+/**
+ * RolesGuard - Guard para verificar roles (compatibilidade legada)
+ *
+ * ⚠️ DEPRECATED: Este guard mantém compatibilidade com o sistema antigo de roles.
+ *
+ * Para novos endpoints, use:
+ * - PermissionsGuard + @RequirePermissions(['module:action'])
+ * - PermissionsGuard + @RequireAllPermissions(['perm1', 'perm2'])
+ * - PermissionsGuard + @RequireAnyPermission(['perm1', 'perm2'])
+ *
+ * Migração:
+ * - @Roles('ADMIN') → @RequirePermissions(['*'])
+ * - @Roles('STOCK_MANAGER') → @RequirePermissions(['estoque:*'])
+ * - @Roles('AGENT') → @RequirePermissions(['tickets:view'])
+ *
+ * @deprecated Use PermissionsGuard para permissões granulares
+ */
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) { }
+  constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
@@ -23,10 +40,10 @@ export class RolesGuard implements CanActivate {
     }
 
     const hasRole = requiredRoles.some((role) => {
-      // Direct role match (ADMIN, AGENT)
+      // Direct role match (ADMIN, AGENT, etc.)
       if (user.role === role) return true;
 
-      // Map STOCK_MANAGER role to 'estoque' permission
+      // Map legacy STOCK_MANAGER role to 'estoque' permission (backward compatibility)
       if (role === 'STOCK_MANAGER' && user.permissions?.includes('estoque')) {
         return true;
       }
