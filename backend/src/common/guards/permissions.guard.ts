@@ -11,10 +11,9 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const permissionsMetadata = this.reflector.getAllAndOverride<any>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const permissionsMetadata = this.reflector.getAllAndOverride<
+      string[] | { permissions: string[]; requireAll: boolean }
+    >(PERMISSIONS_KEY, [context.getHandler(), context.getClass()]);
 
     // Se não há metadados de permissão, permitir acesso
     if (!permissionsMetadata) {
@@ -32,8 +31,10 @@ export class PermissionsGuard implements CanActivate {
     let requireAll = false;
 
     if (typeof permissionsMetadata === 'object' && !Array.isArray(permissionsMetadata)) {
-      requiredPermissions = permissionsMetadata.permissions;
-      requireAll = permissionsMetadata.requireAll || false;
+      requiredPermissions = (permissionsMetadata as { permissions: string[]; requireAll: boolean })
+        .permissions;
+      requireAll =
+        (permissionsMetadata as { permissions: string[]; requireAll: boolean }).requireAll || false;
     } else {
       requiredPermissions = Array.isArray(permissionsMetadata)
         ? permissionsMetadata

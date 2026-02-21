@@ -11,9 +11,9 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { AuthGuard } from '@nestjs/passport';
+import { PermissionsGuard } from '../../../common/guards/permissions.guard';
+import { RequirePermissions, RequireAllPermissions } from '../../../common/decorators/require-permissions.decorator';
 import { RoleService } from '../../../infrastructure/services/role.service';
 import {
   CreateRoleDto,
@@ -22,7 +22,7 @@ import {
 } from '../../../domain/dtos/role';
 
 @Controller('roles')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(AuthGuard('jwt'), PermissionsGuard)
 export class RolesController {
   constructor(private readonly roleService: RoleService) {}
 
@@ -31,7 +31,7 @@ export class RolesController {
    * Listar todas as roles
    */
   @Get()
-  @Roles('ADMIN')
+  @RequirePermissions('roles:view')
   async findAll(@Query() query: QueryRoleDto) {
     return this.roleService.findAll(query);
   }
@@ -41,7 +41,7 @@ export class RolesController {
    * Listar todas as permissões disponíveis
    */
   @Get('permissions')
-  @Roles('ADMIN')
+  @RequirePermissions('roles:view')
   async getAvailablePermissions() {
     return this.roleService.getAvailablePermissions();
   }
@@ -51,7 +51,7 @@ export class RolesController {
    * Buscar role por ID
    */
   @Get(':id')
-  @Roles('ADMIN')
+  @RequirePermissions('roles:view')
   async findOne(@Param('id') id: string) {
     return this.roleService.findOne(id);
   }
@@ -61,17 +61,17 @@ export class RolesController {
    * Criar nova role
    */
   @Post()
-  @Roles('ADMIN')
+  @RequirePermissions('roles:create')
   async create(@Body() dto: CreateRoleDto) {
     return this.roleService.create(dto);
   }
 
   /**
    * POST /roles/:roleId/assign/:userId
-   * Atribuir role a usuário
+   * Atribuir role a usuário (operação sensível)
    */
   @Post(':roleId/assign/:userId')
-  @Roles('ADMIN')
+  @RequireAllPermissions('roles:assign', 'users:update')
   async assignToUser(@Param('roleId') roleId: string, @Param('userId') userId: string) {
     return this.roleService.assignRoleToUser(userId, roleId);
   }
@@ -81,17 +81,17 @@ export class RolesController {
    * Atualizar role
    */
   @Patch(':id')
-  @Roles('ADMIN')
+  @RequirePermissions('roles:update')
   async update(@Param('id') id: string, @Body() dto: UpdateRoleDto) {
     return this.roleService.update(id, dto);
   }
 
   /**
    * DELETE /roles/:id
-   * Deletar role
+   * Deletar role (operação sensível)
    */
   @Delete(':id')
-  @Roles('ADMIN')
+  @RequireAllPermissions('roles:delete', 'audit:view')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('id') id: string) {
     await this.roleService.delete(id);

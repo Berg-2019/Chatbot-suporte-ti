@@ -12,9 +12,9 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { AuthGuard } from '@nestjs/passport';
+import { PermissionsGuard } from '../../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import { CannedResponseService } from '../../../infrastructure/services/canned-response.service';
 import {
   CreateCannedResponseDto,
@@ -23,7 +23,7 @@ import {
 } from '../../../domain/dtos/canned-response';
 
 @Controller('canned-responses')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(AuthGuard('jwt'), PermissionsGuard)
 export class CannedResponsesController {
   constructor(private readonly cannedResponseService: CannedResponseService) {}
 
@@ -32,7 +32,7 @@ export class CannedResponsesController {
    * Listar todas as respostas prontas com filtros
    */
   @Get()
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('canned_responses:view')
   async findAll(@Query() query: QueryCannedResponseDto) {
     return this.cannedResponseService.findAll(query);
   }
@@ -42,7 +42,7 @@ export class CannedResponsesController {
    * Listar categorias únicas
    */
   @Get('categories')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('canned_responses:view')
   async getCategories() {
     return this.cannedResponseService.getCategories();
   }
@@ -52,7 +52,7 @@ export class CannedResponsesController {
    * Autocomplete para o chat
    */
   @Get('suggest')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('canned_responses:view')
   async suggest(@Query('q') query: string) {
     if (!query || query.length < 2) {
       return [];
@@ -65,7 +65,7 @@ export class CannedResponsesController {
    * Buscar resposta pronta por ID
    */
   @Get(':id')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('canned_responses:view')
   async findOne(@Param('id') id: string) {
     return this.cannedResponseService.findOne(id);
   }
@@ -75,7 +75,7 @@ export class CannedResponsesController {
    * Buscar por shortcode
    */
   @Get('shortcode/:shortcode')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('canned_responses:view')
   async findByShortcode(@Param('shortcode') shortcode: string) {
     return this.cannedResponseService.findByShortcode(shortcode);
   }
@@ -85,7 +85,7 @@ export class CannedResponsesController {
    * Criar nova resposta pronta
    */
   @Post()
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('canned_responses:create')
   async create(@Body() dto: CreateCannedResponseDto, @Req() req: any) {
     return this.cannedResponseService.create({
       ...dto,
@@ -98,7 +98,7 @@ export class CannedResponsesController {
    * Atualizar resposta pronta
    */
   @Patch(':id')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('canned_responses:update')
   async update(@Param('id') id: string, @Body() dto: UpdateCannedResponseDto) {
     return this.cannedResponseService.update(id, dto);
   }
@@ -108,7 +108,7 @@ export class CannedResponsesController {
    * Deletar resposta pronta
    */
   @Delete(':id')
-  @Roles('ADMIN')
+  @RequirePermissions('canned_responses:delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('id') id: string) {
     await this.cannedResponseService.delete(id);

@@ -11,9 +11,9 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { AuthGuard } from '@nestjs/passport';
+import { PermissionsGuard } from '../../../common/guards/permissions.guard';
+import { RequirePermissions, RequireAllPermissions } from '../../../common/decorators/require-permissions.decorator';
 import { ContactService } from '../../../infrastructure/services/contact.service';
 import {
   CreateContactDto,
@@ -22,7 +22,7 @@ import {
 } from '../../../domain/dtos/contact';
 
 @Controller('contacts')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(AuthGuard('jwt'), PermissionsGuard)
 export class ContactsEnhancedController {
   constructor(private readonly contactService: ContactService) {}
 
@@ -31,7 +31,7 @@ export class ContactsEnhancedController {
    * Listar todos os contatos com filtros e paginação
    */
   @Get()
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:view')
   async findAll(@Query() query: QueryContactDto) {
     return this.contactService.findAll(query);
   }
@@ -41,7 +41,7 @@ export class ContactsEnhancedController {
    * Listar setores únicos
    */
   @Get('sectors')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:view')
   async getSectors() {
     return this.contactService.getSectors();
   }
@@ -51,7 +51,7 @@ export class ContactsEnhancedController {
    * Buscar contato por ID
    */
   @Get(':id')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:view')
   async findOne(@Param('id') id: string) {
     return this.contactService.findOne(id);
   }
@@ -61,7 +61,7 @@ export class ContactsEnhancedController {
    * Histórico de tickets do contato
    */
   @Get(':id/tickets')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:view')
   async getTicketHistory(@Param('id') id: string, @Query('limit') limit?: string) {
     const parsedLimit = limit ? parseInt(limit, 10) : 10;
     return this.contactService.getTicketHistory(id, parsedLimit);
@@ -72,7 +72,7 @@ export class ContactsEnhancedController {
    * Estatísticas do contato
    */
   @Get(':id/stats')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:view')
   async getStats(@Param('id') id: string) {
     return this.contactService.getContactStats(id);
   }
@@ -82,7 +82,7 @@ export class ContactsEnhancedController {
    * Buscar contato por telefone
    */
   @Get('phone/:phoneNumber')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:view')
   async findByPhone(@Param('phoneNumber') phoneNumber: string) {
     return this.contactService.findByPhone(phoneNumber);
   }
@@ -92,7 +92,7 @@ export class ContactsEnhancedController {
    * Buscar contato por JID
    */
   @Get('jid/:jid')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:view')
   async findByJid(@Param('jid') jid: string) {
     return this.contactService.findByJid(decodeURIComponent(jid));
   }
@@ -102,7 +102,7 @@ export class ContactsEnhancedController {
    * Criar novo contato
    */
   @Post()
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:create')
   async create(@Body() dto: CreateContactDto) {
     return this.contactService.create(dto);
   }
@@ -112,7 +112,7 @@ export class ContactsEnhancedController {
    * Criar ou atualizar contato por JID
    */
   @Post('upsert/jid')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:create')
   async upsertByJid(
     @Body()
     dto: {
@@ -135,7 +135,7 @@ export class ContactsEnhancedController {
    * Criar ou atualizar contato por telefone
    */
   @Post('upsert/phone')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:create')
   async upsertByPhone(
     @Body()
     dto: {
@@ -153,10 +153,10 @@ export class ContactsEnhancedController {
 
   /**
    * POST /contacts/:id/merge/:mergeId
-   * Merge de contatos duplicados
+   * Merge de contatos duplicados (operação sensível)
    */
   @Post(':id/merge/:mergeId')
-  @Roles('ADMIN')
+  @RequireAllPermissions('contacts:merge', 'contacts:delete')
   async mergeContacts(@Param('id') keepId: string, @Param('mergeId') mergeId: string) {
     return this.contactService.mergeContacts(keepId, mergeId);
   }
@@ -166,7 +166,7 @@ export class ContactsEnhancedController {
    * Atualizar contato
    */
   @Patch(':id')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:update')
   async update(@Param('id') id: string, @Body() dto: UpdateContactDto) {
     return this.contactService.update(id, dto);
   }
@@ -176,7 +176,7 @@ export class ContactsEnhancedController {
    * Atualizar custom attributes (merge)
    */
   @Patch(':id/custom-attributes')
-  @Roles('ADMIN', 'AGENT')
+  @RequirePermissions('contacts:update')
   async updateCustomAttributes(
     @Param('id') id: string,
     @Body() attributes: Record<string, any>,
@@ -189,7 +189,7 @@ export class ContactsEnhancedController {
    * Deletar contato
    */
   @Delete(':id')
-  @Roles('ADMIN')
+  @RequirePermissions('contacts:delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('id') id: string) {
     await this.contactService.delete(id);
