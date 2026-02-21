@@ -862,6 +862,397 @@ export const reportsApi = {
 };
 
 // ================================================================
+// Canned Responses API (Fase 1 - Feature 1)
+// ================================================================
+
+export interface CannedResponse {
+    id: string;
+    shortcode: string;
+    title: string;
+    content: string;
+    category: string | null;
+    isPublic: boolean;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CannedResponseFilters {
+    search?: string;
+    category?: string;
+    isPublic?: boolean;
+    limit?: number;
+}
+
+export const cannedResponsesApi = {
+    // List all canned responses
+    list: (filters?: CannedResponseFilters): Promise<CannedResponse[]> => {
+        const params = new URLSearchParams();
+        if (filters?.search) params.set('search', filters.search);
+        if (filters?.category) params.set('category', filters.category);
+        if (filters?.isPublic !== undefined) params.set('isPublic', String(filters.isPublic));
+        if (filters?.limit) params.set('limit', String(filters.limit));
+        const query = params.toString();
+        return apiFetch<CannedResponse[]>(`/canned-responses${query ? `?${query}` : ''}`);
+    },
+
+    // Get categories
+    getCategories: (): Promise<string[]> => {
+        return apiFetch<string[]>('/canned-responses/categories');
+    },
+
+    // Autocomplete/suggest
+    suggest: (query: string): Promise<CannedResponse[]> => {
+        return apiFetch<CannedResponse[]>(`/canned-responses/suggest?q=${encodeURIComponent(query)}`);
+    },
+
+    // Get by ID
+    getById: (id: string): Promise<CannedResponse> => {
+        return apiFetch<CannedResponse>(`/canned-responses/${id}`);
+    },
+
+    // Get by shortcode
+    getByShortcode: (shortcode: string): Promise<CannedResponse> => {
+        return apiFetch<CannedResponse>(`/canned-responses/shortcode/${shortcode}`);
+    },
+
+    // Create
+    create: (data: Omit<CannedResponse, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<CannedResponse> => {
+        return apiFetch<CannedResponse>('/canned-responses', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Update
+    update: (id: string, data: Partial<Omit<CannedResponse, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>>): Promise<CannedResponse> => {
+        return apiFetch<CannedResponse>(`/canned-responses/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Delete
+    delete: (id: string): Promise<void> => {
+        return apiFetch<void>(`/canned-responses/${id}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// ================================================================
+// Webhooks API (Fase 1 - Feature 2)
+// ================================================================
+
+export interface Webhook {
+    id: string;
+    name: string;
+    url: string;
+    events: string[];
+    active: boolean;
+    secret: string | null;
+    customHeaders: Record<string, string> | null;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface WebhookLog {
+    id: string;
+    webhookId: string;
+    event: string;
+    payload: any;
+    statusCode: number | null;
+    response: string | null;
+    success: boolean;
+    error: string | null;
+    executedAt: string;
+}
+
+export interface WebhookStats {
+    totalExecutions: number;
+    successfulExecutions: number;
+    failedExecutions: number;
+    successRate: number;
+    lastExecution: string | null;
+}
+
+export interface WebhookFilters {
+    active?: boolean;
+    event?: string;
+}
+
+export const webhooksApi = {
+    // List all webhooks
+    list: (filters?: WebhookFilters): Promise<Webhook[]> => {
+        const params = new URLSearchParams();
+        if (filters?.active !== undefined) params.set('active', String(filters.active));
+        if (filters?.event) params.set('event', filters.event);
+        const query = params.toString();
+        return apiFetch<Webhook[]>(`/webhooks${query ? `?${query}` : ''}`);
+    },
+
+    // Get by ID
+    getById: (id: string): Promise<Webhook> => {
+        return apiFetch<Webhook>(`/webhooks/${id}`);
+    },
+
+    // Get logs
+    getLogs: (id: string, limit?: number): Promise<WebhookLog[]> => {
+        const query = limit ? `?limit=${limit}` : '';
+        return apiFetch<WebhookLog[]>(`/webhooks/${id}/logs${query}`);
+    },
+
+    // Get stats
+    getStats: (id: string): Promise<WebhookStats> => {
+        return apiFetch<WebhookStats>(`/webhooks/${id}/stats`);
+    },
+
+    // Create
+    create: (data: Omit<Webhook, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<Webhook> => {
+        return apiFetch<Webhook>('/webhooks', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Test webhook
+    test: (id: string): Promise<{ success: boolean; message: string }> => {
+        return apiFetch<{ success: boolean; message: string }>(`/webhooks/${id}/test`, {
+            method: 'POST',
+        });
+    },
+
+    // Update
+    update: (id: string, data: Partial<Omit<Webhook, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>>): Promise<Webhook> => {
+        return apiFetch<Webhook>(`/webhooks/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Delete
+    delete: (id: string): Promise<void> => {
+        return apiFetch<void>(`/webhooks/${id}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// ================================================================
+// Contacts API (Fase 1 - Feature 3)
+// ================================================================
+
+export interface Contact {
+    id: string;
+    jid: string;
+    phoneNumber: string | null;
+    name: string;
+    email: string | null;
+    sector: string;
+    company: string | null;
+    department: string | null;
+    ramal: string | null;
+    customAttributes: Record<string, any> | null;
+    notes: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ContactStats {
+    totalTickets: number;
+    resolvedTickets: number;
+    resolutionRate: number;
+    daysSinceLastContact: number | null;
+}
+
+export interface ContactFilters {
+    search?: string;
+    sector?: string;
+    page?: number;
+    limit?: number;
+}
+
+export interface ContactListResponse {
+    items: Contact[];
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+}
+
+export const contactsApi = {
+    // List all contacts with pagination
+    list: (filters?: ContactFilters): Promise<ContactListResponse> => {
+        const params = new URLSearchParams();
+        if (filters?.search) params.set('search', filters.search);
+        if (filters?.sector) params.set('sector', filters.sector);
+        if (filters?.page) params.set('page', String(filters.page));
+        if (filters?.limit) params.set('limit', String(filters.limit));
+        const query = params.toString();
+        return apiFetch<ContactListResponse>(`/contacts${query ? `?${query}` : ''}`);
+    },
+
+    // Get sectors
+    getSectors: (): Promise<string[]> => {
+        return apiFetch<string[]>('/contacts/sectors');
+    },
+
+    // Get by ID
+    getById: (id: string): Promise<Contact> => {
+        return apiFetch<Contact>(`/contacts/${id}`);
+    },
+
+    // Get ticket history
+    getTicketHistory: (id: string, limit?: number): Promise<any[]> => {
+        const query = limit ? `?limit=${limit}` : '';
+        return apiFetch<any[]>(`/contacts/${id}/tickets${query}`);
+    },
+
+    // Get stats
+    getStats: (id: string): Promise<ContactStats> => {
+        return apiFetch<ContactStats>(`/contacts/${id}/stats`);
+    },
+
+    // Get by phone
+    getByPhone: (phone: string): Promise<Contact> => {
+        return apiFetch<Contact>(`/contacts/phone/${encodeURIComponent(phone)}`);
+    },
+
+    // Get by JID
+    getByJid: (jid: string): Promise<Contact> => {
+        return apiFetch<Contact>(`/contacts/jid/${encodeURIComponent(jid)}`);
+    },
+
+    // Create
+    create: (data: Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>): Promise<Contact> => {
+        return apiFetch<Contact>('/contacts', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Upsert by JID
+    upsertByJid: (data: { jid: string; phoneNumber: string; name: string; [key: string]: any }): Promise<Contact> => {
+        return apiFetch<Contact>('/contacts/upsert/jid', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Upsert by phone
+    upsertByPhone: (data: { phoneNumber: string; name: string; [key: string]: any }): Promise<Contact> => {
+        return apiFetch<Contact>('/contacts/upsert/phone', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Merge contacts
+    merge: (keepId: string, mergeId: string): Promise<Contact> => {
+        return apiFetch<Contact>(`/contacts/${keepId}/merge/${mergeId}`, {
+            method: 'POST',
+        });
+    },
+
+    // Update
+    update: (id: string, data: Partial<Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Contact> => {
+        return apiFetch<Contact>(`/contacts/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Update custom attributes
+    updateCustomAttributes: (id: string, attributes: Record<string, any>): Promise<Contact> => {
+        return apiFetch<Contact>(`/contacts/${id}/custom-attributes`, {
+            method: 'PATCH',
+            body: JSON.stringify(attributes),
+        });
+    },
+
+    // Delete
+    delete: (id: string): Promise<void> => {
+        return apiFetch<void>(`/contacts/${id}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// ================================================================
+// Roles API (Fase 1 - Feature 4)
+// ================================================================
+
+export interface CustomRole {
+    id: string;
+    name: string;
+    description: string | null;
+    permissions: string[];
+    isSystem: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface PermissionModule {
+    module: string;
+    actions: string[];
+}
+
+export interface RoleFilters {
+    isSystem?: boolean;
+}
+
+export const rolesApi = {
+    // List all roles
+    list: (filters?: RoleFilters): Promise<CustomRole[]> => {
+        const params = new URLSearchParams();
+        if (filters?.isSystem !== undefined) params.set('isSystem', String(filters.isSystem));
+        const query = params.toString();
+        return apiFetch<CustomRole[]>(`/roles${query ? `?${query}` : ''}`);
+    },
+
+    // Get available permissions
+    getPermissions: (): Promise<PermissionModule[]> => {
+        return apiFetch<PermissionModule[]>('/roles/permissions');
+    },
+
+    // Get by ID
+    getById: (id: string): Promise<CustomRole> => {
+        return apiFetch<CustomRole>(`/roles/${id}`);
+    },
+
+    // Create
+    create: (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isSystem'>): Promise<CustomRole> => {
+        return apiFetch<CustomRole>('/roles', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Assign role to user
+    assignToUser: (roleId: string, userId: string): Promise<{ message: string }> => {
+        return apiFetch<{ message: string }>(`/roles/${roleId}/assign/${userId}`, {
+            method: 'POST',
+        });
+    },
+
+    // Update
+    update: (id: string, data: Partial<Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isSystem'>>): Promise<CustomRole> => {
+        return apiFetch<CustomRole>(`/roles/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Delete
+    delete: (id: string): Promise<void> => {
+        return apiFetch<void>(`/roles/${id}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// ================================================================
 // Export all APIs
 // ================================================================
 
@@ -876,6 +1267,10 @@ export const api = {
     faq: faqApi,
     teamChat: teamChatApi,
     reports: reportsApi,
+    cannedResponses: cannedResponsesApi,
+    webhooks: webhooksApi,
+    contacts: contactsApi,
+    roles: rolesApi,
 };
 
 export default api;
