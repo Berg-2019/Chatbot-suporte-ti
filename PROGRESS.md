@@ -1,8 +1,8 @@
 # 📊 Progresso da Implementação - Feature Absorption
 
 > **Branch**: `feature/chatbot-upgrade`
-> **Última atualização**: 2026-02-20 14:00
-> **Status Geral**: 🎉 FASE 1 - FUNDAÇÃO: 100% COMPLETA (BACKEND)
+> **Última atualização**: 2026-02-21 18:30
+> **Status Geral**: 🎉 FASE 1 - FUNDAÇÃO: 100% COMPLETA (BACKEND + GUARDS)
 
 ---
 
@@ -225,11 +225,13 @@ DELETE /roles/:id                     - Deletar
 
 ### Commits
 - ✅ Schema + Seed da Fase 1 (9 models, 7 roles, 10 canned responses)
-- ✅ Documentação completa (4 arquivos de docs)
+- ✅ Documentação completa (5 arquivos de docs)
 - ✅ Implementação Canned Responses (completo)
 - ✅ Implementação Webhooks (completo + guia integração)
 - ✅ Implementação Contact Service (completo)
 - ✅ Implementação RBAC Service (completo)
+- ✅ Guards system (PermissionsGuard + 3 decorators)
+- ✅ Controller migrations (4 controllers migrados)
 
 ### Coverage - Fase 1
 - **Backend**: 4/4 features (100%) 🎉
@@ -248,11 +250,17 @@ DELETE /roles/:id                     - Deletar
 4. ✅ Implementar RBAC Service completo
 5. ✅ **FASE 1 - FUNDAÇÃO: 100% BACKEND COMPLETO!**
 
-### ✅ Concluído Agora
+### ✅ Sistema de Guards e Migração (100%)
 1. ✅ Criar decorator @RequirePermissions() (3 variantes)
 2. ✅ Implementar PermissionsGuard (novo sistema)
 3. ✅ Atualizar RolesGuard com deprecation notice
-4. ✅ Criar GUARDS_USAGE_GUIDE.md completo
+4. ✅ Criar GUARDS_USAGE_GUIDE.md completo (450+ linhas)
+5. ✅ Migrar CannedResponsesController para PermissionsGuard
+6. ✅ Migrar WebhooksController para PermissionsGuard
+7. ✅ Migrar ContactsEnhancedController para PermissionsGuard
+8. ✅ Migrar RolesController para PermissionsGuard
+9. ✅ Fix TypeScript compilation errors
+10. ✅ Commit guard system and migrations
 
 ### Próximos (Esta Semana)
 1. ⏳ Frontend: CRUD de Canned Responses
