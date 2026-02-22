@@ -22,6 +22,11 @@ const StockView = lazy(() => import('@/app/components/views/StockView'));
 const UsersView = lazy(() => import('@/app/components/views/UsersView'));
 const TeamChatView = lazy(() => import('@/app/components/views/TeamChatView'));
 
+// Fase 1 - New Features
+const CannedResponsesView = lazy(() => import('@/app/components/views/CannedResponsesView'));
+const WebhooksView = lazy(() => import('@/app/components/views/WebhooksView'));
+const RolesView = lazy(() => import('@/app/components/views/RolesView'));
+
 // Loading fallback component
 const LoadingFallback = () => (
   <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -71,6 +76,13 @@ function MainContent() {
         return <UsersView />;
       case 'chat':
         return <TeamChatView />;
+      // Fase 1 - New Features
+      case 'respostas-prontas':
+        return <CannedResponsesView />;
+      case 'webhooks':
+        return <WebhooksView />;
+      case 'roles':
+        return <RolesView />;
       default:
         if (profile === 'tech_elect') return <ElectricalDashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
         return <DashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;

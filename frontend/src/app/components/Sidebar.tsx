@@ -11,7 +11,9 @@ import {
   X,
   Printer,
   Zap,
-  Briefcase
+  Briefcase,
+  Webhook,
+  Shield
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth, UserProfile } from '@/app/context/AuthContext';
@@ -40,6 +42,10 @@ const menuItems: MenuItem[] = [
   { id: 'estoque', label: 'Estoque', icon: Package, roles: ['admin', 'tech_ti', 'tech_elect'] },
   { id: 'usuarios', label: 'Usuários', icon: Users, roles: ['admin', 'manager', 'tech_elect'] },
   { id: 'chat', label: 'Chat Equipe', icon: MessageSquare, roles: ['admin', 'tech_ti', 'tech_elect', 'manager'] },
+  // Fase 1 - New Features
+  { id: 'respostas-prontas', label: 'Respostas Prontas', icon: MessageSquare, roles: ['admin', 'tech_ti'] },
+  { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['admin'] },
+  { id: 'roles', label: 'Roles & Permissões', icon: Shield, roles: ['admin'] },
 ];
 
 export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
