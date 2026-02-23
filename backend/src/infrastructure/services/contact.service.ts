@@ -85,7 +85,7 @@ export class ContactService {
    * Buscar por número de telefone
    */
   async findByPhone(phoneNumber: string) {
-    return this.prisma.contact.findUnique({
+    return this.prisma.contact.findFirst({
       where: { phoneNumber },
     });
   }
@@ -108,11 +108,11 @@ export class ContactService {
 
     const contact = await this.prisma.contact.create({
       data: {
-        jid: data.jid,
+        jid: data.jid || `${data.phoneNumber}@s.whatsapp.net`,
         phoneNumber: data.phoneNumber,
         name: data.name,
         email: data.email,
-        sector: data.sector,
+        sector: data.sector || 'Não informado',
         company: data.company,
         department: data.department,
         ramal: data.ramal,
@@ -211,7 +211,7 @@ export class ContactService {
         phoneNumber: data.phoneNumber,
         name: data.name,
         email: data.email,
-        sector: data.sector,
+        sector: data.sector || 'Não informado',
         company: data.company,
         department: data.department,
         ramal: data.ramal,
@@ -224,7 +224,7 @@ export class ContactService {
         phoneNumber: data.phoneNumber,
         name: data.name,
         email: data.email,
-        sector: data.sector,
+        ...(data.sector && { sector: data.sector }),
         company: data.company,
         department: data.department,
         ramal: data.ramal,
@@ -322,6 +322,10 @@ export class ContactService {
   async getTicketHistory(id: string, limit = 10) {
     const contact = await this.findOne(id);
 
+    if (!contact.phoneNumber) {
+      return [];
+    }
+
     const tickets = await this.prisma.ticket.findMany({
       where: {
         phoneNumber: contact.phoneNumber,
@@ -351,6 +355,19 @@ export class ContactService {
    */
   async getContactStats(id: string) {
     const contact = await this.findOne(id);
+
+    if (!contact.phoneNumber) {
+      return {
+        totalTickets: 0,
+        resolvedTickets: 0,
+        openTickets: 0,
+        resolutionRate: 0,
+        lastTicketAt: null,
+        daysSinceLastContact: Math.floor(
+          (new Date().getTime() - contact.lastContactAt.getTime()) / (1000 * 60 * 60 * 24)
+        ),
+      };
+    }
 
     const [totalTickets, resolvedTickets, avgResolutionTime] = await Promise.all([
       this.prisma.ticket.count({
@@ -402,10 +419,10 @@ export class ContactService {
       by: ['sector'],
       where: {
         sector: {
-          not: null,
+          not: '',
         },
       },
-      _count: { sector: true },
+      _count: true,
       orderBy: {
         _count: {
           sector: 'desc',
@@ -415,7 +432,7 @@ export class ContactService {
 
     return contacts.map((c) => ({
       sector: c.sector,
-      count: c._count.sector,
+      count: c._count,
     }));
   }
 
@@ -466,11 +483,13 @@ export class ContactService {
       ...(keepContact.customAttributes as Record<string, any>),
     };
 
-    // Atualizar tickets do contato mesclado
-    await this.prisma.ticket.updateMany({
-      where: { phoneNumber: mergeContact.phoneNumber },
-      data: { phoneNumber: keepContact.phoneNumber },
-    });
+    // Atualizar tickets do contato mesclado (apenas se ambos tiverem phoneNumber)
+    if (mergeContact.phoneNumber && keepContact.phoneNumber) {
+      await this.prisma.ticket.updateMany({
+        where: { phoneNumber: mergeContact.phoneNumber },
+        data: { phoneNumber: keepContact.phoneNumber },
+      });
+    }
 
     // Atualizar contato principal
     await this.prisma.contact.update({

@@ -164,8 +164,8 @@ services:
       - "5173:5173"
     environment:
       NODE_ENV: development
-      VITE_API_URL: ""
-      VITE_WS_URL: ""
+      VITE_API_URL: "http://localhost:3000"
+      VITE_WS_URL: "ws://localhost:3000"
     volumes:
       - ./frontend:/app:delegated
       - /app/node_modules
@@ -261,4 +261,4 @@ volumes:
 networks:
   helpdesk_network:
     name: helpdesk_network
-    driver: bridge
+    external: true

@@ -220,7 +220,7 @@ export default function UsersView() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 rounded-full animate-spin" style={{ borderColor: 'var(--cw-border)', borderTopColor: 'var(--cw-accent)' }}></div>
       </div>
     );
   }
@@ -229,14 +229,15 @@ export default function UsersView() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <div className="p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-full">
-          <Users className="text-yellow-500" size={48} />
+        <div className="p-4 rounded-full" style={{ backgroundColor: 'rgba(234, 179, 8, 0.1)' }}>
+          <Users style={{ color: '#EAB308' }} size={40} />
         </div>
-        <h2 className="text-xl font-bold text-white">Erro ao carregar</h2>
-        <p className="text-slate-400">{error}</p>
+        <h2 className="text-lg font-bold" style={{ color: 'var(--cw-text-primary)' }}>Erro ao carregar contatos</h2>
+        <p className="text-sm" style={{ color: 'var(--cw-text-tertiary)' }}>{error}</p>
         <button
           onClick={fetchGlpiUsers}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+          className="px-4 py-2 text-white text-sm rounded-lg font-medium"
+          style={{ backgroundColor: 'var(--cw-accent)' }}
         >
           Tentar novamente
         </button>
@@ -248,161 +249,163 @@ export default function UsersView() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Gestão de Usuários</h1>
-          <p className="text-slate-400">Gerencie usuários e permissões do sistema</p>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--cw-text-primary)' }}>Contatos</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--cw-text-tertiary)' }}>Gerencie contatos e usuários do sistema</p>
         </div>
         <button
           onClick={() => {
             resetForm();
             setIsModalOpen(true);
           }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-blue-900/20"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors"
+          style={{ backgroundColor: 'var(--cw-accent)' }}
         >
-          <Plus size={20} />
-          <span className="hidden sm:inline">Novo Usuário</span>
+          <Plus size={16} />
+          <span className="hidden sm:inline">Novo Contato</span>
         </button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Users className="text-blue-500" size={24} />
-            <div className="text-slate-400 text-sm">Total</div>
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border p-4" style={{ backgroundColor: 'var(--cw-bg-secondary)', borderColor: 'var(--cw-border)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Users size={16} style={{ color: 'var(--cw-accent)' }} />
+            <span className="text-xs" style={{ color: 'var(--cw-text-tertiary)' }}>Total</span>
           </div>
-          <div className="text-3xl font-bold text-white">{glpiUsers.length}</div>
+          <span className="text-2xl font-bold" style={{ color: 'var(--cw-text-primary)' }}>{glpiUsers.length}</span>
         </div>
-
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-            <div className="text-slate-400 text-sm">Ativos</div>
+        <div className="rounded-xl border p-4" style={{ backgroundColor: 'var(--cw-bg-secondary)', borderColor: 'var(--cw-border)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--cw-success)' }} />
+            <span className="text-xs" style={{ color: 'var(--cw-text-tertiary)' }}>Ativos</span>
           </div>
-          <div className="text-3xl font-bold text-green-500">{glpiUsers.filter(u => u.is_active).length}</div>
+          <span className="text-2xl font-bold" style={{ color: 'var(--cw-success)' }}>{glpiUsers.filter(u => u.is_active).length}</span>
         </div>
-
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-3 h-3 bg-slate-500 rounded-full"></div>
-            <div className="text-slate-400 text-sm">Inativos</div>
+        <div className="rounded-xl border p-4" style={{ backgroundColor: 'var(--cw-bg-secondary)', borderColor: 'var(--cw-border)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--cw-text-tertiary)' }} />
+            <span className="text-xs" style={{ color: 'var(--cw-text-tertiary)' }}>Inativos</span>
           </div>
-          <div className="text-3xl font-bold text-slate-400">{glpiUsers.filter(u => !u.is_active).length}</div>
-        </div>
-
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Shield className="text-green-500" size={24} />
-            <div className="text-slate-400 text-sm">GLPI</div>
-          </div>
-          <div className="text-3xl font-bold text-green-500">{glpiUsers.length}</div>
+          <span className="text-2xl font-bold" style={{ color: 'var(--cw-text-tertiary)' }}>{glpiUsers.filter(u => !u.is_active).length}</span>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar usuários..."
-              className="w-full bg-slate-800 text-white rounded-lg pl-12 pr-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <button
-            onClick={fetchGlpiUsers}
-            disabled={loading}
-            className="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-4 py-3 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <Shield size={18} /> Atualizar do GLPI
-              </>
-            )}
-          </button>
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--cw-text-tertiary)' }} />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por nome, email ou telefone..."
+            className="w-full rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none border"
+            style={{ backgroundColor: 'var(--cw-bg-tertiary)', borderColor: 'var(--cw-border)', color: 'var(--cw-text-primary)' }}
+          />
         </div>
+        <button
+          onClick={fetchGlpiUsers}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+          style={{ backgroundColor: 'var(--cw-bg-tertiary)', borderColor: 'var(--cw-border)', color: 'var(--cw-text-secondary)' }}
+        >
+          <Shield size={14} /> Atualizar GLPI
+        </button>
       </div>
 
-      {/* Users List */}
-      <div className="space-y-4">
-        {filteredUsers.map((user) => (
-          <div
-            key={user.id}
-            className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 hover:border-slate-700/50 transition-all group"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4 flex-1">
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg">
-                  {(user.firstname || user.name || '?').charAt(0).toUpperCase()}
-                </div>
+      {/* Contacts Table — Chatwoot style */}
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--cw-border)' }}>
+        <table className="w-full">
+          <thead>
+            <tr style={{ backgroundColor: 'var(--cw-bg-tertiary)' }}>
+              <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--cw-text-tertiary)' }}>Nome</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--cw-text-tertiary)' }}>Contato</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--cw-text-tertiary)' }}>Setor</th>
+              <th className="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--cw-text-tertiary)' }}>Status</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--cw-text-tertiary)' }}>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredUsers.map((user) => {
+              const fullName = user.firstname && user.realname
+                ? `${user.firstname} ${user.realname}`
+                : user.name;
+              const initial = (user.firstname || user.name || '?').charAt(0).toUpperCase();
+              const sectorName = user.groups?.[0]?.name || user.department || '—';
 
-                <div className="flex-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                    <h3 className="text-white font-semibold text-lg">
-                      {user.firstname && user.realname
-                        ? `${user.firstname} ${user.realname}`
-                        : user.name}
-                    </h3>
-                    <div className="flex gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium border bg-green-500/20 text-green-400 border-green-500/30">
-                        GLPI
+              return (
+                <tr key={user.id} className="group border-t transition-colors"
+                  style={{ borderColor: 'var(--cw-border)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                >
+                  {/* Nome */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                        style={{ backgroundColor: 'var(--cw-accent)' }}>
+                        {initial}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: 'var(--cw-text-primary)' }}>{fullName}</p>
+                        <p className="text-xs truncate" style={{ color: 'var(--cw-text-tertiary)' }}>@{user.name}</p>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Contato */}
+                  <td className="px-4 py-3">
+                    <div className="space-y-0.5">
+                      <p className="text-sm truncate" style={{ color: 'var(--cw-text-primary)' }}>{user.email || '—'}</p>
+                      <p className="text-xs" style={{ color: 'var(--cw-text-tertiary)' }}>{user.phone || '—'}</p>
+                    </div>
+                  </td>
+
+                  {/* Setor */}
+                  <td className="px-4 py-3">
+                    <span className="text-sm" style={{ color: 'var(--cw-text-secondary)' }}>{sectorName}</span>
+                  </td>
+
+                  {/* Status */}
+                  <td className="px-4 py-3 text-center">
+                    {user.is_active ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                        style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--cw-success)' }}>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--cw-success)' }} /> Ativo
                       </span>
-                      {user.is_active ? (
-                        <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
-                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div> Ativo
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-700/50 text-slate-400 border border-slate-600/50">
-                          <div className="w-1.5 h-1.5 bg-slate-500 rounded-full"></div> Inativo
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                        style={{ backgroundColor: 'var(--cw-bg-tertiary)', color: 'var(--cw-text-tertiary)' }}>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--cw-text-tertiary)' }} /> Inativo
+                      </span>
+                    )}
+                  </td>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <Users size={16} />
-                      <span>Login: {user.name}</span>
+                  {/* Ações */}
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleEditUser(user)}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: 'var(--cw-text-tertiary)' }}
+                      ><Edit2 size={14} /></button>
+                      <button
+                        onClick={() => handleDeleteUser(user)}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: 'var(--cw-text-tertiary)' }}
+                      ><Trash2 size={14} /></button>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <Mail size={16} />
-                      <span className="truncate">{user.email || 'Sem email'}</span>
-                    </div>
-                    <div className="text-slate-400">
-                      <span className="text-slate-500 font-medium">ID GLPI:</span> {user.id}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleEditUser(user)}
-                  className="p-2 bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg transition-colors text-slate-400"
-                >
-                  <Edit2 size={18} />
-                </button>
-                <button
-                  onClick={() => handleDeleteUser(user)}
-                  className="p-2 bg-slate-800 hover:bg-red-600 hover:text-white rounded-lg transition-colors text-slate-400"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
 
         {filteredUsers.length === 0 && (
-          <div className="text-center py-12">
-            <Users className="mx-auto text-slate-600 mb-4" size={48} />
-            <p className="text-slate-400">Nenhum usuário encontrado no GLPI</p>
-            <p className="text-slate-500 text-sm mt-2">Verifique a conexão com o GLPI</p>
+          <div className="text-center py-12" style={{ backgroundColor: 'var(--cw-bg-secondary)' }}>
+            <Users size={32} className="mx-auto mb-2" style={{ color: 'var(--cw-text-tertiary)' }} />
+            <p className="text-sm" style={{ color: 'var(--cw-text-tertiary)' }}>Nenhum contato encontrado</p>
           </div>
         )}
       </div>

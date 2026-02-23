@@ -112,27 +112,58 @@ export class AuthService {
   }
 
   /**
-   * Login tradicional (usuário local)
+   * Login tradicional (usuário local) - SIMPLIFICADO
    */
   async login(dto: LoginDto) {
+    console.log(`🔐 Login attempt for: ${dto.email}`);
+
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
+      include: {
+        customRole: true, // Incluir role customizada se existir
+      }
     });
 
     if (!user) {
+      console.log(`❌ User not found: ${dto.email}`);
       throw new UnauthorizedException('Credenciais inválidas');
     }
+
+    console.log(`✅ User found: ${user.name}`);
 
     const validPassword = await bcrypt.compare(dto.password, user.password);
     if (!validPassword) {
+      console.log(`❌ Invalid password for: ${dto.email}`);
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
+    console.log(`✅ Password valid`);
+
     if (!user.active) {
+      console.log(`❌ User inactive: ${dto.email}`);
       throw new UnauthorizedException('Usuário desativado');
     }
 
-    const token = this.jwt.sign({ sub: user.id, email: user.email });
+    console.log(`✅ User active, generating token...`);
+
+    // Determinar permissões baseado na role customizada ou role padrão
+    let permissions: string[] = user.permissions || [];
+    if (user.customRole) {
+      permissions = user.customRole.permissions as string[];
+    }
+
+    // Determinar perfil para o frontend
+    const profile: UserProfile = user.role === 'ADMIN' ? 'admin' :
+      user.sector === 'ELECTRIC' ? 'tech_elect' : 'tech_ti';
+
+    const token = this.jwt.sign({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      sector: user.sector,
+    });
+
+    console.log(`✅ Token generated successfully for ${user.name}`);
 
     return {
       token,
@@ -141,6 +172,13 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        profile,
+        permissions,
+        sector: user.sector,
+        customRole: user.customRole ? {
+          id: user.customRole.id,
+          name: user.customRole.name,
+        } : null,
       },
     };
   }

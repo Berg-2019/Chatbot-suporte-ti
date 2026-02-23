@@ -1,10 +1,10 @@
 import { useState, lazy, Suspense } from 'react';
 import Sidebar from '@/app/components/Sidebar';
 import ChatView from '@/app/components/ChatView';
+import ConversationListPanel from '@/app/components/ConversationListPanel';
 import { AuthProvider, useAuth } from '@/app/context/AuthContext';
+import { ThemeProvider, useTheme } from '@/app/context/ThemeContext';
 import { Toaster } from 'sonner';
-import { motion, AnimatePresence } from 'motion/react';
-import { LogOut } from 'lucide-react';
 
 import { Ticket } from '@/app/services/api';
 
@@ -27,17 +27,43 @@ const CannedResponsesView = lazy(() => import('@/app/components/views/CannedResp
 const WebhooksView = lazy(() => import('@/app/components/views/WebhooksView'));
 const RolesView = lazy(() => import('@/app/components/views/RolesView'));
 
+// Fase 2 - Chatwoot-inspired Settings
+const TeamsView = lazy(() => import('@/app/components/views/TeamsView'));
+const LabelsView = lazy(() => import('@/app/components/views/LabelsView'));
+const SLAView = lazy(() => import('@/app/components/views/SLAView'));
+
 // Loading fallback component
 const LoadingFallback = () => (
-  <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-    <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+  <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
+    <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--cw-accent)', borderTopColor: 'transparent' }}></div>
   </div>
 );
+
+// Empty state when no conversation is selected
+function EmptyConversationState() {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
+      <div className="w-20 h-20 rounded-2xl flex items-center justify-center" style={{ backgroundColor: 'var(--cw-bg-tertiary)' }}>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--cw-text-tertiary)' }}>
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <div className="text-center">
+        <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--cw-text-primary)' }}>
+          Selecione uma conversa
+        </h3>
+        <p className="text-sm max-w-xs" style={{ color: 'var(--cw-text-tertiary)' }}>
+          Clique em uma conversa na lista ao lado para visualizar as mensagens
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function MainContent() {
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
   const [selectedTicketData, setSelectedTicketData] = useState<Ticket | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0); // Trigger for dashboard refresh
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { profile, isAuthenticated, logout, isLoading } = useAuth();
 
   const handleTicketClick = (ticket: Ticket) => {
@@ -46,19 +72,23 @@ function MainContent() {
 
   const handleCloseTicketDrawer = () => {
     setSelectedTicketData(null);
-    setRefreshTrigger(prev => prev + 1); // Force refresh of parent view
+    setRefreshTrigger(prev => prev + 1);
   };
 
+  // Views that use the conversation layout (3-column with chat panel)
+  const isConversationView = activeMenuItem === 'dashboard' || activeMenuItem === 'mentions';
+  const isManagerTvMode = profile === 'manager';
+
   const renderView = () => {
-    // If manager, always return ManagerView (handled in return, but safe here too)
     if (profile === 'manager') return <ManagerView />;
 
     switch (activeMenuItem) {
       case 'dashboard':
-        if (profile === 'tech_elect') return <ElectricalDashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
-        return <DashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
+      case 'mentions':
+        // These render inside the 3-column layout
+        return null;
       case 'gestao':
-        return <ManagerView />; // Keep for non-managers viewing manager view if allowed
+        return <ManagerView />;
       case 'metricas':
         return <MetricsView />;
       case 'impressoras':
@@ -72,33 +102,34 @@ function MainContent() {
       case 'estoque':
         return <StockView />;
       case 'usuarios':
-        if (profile === 'tech_elect') return <UsersView />;
         return <UsersView />;
       case 'chat':
         return <TeamChatView />;
-      // Fase 1 - New Features
       case 'respostas-prontas':
         return <CannedResponsesView />;
       case 'webhooks':
         return <WebhooksView />;
       case 'roles':
         return <RolesView />;
+      case 'teams':
+        return <TeamsView />;
+      case 'labels':
+        return <LabelsView />;
+      case 'sla':
+        return <SLAView />;
       default:
-        if (profile === 'tech_elect') return <ElectricalDashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
-        return <DashboardView onTicketClick={handleTicketClick} refreshTrigger={refreshTrigger} />;
+        return null;
     }
   };
 
-  // If loading session, show simple spinner
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
+        <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--cw-accent)', borderTopColor: 'transparent' }}></div>
       </div>
     );
   }
 
-  // If not authenticated, show Login View
   if (!isAuthenticated) {
     return (
       <Suspense fallback={<LoadingFallback />}>
@@ -107,74 +138,64 @@ function MainContent() {
     );
   }
 
-  const isManagerTvMode = profile === 'manager';
-
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
       {!isManagerTvMode && <Sidebar activeItem={activeMenuItem} onItemClick={setActiveMenuItem} />}
 
-      <main className={`flex-1 overflow-auto relative ${isManagerTvMode ? 'h-screen overflow-hidden p-0' : ''}`}>
-        {/* Logout Button (Floating for easy access) */}
-        <div className="absolute top-4 right-4 z-50">
-          <button
-            onClick={logout}
-            className={`p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-500 rounded-full transition-all ${isManagerTvMode ? 'bg-slate-900/80 backdrop-blur-md border border-slate-700' : 'bg-slate-800/50'}`}
-            title="Sair do Sistema"
-            aria-label="Sair do Sistema"
-          >
-            <LogOut size={20} />
-          </button>
-        </div>
+      {/* Conversation Layout (3 columns when dashboard) */}
+      {isConversationView && !isManagerTvMode ? (
+        <>
+          {/* Middle column: Conversation list */}
+          <ConversationListPanel
+            onTicketClick={handleTicketClick}
+            selectedTicketId={selectedTicketData?.id || null}
+            refreshTrigger={refreshTrigger}
+          />
 
-
-
-        <div className={isManagerTvMode ? 'h-full' : 'p-6 lg:p-8 pt-16 lg:pt-8'}>
-          <Suspense fallback={<LoadingFallback />}>
-            {isManagerTvMode ? <ManagerView /> : renderView()}
-          </Suspense>
-        </div>
-      </main>
-
-      {/* Chat View - Drawer/Modal */}
-      <AnimatePresence>
-        {selectedTicketData && (
-          <>
-            {/* Overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setSelectedTicketData(null)}
-            />
-
-            {/* Drawer Container */}
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 right-0 w-full lg:w-[450px] bg-slate-950 z-50 shadow-2xl border-l border-slate-800"
-            >
+          {/* Right column: Chat or empty state */}
+          {selectedTicketData ? (
+            <div className="flex-1 flex flex-col border-l" style={{ borderColor: 'var(--cw-border)' }}>
               <ChatView
                 ticket={selectedTicketData}
                 onClose={() => setSelectedTicketData(null)}
                 onCloseTicket={handleCloseTicketDrawer}
               />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+            </div>
+          ) : (
+            <EmptyConversationState />
+          )}
+        </>
+      ) : (
+        /* Standard layout for non-conversation views */
+        <main className={`flex-1 overflow-auto relative ${isManagerTvMode ? 'h-screen overflow-hidden p-0' : ''}`}>
+          <div className={isManagerTvMode ? 'h-full' : 'p-6 lg:p-8'}>
+            <Suspense fallback={<LoadingFallback />}>
+              {isManagerTvMode ? <ManagerView /> : renderView()}
+            </Suspense>
+          </div>
+        </main>
+      )}
     </div>
+  );
+}
+
+function AppInner() {
+  const { theme } = useTheme();
+  return (
+    <>
+      <MainContent />
+      <Toaster position="top-right" theme={theme} closeButton richColors />
+    </>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <MainContent />
-      <Toaster position="top-right" theme="dark" closeButton richColors />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppInner />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

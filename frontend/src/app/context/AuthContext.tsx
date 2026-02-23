@@ -51,36 +51,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-      // Determine if input is email
-      const isEmail = email.includes('@');
-      let response;
+      console.log('🔐 Tentando login...', { email, API_URL });
 
-      if (isEmail) {
-        // Try regular login first (only if it looks like an email)
-        response = await fetch(`${API_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-      }
+      // Login local simplificado - SEM GLPI
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-      // If regular login failed or wasn't attempted (username), try GLPI login
-      if (!response || !response.ok) {
-        console.log(`Trying GLPI login for: ${email} (isEmail: ${isEmail})`);
-        response = await fetch(`${API_URL}/api/auth/glpi-login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ login: email, password }),
-        });
-      }
+      console.log('📡 Response status:', response.status);
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Erro desconhecido' }));
+        console.error('❌ Login falhou:', errorData);
         setIsLoading(false);
         return false;
       }
 
       const data = await response.json();
-      const token = data.token || data.access_token; // Handle both formats
+      console.log('✅ Login bem-sucedido:', data);
+
+      const token = data.token || data.access_token;
 
       const newUser: User = {
         name: data.user?.name || email.split('@')[0],
@@ -93,27 +85,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(newUser);
       setIsAuthenticated(true);
       localStorage.setItem('helpdesk_user', JSON.stringify(newUser));
-      localStorage.setItem('authToken', token); // Store token for API calls
+      localStorage.setItem('authToken', token);
 
-      // Define profile based on role from backend or email
-      let newProfile: UserProfile = 'admin';
-
-      // Use profile returned from backend (based on GLPI groups)
-      if (data.user?.profile) {
-        newProfile = data.user.profile as UserProfile;
-      }
-      // Fallback to legacy checks
-      else if (data.user?.role === 'TECH_ELECT' || data.user?.role === 'tech_elect' || email.includes('eletrica')) newProfile = 'tech_elect';
-      else if (data.user?.role === 'TECH_TI' || data.user?.role === 'tech_ti' || email.includes('tecnico')) newProfile = 'tech_ti';
-      else if (data.user?.role === 'MANAGER' || data.user?.role === 'manager' || email.includes('gestor')) newProfile = 'manager';
+      // Usar perfil do backend se disponível
+      const newProfile: UserProfile = data.user?.profile || 'admin';
 
       setProfile(newProfile);
       localStorage.setItem('helpdesk_profile', newProfile);
       setIsLoading(false);
 
+      console.log('✅ Login completo! Profile:', newProfile);
+
       return true;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ Erro de conexão:', error);
       setIsLoading(false);
       return false;
     }

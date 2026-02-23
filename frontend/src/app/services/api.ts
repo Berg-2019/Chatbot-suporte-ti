@@ -13,24 +13,37 @@ const getAuthHeaders = (): HeadersInit => {
     };
 };
 
-// Generic fetch wrapper with error handling
+// Generic fetch wrapper with error handling and timeout
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(`${API_URL}/api${endpoint}`, {
-        ...options,
-        headers: {
-            ...getAuthHeaders(),
-            ...options?.headers,
-        },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Request failed' }));
-        // NestJS retorna { message, error, statusCode } - extrair a mensagem corretamente
-        const errorMessage = error.message || error.error || `HTTP ${response.status}`;
-        throw new Error(errorMessage);
+    try {
+        const response = await fetch(`${API_URL}/api${endpoint}`, {
+            ...options,
+            signal: controller.signal,
+            headers: {
+                ...getAuthHeaders(),
+                ...options?.headers,
+            },
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Request failed' }));
+            const errorMessage = error.message || error.error || `HTTP ${response.status}`;
+            throw new Error(errorMessage);
+        }
+
+        return response.json();
+    } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('Tempo limite excedido. Verifique a conexão com o servidor.');
+        }
+        throw err;
     }
-
-    return response.json();
 }
 
 // ================================================================
@@ -1133,7 +1146,7 @@ export const contactsApi = {
     },
 
     // Upsert by JID
-    upsertByJid: (data: { jid: string; phoneNumber: string; name: string; [key: string]: any }): Promise<Contact> => {
+    upsertByJid: (data: { jid: string; phoneNumber: string; name: string;[key: string]: any }): Promise<Contact> => {
         return apiFetch<Contact>('/contacts/upsert/jid', {
             method: 'POST',
             body: JSON.stringify(data),
@@ -1141,7 +1154,7 @@ export const contactsApi = {
     },
 
     // Upsert by phone
-    upsertByPhone: (data: { phoneNumber: string; name: string; [key: string]: any }): Promise<Contact> => {
+    upsertByPhone: (data: { phoneNumber: string; name: string;[key: string]: any }): Promise<Contact> => {
         return apiFetch<Contact>('/contacts/upsert/phone', {
             method: 'POST',
             body: JSON.stringify(data),

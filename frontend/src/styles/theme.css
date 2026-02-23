@@ -39,6 +39,64 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Chatwoot-inspired palette — LIGHT THEME (default) */
+  --cw-bg-primary: #f0f4f9;
+  --cw-bg-secondary: #ffffff;
+  --cw-bg-tertiary: #f5f7fa;
+  --cw-bg-sidebar: #f0f4f9;
+  --cw-bg-chat: #ffffff;
+  --cw-bg-input: #f5f7fa;
+  --cw-bg-hover: #e8ecf1;
+  --cw-bg-active: rgba(31, 147, 255, 0.08);
+  --cw-border: #e0e6ed;
+  --cw-border-light: #eaeef3;
+  --cw-text-primary: #1f2937;
+  --cw-text-secondary: #6b7280;
+  --cw-text-tertiary: #9ca3af;
+  --cw-accent: #1F93FF;
+  --cw-accent-hover: #1A7FE0;
+  --cw-accent-subtle: rgba(31, 147, 255, 0.08);
+  --cw-success: #22C55E;
+  --cw-warning: #EAB308;
+  --cw-danger: #EF4444;
+  --cw-private-bg: #FFF8E1;
+  --cw-private-border: #FFE082;
+  --cw-bubble-outgoing: #d6cbef;
+  --cw-bubble-outgoing-text: #1f2937;
+  --cw-bubble-incoming: #f0f0f5;
+  --cw-bubble-incoming-text: #1f2937;
+  --cw-resolve-btn: #1F93FF;
+}
+
+/* Chatwoot DARK THEME */
+[data-theme="dark"] {
+  --cw-bg-primary: #151718;
+  --cw-bg-secondary: #1B1F23;
+  --cw-bg-tertiary: #25292E;
+  --cw-bg-sidebar: #1B1F23;
+  --cw-bg-chat: #1B1F23;
+  --cw-bg-input: #25292E;
+  --cw-bg-hover: #2A2F35;
+  --cw-bg-active: rgba(59, 130, 246, 0.12);
+  --cw-border: #2D3237;
+  --cw-border-light: #383D42;
+  --cw-text-primary: #E8EAED;
+  --cw-text-secondary: #9AA0A6;
+  --cw-text-tertiary: #6B7280;
+  --cw-accent: #1F93FF;
+  --cw-accent-hover: #1A7FE0;
+  --cw-accent-subtle: rgba(31, 147, 255, 0.15);
+  --cw-success: #22C55E;
+  --cw-warning: #EAB308;
+  --cw-danger: #EF4444;
+  --cw-private-bg: #3D3522;
+  --cw-private-border: #5C4F2E;
+  --cw-bubble-outgoing: #6e57a8;
+  --cw-bubble-outgoing-text: #ffffff;
+  --cw-bubble-incoming: #25292E;
+  --cw-bubble-incoming-text: #E8EAED;
+  --cw-resolve-btn: #1F93FF;
 }
 
 .dark {

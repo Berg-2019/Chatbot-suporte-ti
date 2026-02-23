@@ -2,17 +2,21 @@ import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import {
   Send,
-  X,
   Paperclip,
-  MoreVertical,
+  Smile,
+  Mic,
+  Code2,
+  ChevronDown,
+  Clock,
+  Pause,
   User,
   Briefcase,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
+  MapPin,
+  CheckCheck,
   RefreshCw,
-  LogOut,
-  MapPin
+  X,
+  UserPlus,
+  Expand
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import CloseTicketModal, { CloseTicketData } from './modals/CloseTicketModal';
@@ -23,28 +27,33 @@ import { ticketsApi, type Ticket, type Message as ApiMessage } from '@/app/servi
 interface ChatViewProps {
   ticket: Ticket;
   onClose: () => void;
-  onCloseTicket: () => void; // Called when ticket is formally closed
+  onCloseTicket: () => void;
 }
 
 interface Message {
-  id: string; // Changed to string to match waMessageId/backend ID
-  content: string; // Changed from text to content to match backend
-  type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'DOCUMENT' | 'VIDEO'; // Explicitly allow all types from backend
-  direction: 'INCOMING' | 'OUTGOING'; // Matches backend
-  createdAt: string; // Matches backend
+  id: string;
+  content: string;
+  type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'DOCUMENT' | 'VIDEO';
+  direction: 'INCOMING' | 'OUTGOING';
+  createdAt: string;
   sender?: {
     id: string;
     name: string;
   };
 }
 
+type InputMode = 'reply' | 'private';
+
 export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewProps) {
-  const [messageInput, setMessageInput] = useState(''); // Renamed to avoid conflict with `messages` state
+  const [messageInput, setMessageInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
+  const [inputMode, setInputMode] = useState<InputMode>('reply');
+  const [showResolveDropdown, setShowResolveDropdown] = useState(false);
+  const [showContactPanel, setShowContactPanel] = useState(false);
 
-  // --- Socket.IO setup ---
+  // Socket.IO setup
   useEffect(() => {
     const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     socketRef.current = io(SOCKET_URL, {
@@ -53,18 +62,12 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
     });
 
     socketRef.current.on('connect', () => {
-      console.log(`Connected to Socket.IO for ticket ${ticket.id}`);
-      // Join the ticket-specific room
       socketRef.current?.emit('ticket:subscribe', ticket.id);
     });
 
     socketRef.current.on('message:new', (newMessage: Message) => {
-      console.log('Received new message:', newMessage);
       setMessages((prevMessages) => {
-        // Prevent duplicates - check by ID
-        if (prevMessages.some(msg => msg.id === newMessage.id)) {
-          return prevMessages;
-        }
+        if (prevMessages.some(msg => msg.id === newMessage.id)) return prevMessages;
         return [...prevMessages, newMessage];
       });
     });
@@ -73,22 +76,20 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
       console.log('Disconnected from Socket.IO');
     });
 
-    // Cleanup on unmount or ticket change
     return () => {
       if (socketRef.current) {
         socketRef.current.emit('ticket:unsubscribe', ticket.id);
         socketRef.current.disconnect();
       }
     };
-  }, [ticket.id]); // Reconnect if ticket.id changes
+  }, [ticket.id]);
 
-  // --- Fetch initial messages (only once on mount) ---
+  // Fetch initial messages
   useEffect(() => {
     const fetchInitialMessages = async () => {
       if (!ticket.id) return;
       try {
         const data = await ticketsApi.getMessages(ticket.id.toString());
-        // Backend Message type is compatible with our local Message interface
         setMessages(data as Message[]);
       } catch (err) {
         console.error('Failed to load initial messages', err);
@@ -96,11 +97,11 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
       }
     };
     fetchInitialMessages();
-  }, [ticket.id]); // Fetch only when ticket.id changes
+  }, [ticket.id]);
 
   // Modal States
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false); // Mocked for now
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -117,7 +118,6 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
     const tempId = `temp-${Date.now()}`;
 
     try {
-      // Optimistic update: Add message to state immediately
       const newMessage: Message = {
         id: tempId,
         content: messageInput,
@@ -132,26 +132,20 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
       setMessageInput('');
     } catch (err) {
       toast.error('Erro ao enviar mensagem');
-      // Revert optimistic update if API fails
       setMessages((prev) => prev.filter(msg => msg.id !== tempId));
     }
   };
 
   const handleCloseTicket = async (data: CloseTicketData) => {
-    console.log('Ticket Closed with Data:', data);
-
     try {
-      // Parse timeSpent "Xh Ym" to minutes
       const timeParts = data.timeSpent.match(/(\d+)h\s+(\d+)m/);
       let minutes = 0;
       if (timeParts) {
         minutes = (parseInt(timeParts[1]) * 60) + parseInt(timeParts[2]);
       } else {
-        // Fallback or simple parse
         minutes = parseInt(data.timeSpent) || 0;
       }
 
-      // Map details
       const closePayload = {
         solution: data.solution,
         solutionType: data.category,
@@ -161,7 +155,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
           partName: p.name,
           quantity: p.quantity,
           unitCost: p.cost,
-          purchased: false // Default/assumed
+          purchased: false
         }))
       };
 
@@ -172,191 +166,456 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
       });
       setIsCloseModalOpen(false);
       onCloseTicket();
-
     } catch (err) {
       console.error('Erro ao fechar ticket:', err);
       toast.error('Erro ao fechar ticket. Tente novamente.');
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-slate-950 relative">
-      {/* Header Operacional */}
-      <div className="bg-slate-900 border-b border-slate-800 p-4 shadow-md z-10">
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+    // Shift+Enter for new line is default textarea behavior
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+  };
 
-        {/* Top Bar: Title & Close Drawer */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-900/20">
-              {(ticket.customerName || ticket.client || 'CL').substring(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <h2 className="text-white font-semibold flex items-center gap-2">
-                {ticket.customerName || ticket.client || 'Cliente Desconhecido'}
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Online" />
-              </h2>
-              <div className="flex items-center text-xs text-slate-400 gap-2">
-                <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">#{ticket.ticketNumber || '0000'}</span>
-                <span>• {ticket.category || 'Geral'}</span>
-                {ticket.sector && (
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${ticket.sector.toLowerCase().includes('elétrica') || ticket.sector.toLowerCase().includes('eletrica')
-                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                    : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                    }`}>
-                    {ticket.sector}
-                  </span>
-                )}
-              </div>
+  const isPrivateMode = inputMode === 'private';
+
+  return (
+    <div className="flex flex-col h-full relative" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
+      {/* Chatwoot-style Header */}
+      <div
+        className="flex items-center justify-between px-4 py-3 border-b"
+        style={{
+          backgroundColor: 'var(--cw-bg-secondary)',
+          borderColor: 'var(--cw-border)',
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold"
+            style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+          >
+            {(ticket.customerName || ticket.client || 'CL').substring(0, 2).toUpperCase()}
+          </div>
+          <div>
+            <h3 className="text-[14px] font-semibold leading-tight" style={{ color: 'var(--cw-text-primary)' }}>
+              {ticket.customerName || ticket.client || 'Cliente'}
+            </h3>
+            <div className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--cw-text-tertiary)' }}>
+              {ticket.category && <span>{ticket.category}</span>}
+              {ticket.sector && (
+                <>
+                  <span>•</span>
+                  <span>{ticket.sector}</span>
+                </>
+              )}
+              {ticket.ticketNumber && (
+                <>
+                  <span>•</span>
+                  <span>#{ticket.ticketNumber.split('-').pop()}</span>
+                </>
+              )}
             </div>
           </div>
-
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
-            <X size={20} />
-          </button>
         </div>
 
-        {/* Info Card (Context) */}
-        <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3 mb-4">
-          <div className="flex justify-between items-start">
-            <p className="text-sm text-blue-100 line-clamp-2">
-              <span className="font-semibold text-blue-400">Problema:</span> {ticket.description || 'Sem descrição detalhada.'}
-            </p>
-          </div>
-          <div className="flex gap-4 mt-2 text-xs text-blue-300/70">
-            <span className="flex items-center gap-1">
-              <User size={12} />
-              <span className="text-slate-400">Setor:</span>
-              <span className="font-medium text-blue-200">{ticket.sector || 'Não informado'}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <Briefcase size={12} />
-              <span className="text-slate-400">Categoria:</span>
-              <span className="font-medium text-blue-200">{ticket.category || 'Geral'}</span>
-            </span>
-            {ticket.location && (
-              <span className="flex items-center gap-1">
-                <MapPin size={12} />
-                <span className="text-slate-400">Local:</span>
-                <span className="font-medium text-blue-200">{ticket.location}</span>
-              </span>
+        <div className="flex items-center gap-2">
+          {/* Resolver button (Chatwoot-style) */}
+          <div className="relative">
+            <div className="flex items-center">
+              <button
+                onClick={() => setIsCloseModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-l-lg text-[13px] font-medium text-white transition-colors"
+                style={{ backgroundColor: 'var(--cw-resolve-btn)' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-accent-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-resolve-btn)'}
+              >
+                Resolver
+              </button>
+              <button
+                onClick={() => setShowResolveDropdown(!showResolveDropdown)}
+                className="flex items-center px-1.5 py-1.5 rounded-r-lg text-white border-l border-white/20 transition-colors"
+                style={{ backgroundColor: 'var(--cw-resolve-btn)' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-accent-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-resolve-btn)'}
+              >
+                <ChevronDown size={16} />
+              </button>
+            </div>
+
+            {/* Dropdown */}
+            {showResolveDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowResolveDropdown(false)} />
+                <div
+                  className="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-xl z-50 py-1 border"
+                  style={{
+                    backgroundColor: 'var(--cw-bg-tertiary)',
+                    borderColor: 'var(--cw-border)',
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      setShowResolveDropdown(false);
+                      toast.info('Chamado adiado');
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-[13px] transition-colors"
+                    style={{ color: 'var(--cw-text-secondary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <Clock size={14} />
+                    Adiar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowResolveDropdown(false);
+                      toast.info('Chamado pendente');
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-[13px] transition-colors"
+                    style={{ color: 'var(--cw-text-secondary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <Pause size={14} />
+                    Deixar pendente
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowResolveDropdown(false);
+                      setIsTransferModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-[13px] transition-colors"
+                    style={{ color: 'var(--cw-text-secondary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <RefreshCw size={14} />
+                    Transferir
+                  </button>
+                </div>
+              </>
             )}
           </div>
-        </div>
 
-        {/* Action Buttons Toolbar */}
-        <div className="grid grid-cols-2 gap-2">
+          {/* Contact info toggle */}
           <button
-            onClick={() => setIsTransferModalOpen(true)}
-            className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-lg text-sm border border-slate-700 transition-colors"
+            onClick={() => setShowContactPanel(!showContactPanel)}
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: 'var(--cw-text-secondary)' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            title="Info do contato"
           >
-            <RefreshCw size={16} /> Transferir
-          </button>
-          <button
-            onClick={() => setIsCloseModalOpen(true)}
-            className="flex items-center justify-center gap-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 hover:text-red-400 py-2 rounded-lg text-sm border border-red-900/30 transition-colors"
-          >
-            <CheckCircle2 size={16} /> Fechar Chamado
+            <User size={18} />
           </button>
         </div>
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/50" style={{ backgroundImage: 'radial-gradient(circle at center, #1e293b 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
-        <div className="text-center text-xs text-slate-600 my-4">
-          <span>Chamado iniciado em {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}</span>
-        </div>
-
-        {messages.map((msg) => {
-          const isOutgoing = msg.direction === 'OUTGOING';
-          const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-          // Prepend API URL if the content is a relative path (e.g., /api/bot/media/...)
-          const mediaSrc = msg.content.startsWith('/api/bot/media') ? `${apiUrl}${msg.content}` : msg.content;
-
-          return (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${isOutgoing
-                  ? 'bg-blue-600 text-white rounded-tr-none'
-                  : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
-                  }`}
+      {/* Main area: messages + optional contact panel */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Messages Area */}
+        <div className="flex-1 flex flex-col">
+          <div
+            className="flex-1 overflow-y-auto px-6 py-4 space-y-3"
+            style={{ backgroundColor: 'var(--cw-bg-chat)' }}
+          >
+            {/* Date separator */}
+            <div className="text-center my-3">
+              <span
+                className="text-[11px] px-3 py-1 rounded-full"
+                style={{
+                  backgroundColor: 'var(--cw-bg-tertiary)',
+                  color: 'var(--cw-text-tertiary)',
+                }}
               >
-                {!isOutgoing && msg.sender?.name && (
-                  <div className="text-xs text-slate-400 mb-1 px-1">
-                    {msg.sender.name}
-                  </div>
-                )}
-                {msg.type === 'IMAGE' ? (
-                  <div className="space-y-2">
-                    <img src={mediaSrc} alt="Imagem enviada" className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(mediaSrc, '_blank')} />
-                  </div>
-                ) : msg.type === 'AUDIO' ? (
-                  <div className="flex items-center gap-2 min-w-[200px]">
-                    <audio controls src={mediaSrc} className="w-full h-8" />
-                  </div>
-                ) : msg.type === 'VIDEO' ? ( // Handle video type
-                  <div className="space-y-2">
-                    <video controls src={mediaSrc} className="rounded-lg max-w-full max-h-60 object-cover" />
-                  </div>
-                ) : msg.type === 'DOCUMENT' ? ( // Handle document type
-                  <a href={mediaSrc} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-400 hover:underline">
-                    <Paperclip size={16} />
-                    <span>Download Anexo</span> {/* You might want to extract filename from URL or message for better display */}
-                  </a>
-                ) : (
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                )}
+                {new Date(ticket.createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </span>
+            </div>
 
-                <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isOutgoing ? 'text-blue-200' : 'text-slate-500'
-                  }`}>
-                  {time}
-                  {/* Status indicators can be added here if needed, e.g., '✓✓' for delivered */}
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
+            {messages.map((msg) => {
+              const isOutgoing = msg.direction === 'OUTGOING';
+              const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+              const mediaSrc = msg.content.startsWith('/api/bot/media') ? `${apiUrl}${msg.content}` : msg.content;
 
-      {/* Input Area */}
-      <div className="p-4 bg-slate-900 border-t border-slate-800">
-        <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
-          <button
-            type="button"
-            onClick={() => toast.info('Anexo de arquivos em breve')}
-            className="p-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-            title="Anexar arquivo"
-          >
-            <Paperclip size={20} />
-          </button>
+              return (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}
+                >
+                  {/* Incoming: avatar on left */}
+                  {!isOutgoing && (
+                    <div
+                      className="w-7 h-7 min-w-[28px] rounded-full flex items-center justify-center text-white text-[10px] font-semibold mr-2 mt-1"
+                      style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+                    >
+                      {(msg.sender?.name || ticket.customerName || 'CL').substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
 
-          <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl flex items-center px-4 py-2 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/50 transition-all">
-            <input
-              type="text"
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              placeholder="Digite sua mensagem..."
-              className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder-slate-500 h-10" // h-10 to match height properly
-            />
+                  <div
+                    className={`max-w-[70%] rounded-xl px-3.5 py-2.5 ${isOutgoing ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
+                    style={{
+                      backgroundColor: isOutgoing ? 'var(--cw-bubble-outgoing)' : 'var(--cw-bubble-incoming)',
+                      border: isOutgoing ? 'none' : '1px solid var(--cw-border)',
+                      color: isOutgoing ? 'var(--cw-bubble-outgoing-text)' : 'var(--cw-bubble-incoming-text)',
+                    }}
+                  >
+                    {!isOutgoing && msg.sender?.name && (
+                      <div className="text-[11px] font-semibold mb-1" style={{ color: '#8B5CF6' }}>
+                        {msg.sender.name}
+                      </div>
+                    )}
+                    {msg.type === 'IMAGE' ? (
+                      <img src={mediaSrc} alt="Imagem" className="rounded-lg max-w-full max-h-52 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(mediaSrc, '_blank')} />
+                    ) : msg.type === 'AUDIO' ? (
+                      <audio controls src={mediaSrc} className="w-full h-8" />
+                    ) : msg.type === 'VIDEO' ? (
+                      <video controls src={mediaSrc} className="rounded-lg max-w-full max-h-52" />
+                    ) : msg.type === 'DOCUMENT' ? (
+                      <a href={mediaSrc} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline" style={{ color: isOutgoing ? '#E0F2FE' : 'var(--cw-accent)' }}>
+                        <Paperclip size={14} />
+                        <span className="text-sm">Download Anexo</span>
+                      </a>
+                    ) : (
+                      <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    )}
+
+                    <div className="text-[10px] mt-1 flex items-center justify-end gap-1"
+                      style={{ color: 'var(--cw-text-tertiary)', opacity: isOutgoing ? 0.8 : 1 }}
+                    >
+                      {time}
+                      {isOutgoing && <CheckCheck size={12} />}
+                    </div>
+                  </div>
+
+                  {/* Outgoing: indicator on right */}
+                  {isOutgoing && (
+                    <div
+                      className="w-7 h-7 min-w-[28px] rounded-full flex items-center justify-center text-white text-[10px] font-semibold ml-2 mt-1"
+                      style={{ backgroundColor: 'var(--cw-accent)' }}
+                    >
+                      R
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+            <div ref={messagesEndRef} />
           </div>
 
-          <button
-            type="submit"
-            disabled={!messageInput.trim()}
-            className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20 transition-all hover:scale-105"
+          {/* Input Area - Chatwoot style */}
+          <div
+            className="border-t"
+            style={{
+              backgroundColor: isPrivateMode ? 'var(--cw-private-bg)' : 'var(--cw-bg-secondary)',
+              borderColor: isPrivateMode ? 'var(--cw-private-border)' : 'var(--cw-border)',
+            }}
           >
-            <Send size={20} />
-          </button>
-        </form>
-        <div className="text-center mt-2">
-          <span className="text-[10px] text-slate-600">Pressione Enter para enviar</span>
+            {/* Reply / Private tabs */}
+            <div className="flex items-center justify-between px-4 pt-2">
+              <div className="flex items-center gap-0">
+                <button
+                  onClick={() => setInputMode('reply')}
+                  className={`px-3 py-1.5 text-[13px] font-medium rounded-full transition-all ${!isPrivateMode ? 'text-white' : ''}`}
+                  style={{
+                    backgroundColor: !isPrivateMode ? 'var(--cw-bg-tertiary)' : 'transparent',
+                    color: !isPrivateMode ? 'var(--cw-text-primary)' : 'var(--cw-text-tertiary)',
+                    border: !isPrivateMode ? '1px solid var(--cw-border-light)' : '1px solid transparent',
+                  }}
+                >
+                  Responder
+                </button>
+                <button
+                  onClick={() => setInputMode('private')}
+                  className={`px-3 py-1.5 text-[13px] font-medium rounded-full transition-all ml-1 ${isPrivateMode ? 'text-white' : ''}`}
+                  style={{
+                    backgroundColor: isPrivateMode ? 'var(--cw-bg-tertiary)' : 'transparent',
+                    color: isPrivateMode ? 'var(--cw-text-primary)' : 'var(--cw-text-tertiary)',
+                    border: isPrivateMode ? '1px solid var(--cw-private-border)' : '1px solid transparent',
+                  }}
+                >
+                  Mensagem Privada
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button className="p-1.5 rounded transition-colors" style={{ color: 'var(--cw-accent)' }} title="AI Assist">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" /></svg>
+                </button>
+                <button className="p-1.5 rounded transition-colors" style={{ color: 'var(--cw-text-tertiary)' }} title="Expandir">
+                  <Expand size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Text Input */}
+            <form onSubmit={handleSendMessage} className="px-4 pb-2">
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={isPrivateMode ? 'A mensagem será visível apenas para agentes' : 'Shift + enter para nova linha. Digite \'/\' para selecionar uma Resposta Pronta.'}
+                className="w-full bg-transparent border-none outline-none resize-none text-[13px] leading-relaxed py-2 min-h-[60px] max-h-[120px]"
+                style={{
+                  color: 'var(--cw-text-primary)',
+                }}
+                rows={2}
+              />
+
+              {/* Bottom toolbar */}
+              <div className="flex items-center justify-between pb-1">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="p-2 rounded-lg transition-colors"
+                    style={{ color: 'var(--cw-text-tertiary)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                    title="Emoji"
+                  >
+                    <Smile size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toast.info('Anexo de arquivos em breve')}
+                    className="p-2 rounded-lg transition-colors"
+                    style={{ color: 'var(--cw-text-tertiary)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                    title="Anexar"
+                  >
+                    <Paperclip size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="p-2 rounded-lg transition-colors"
+                    style={{ color: 'var(--cw-text-tertiary)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                    title="Áudio"
+                  >
+                    <Mic size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="p-2 rounded-lg transition-colors"
+                    style={{ color: 'var(--cw-text-tertiary)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                    title="Código"
+                  >
+                    <Code2 size={18} />
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!messageInput.trim()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    backgroundColor: isPrivateMode ? '#B8860B' : 'var(--cw-accent)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (messageInput.trim()) {
+                      e.currentTarget.style.backgroundColor = isPrivateMode ? '#A0750A' : 'var(--cw-accent-hover)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = isPrivateMode ? '#B8860B' : 'var(--cw-accent)';
+                  }}
+                >
+                  Enviar
+                  <span className="text-[10px] opacity-70">(CTRL + ↵)</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
+
+        {/* Contact Info Panel (Chatwoot right panel) */}
+        {showContactPanel && (
+          <div
+            className="w-[280px] min-w-[280px] border-l overflow-y-auto"
+            style={{
+              backgroundColor: 'var(--cw-bg-secondary)',
+              borderColor: 'var(--cw-border)',
+            }}
+          >
+            <div className="p-4 border-b" style={{ borderColor: 'var(--cw-border)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-[13px] font-semibold" style={{ color: 'var(--cw-text-primary)' }}>
+                  Informações do Contato
+                </h4>
+                <button
+                  onClick={() => setShowContactPanel(false)}
+                  className="p-1 rounded transition-colors"
+                  style={{ color: 'var(--cw-text-tertiary)' }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Contact avatar & name */}
+              <div className="flex flex-col items-center text-center mb-4">
+                <div
+                  className="w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-semibold mb-2"
+                  style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+                >
+                  {(ticket.customerName || ticket.client || 'CL').substring(0, 2).toUpperCase()}
+                </div>
+                <h5 className="text-[14px] font-semibold" style={{ color: 'var(--cw-text-primary)' }}>
+                  {ticket.customerName || ticket.client || 'Cliente'}
+                </h5>
+              </div>
+            </div>
+
+            {/* Info fields */}
+            <div className="p-4 space-y-3">
+              <InfoField icon={User} label="Setor" value={ticket.sector || 'Não informado'} />
+              <InfoField icon={Briefcase} label="Categoria" value={ticket.category || 'Geral'} />
+              {ticket.location && (
+                <InfoField icon={MapPin} label="Local" value={ticket.location} />
+              )}
+
+              {/* Description */}
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--cw-border)' }}>
+                <p className="text-[11px] font-medium mb-1" style={{ color: 'var(--cw-text-tertiary)' }}>Descrição</p>
+                <p className="text-[12px]" style={{ color: 'var(--cw-text-secondary)' }}>
+                  {ticket.description || 'Sem descrição.'}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 space-y-2">
+                <button
+                  onClick={() => setIsTransferModalOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-[12px] font-medium transition-colors"
+                  style={{
+                    backgroundColor: 'var(--cw-bg-tertiary)',
+                    color: 'var(--cw-text-secondary)',
+                    border: '1px solid var(--cw-border)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--cw-bg-tertiary)' }}
+                >
+                  <UserPlus size={14} />
+                  Transferir Chamado
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modals */}
@@ -379,14 +638,27 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
             await ticketsApi.transfer(ticket.id.toString(), userId);
             toast.success('Chamado transferido com sucesso!');
             setIsTransferModalOpen(false);
-            onClose(); // Close chat as user no longer owns it
+            onClose();
           } catch (err) {
             toast.error('Erro ao transferir chamado');
           }
         }}
-        currentTechnicianId={ticket.technician} // Assuming ticket has technician ID or similar
+        currentTechnicianId={ticket.technician}
         ticketTitle={ticket.title}
       />
+    </div>
+  );
+}
+
+// Helper component for contact info fields
+function InfoField({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <Icon size={14} className="mt-0.5" style={{ color: 'var(--cw-text-tertiary)' }} />
+      <div>
+        <p className="text-[11px] font-medium" style={{ color: 'var(--cw-text-tertiary)' }}>{label}</p>
+        <p className="text-[12px]" style={{ color: 'var(--cw-text-primary)' }}>{value}</p>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Upload, FileText, MapPin, Camera, Check, User } from 'lucide-react';
+import { X, Upload, FileText, MapPin, Camera, Check, User as UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { ticketsApi, usersApi, type User } from '../../services/api';
 
@@ -137,7 +137,7 @@ export default function ServiceReportModal({ isOpen, onClose, onSuccess, sector 
                     {/* Technician Selection */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                            <User className="w-4 h-4 text-indigo-500" />
+                            <UserIcon className="w-4 h-4 text-indigo-500" />
                             Técnico Responsável
                         </label>
                         <select
