@@ -17,7 +17,7 @@ import { MessagesService } from './messages.service';
 @Controller('tickets/:ticketId/messages')
 @UseGuards(AuthGuard('jwt'))
 export class MessagesController {
-  constructor(private messagesService: MessagesService) {}
+  constructor(private messagesService: MessagesService) { }
 
   @Get()
   async findByTicket(@Param('ticketId') ticketId: string) {
@@ -27,13 +27,15 @@ export class MessagesController {
   @Post()
   async create(
     @Param('ticketId') ticketId: string,
-    @Body('content') content: string,
+    @Body() body: { content: string; isInternal?: boolean; mentions?: string[] },
     @Request() req: any,
   ) {
     return this.messagesService.createFromTechnician(
       ticketId,
-      content,
+      body.content,
       req.user.id,
+      body.isInternal || false,
+      body.mentions || [],
     );
   }
 }

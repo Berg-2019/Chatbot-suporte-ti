@@ -15,6 +15,8 @@ interface CreateMessageDto {
   direction: Direction;
   senderId?: string;
   waMessageId?: string;
+  isInternal?: boolean;
+  mentions?: string[];
 }
 
 @Injectable()
@@ -44,14 +46,16 @@ export class MessagesService {
         direction: dto.direction,
         senderId: dto.senderId,
         waMessageId: dto.waMessageId,
+        isInternal: dto.isInternal || false,
+        mentions: dto.mentions || [],
       },
       include: {
         sender: { select: { id: true, name: true } },
       },
-    });
+    }) as any;
 
-    // Se for OUTGOING e tiver senderId (técnico), enviar via WhatsApp
-    if (dto.direction === 'OUTGOING' && dto.senderId) {
+    // Se for OUTGOING, tiver senderId (técnico), e NÃO for nota interna → enviar via WhatsApp
+    if (dto.direction === 'OUTGOING' && dto.senderId && !dto.isInternal) {
       const ticket = await this.prisma.ticket.findUnique({
         where: { id: dto.ticketId },
       });
@@ -124,12 +128,16 @@ export class MessagesService {
     ticketId: string,
     content: string,
     senderId: string,
+    isInternal: boolean = false,
+    mentions: string[] = [],
   ) {
     return this.create({
       ticketId,
       content,
       direction: 'OUTGOING',
       senderId,
+      isInternal,
+      mentions,
     });
   }
 }

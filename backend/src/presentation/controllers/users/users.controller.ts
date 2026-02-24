@@ -60,6 +60,22 @@ export class UsersController {
     return this.glpiService.getGroups();
   }
 
+  @Post()
+  async createLocalUser(
+    @Body() data: { name: string; email: string; password?: string; role?: 'ADMIN' | 'AGENT' | 'STOCK_MANAGER'; active?: boolean },
+    @Request() req: any,
+  ) {
+    if (req.user.role !== 'ADMIN') {
+      throw new ForbiddenException('Apenas admins');
+    }
+
+    if (!data.name || !data.email || !data.password) {
+      throw new BadRequestException('Nome, e-mail e senha são obrigatórios');
+    }
+
+    return this.usersService.createLocal(data);
+  }
+
   @Get('glpi')
   async getGlpiUsers(@Request() req: any) {
     // Fetch both GLPI users and local users

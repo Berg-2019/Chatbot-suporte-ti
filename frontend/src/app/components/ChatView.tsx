@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import {
   Send,
@@ -16,13 +16,14 @@ import {
   RefreshCw,
   X,
   UserPlus,
-  Expand
+  Expand,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import CloseTicketModal, { CloseTicketData } from './modals/CloseTicketModal';
 import TransferTicketModal from './modals/TransferTicketModal';
 import { toast } from 'sonner';
-import { ticketsApi, type Ticket, type Message as ApiMessage } from '@/app/services/api';
+import { ticketsApi, usersApi, type Ticket, type Message as ApiMessage } from '@/app/services/api';
 
 interface ChatViewProps {
   ticket: Ticket;
@@ -36,10 +37,20 @@ interface Message {
   type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'DOCUMENT' | 'VIDEO';
   direction: 'INCOMING' | 'OUTGOING';
   createdAt: string;
+  isInternal?: boolean;
+  mentions?: string[];
   sender?: {
     id: string;
     name: string;
   };
+}
+
+// Agente para autocomplete de @menções
+interface Agent {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
 type InputMode = 'reply' | 'private';
@@ -48,10 +59,18 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
   const [messageInput, setMessageInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const [inputMode, setInputMode] = useState<InputMode>('reply');
   const [showResolveDropdown, setShowResolveDropdown] = useState(false);
   const [showContactPanel, setShowContactPanel] = useState(false);
+
+  // @Mentions state
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [mentionSearch, setMentionSearch] = useState<string | null>(null); // null = dropdown fechado
+  const [mentionResults, setMentionResults] = useState<Agent[]>([]);
+  const [selectedMentionIds, setSelectedMentionIds] = useState<string[]>([]);
+  const [mentionHighlight, setMentionHighlight] = useState(0);
 
   // Socket.IO setup
   useEffect(() => {
@@ -84,6 +103,19 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
     };
   }, [ticket.id]);
 
+  // Buscar agentes para @mentions
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const users = await usersApi.getAll();
+        setAgents(users.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role })));
+      } catch (err) {
+        console.error('Erro ao buscar agentes para @mentions', err);
+      }
+    };
+    fetchAgents();
+  }, []);
+
   // Fetch initial messages
   useEffect(() => {
     const fetchInitialMessages = async () => {
@@ -115,25 +147,63 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
     e.preventDefault();
     if (!messageInput.trim()) return;
 
-    const tempId = `temp-${Date.now()}`;
+    const isInternal = inputMode === 'private';
+    const currentInput = messageInput;
+    const currentMentions = selectedMentionIds;
+
+    // Clear input immediately for better UX
+    setMessageInput('');
+    setSelectedMentionIds([]);
+    setMentionSearch(null);
 
     try {
-      const newMessage: Message = {
-        id: tempId,
-        content: messageInput,
-        direction: 'OUTGOING',
-        type: 'TEXT',
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, newMessage]);
-      scrollToBottom();
-
-      await ticketsApi.sendMessage(ticket.id.toString(), messageInput);
-      setMessageInput('');
+      // API call will trigger a socket event which will append the message
+      await ticketsApi.sendMessage(ticket.id.toString(), currentInput, isInternal, currentMentions);
     } catch (err) {
       toast.error('Erro ao enviar mensagem');
-      setMessages((prev) => prev.filter(msg => msg.id !== tempId));
+      // Restore input if it failed
+      setMessageInput(currentInput);
+      setSelectedMentionIds(currentMentions);
     }
+  };
+
+  // Detectar @ no textarea e abrir menção
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setMessageInput(val);
+
+    // Detectar @searchTerm
+    const cursorPos = e.target.selectionStart || 0;
+    const textBefore = val.substring(0, cursorPos);
+    const atMatch = textBefore.match(/@(\w*)$/);
+
+    if (atMatch) {
+      const search = atMatch[1].toLowerCase();
+      setMentionSearch(search);
+      const filtered = agents.filter(a =>
+        a.name.toLowerCase().includes(search) ||
+        a.email.toLowerCase().includes(search)
+      ).slice(0, 5);
+      setMentionResults(filtered);
+      setMentionHighlight(0);
+    } else {
+      setMentionSearch(null);
+      setMentionResults([]);
+    }
+  };
+
+  // Inserir menção selecionada no texto
+  const insertMention = (agent: Agent) => {
+    const cursorPos = textareaRef.current?.selectionStart || messageInput.length;
+    const textBefore = messageInput.substring(0, cursorPos);
+    const textAfter = messageInput.substring(cursorPos);
+    const atIndex = textBefore.lastIndexOf('@');
+    const newText = textBefore.substring(0, atIndex) + `@${agent.name} ` + textAfter;
+    setMessageInput(newText);
+    setSelectedMentionIds(prev => [...new Set([...prev, agent.id])]);
+    setMentionSearch(null);
+    setMentionResults([]);
+    textareaRef.current?.focus();
   };
 
   const handleCloseTicket = async (data: CloseTicketData) => {
@@ -173,11 +243,34 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Se o dropdown de menções está aberto, tratar navegação
+    if (mentionSearch !== null && mentionResults.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionHighlight(prev => Math.min(prev + 1, mentionResults.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionHighlight(prev => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(mentionResults[mentionHighlight]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionSearch(null);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSendMessage(e);
     }
-    // Shift+Enter for new line is default textarea behavior
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       handleSendMessage(e);
@@ -341,6 +434,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
 
             {messages.map((msg) => {
               const isOutgoing = msg.direction === 'OUTGOING';
+              const isInternal = msg.isInternal === true;
               const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
               const mediaSrc = msg.content.startsWith('/api/bot/media') ? `${apiUrl}${msg.content}` : msg.content;
@@ -357,21 +451,35 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
                   {!isOutgoing && (
                     <div
                       className="w-7 h-7 min-w-[28px] rounded-full flex items-center justify-center text-white text-[10px] font-semibold mr-2 mt-1"
-                      style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+                      style={{ background: isInternal ? 'linear-gradient(135deg, #D97706, #B45309)' : 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
                     >
-                      {(msg.sender?.name || ticket.customerName || 'CL').substring(0, 2).toUpperCase()}
+                      {isInternal ? <Lock size={12} /> : (msg.sender?.name || ticket.customerName || 'CL').substring(0, 2).toUpperCase()}
                     </div>
                   )}
 
                   <div
                     className={`max-w-[70%] rounded-xl px-3.5 py-2.5 ${isOutgoing ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
                     style={{
-                      backgroundColor: isOutgoing ? 'var(--cw-bubble-outgoing)' : 'var(--cw-bubble-incoming)',
-                      border: isOutgoing ? 'none' : '1px solid var(--cw-border)',
-                      color: isOutgoing ? 'var(--cw-bubble-outgoing-text)' : 'var(--cw-bubble-incoming-text)',
+                      backgroundColor: isInternal
+                        ? 'var(--cw-private-bg, #FEF3C7)'
+                        : isOutgoing ? 'var(--cw-bubble-outgoing)' : 'var(--cw-bubble-incoming)',
+                      border: isInternal
+                        ? '1px solid var(--cw-private-border, #FCD34D)'
+                        : isOutgoing ? 'none' : '1px solid var(--cw-border)',
+                      color: isInternal
+                        ? 'var(--cw-private-text, #92400E)'
+                        : isOutgoing ? 'var(--cw-bubble-outgoing-text)' : 'var(--cw-bubble-incoming-text)',
                     }}
                   >
-                    {!isOutgoing && msg.sender?.name && (
+                    {/* Cabeçalho da nota interna */}
+                    {isInternal && (
+                      <div className="flex items-center gap-1 text-[10px] font-bold mb-1" style={{ color: '#B45309' }}>
+                        <Lock size={10} />
+                        <span>Nota privada</span>
+                        {msg.sender?.name && <span>• {msg.sender.name}</span>}
+                      </div>
+                    )}
+                    {!isInternal && !isOutgoing && msg.sender?.name && (
                       <div className="text-[11px] font-semibold mb-1" style={{ color: '#8B5CF6' }}>
                         {msg.sender.name}
                       </div>
@@ -392,10 +500,11 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
                     )}
 
                     <div className="text-[10px] mt-1 flex items-center justify-end gap-1"
-                      style={{ color: 'var(--cw-text-tertiary)', opacity: isOutgoing ? 0.8 : 1 }}
+                      style={{ color: isInternal ? '#B45309' : 'var(--cw-text-tertiary)', opacity: isOutgoing && !isInternal ? 0.8 : 1 }}
                     >
+                      {isInternal && <Lock size={10} />}
                       {time}
-                      {isOutgoing && <CheckCheck size={12} />}
+                      {isOutgoing && !isInternal && <CheckCheck size={12} />}
                     </div>
                   </div>
 
@@ -403,9 +512,9 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
                   {isOutgoing && (
                     <div
                       className="w-7 h-7 min-w-[28px] rounded-full flex items-center justify-center text-white text-[10px] font-semibold ml-2 mt-1"
-                      style={{ backgroundColor: 'var(--cw-accent)' }}
+                      style={{ backgroundColor: isInternal ? '#D97706' : 'var(--cw-accent)' }}
                     >
-                      R
+                      {isInternal ? <Lock size={12} /> : 'R'}
                     </div>
                   )}
                 </motion.div>
@@ -459,13 +568,50 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
               </div>
             </div>
 
-            {/* Text Input */}
-            <form onSubmit={handleSendMessage} className="px-4 pb-2">
+            {/* Text Input com @mention dropdown */}
+            <form onSubmit={handleSendMessage} className="px-4 pb-2 relative">
+              {/* Dropdown de menções */}
+              {mentionSearch !== null && mentionResults.length > 0 && (
+                <div
+                  className="absolute bottom-full left-4 right-4 mb-1 rounded-lg shadow-xl border overflow-hidden z-50"
+                  style={{
+                    backgroundColor: 'var(--cw-bg-tertiary)',
+                    borderColor: 'var(--cw-border)',
+                  }}
+                >
+                  {mentionResults.map((agent, idx) => (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      onClick={() => insertMention(agent)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[13px] transition-colors"
+                      style={{
+                        backgroundColor: idx === mentionHighlight ? 'var(--cw-bg-active)' : 'transparent',
+                        color: 'var(--cw-text-primary)',
+                      }}
+                      onMouseEnter={() => setMentionHighlight(idx)}
+                    >
+                      <div
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-semibold"
+                        style={{ backgroundColor: 'var(--cw-accent)' }}
+                      >
+                        {agent.name.substring(0, 1).toUpperCase()}
+                      </div>
+                      <div className="text-left">
+                        <span className="font-medium">{agent.name}</span>
+                        <span className="ml-2 text-[11px]" style={{ color: 'var(--cw-text-tertiary)' }}>{agent.email}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <textarea
+                ref={textareaRef}
                 value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder={isPrivateMode ? 'A mensagem será visível apenas para agentes' : 'Shift + enter para nova linha. Digite \'/\' para selecionar uma Resposta Pronta.'}
+                placeholder={isPrivateMode ? 'Nota privada — visível apenas para agentes. Use @nome para mencionar.' : 'Shift + enter para nova linha. Use @ para mencionar agentes.'}
                 className="w-full bg-transparent border-none outline-none resize-none text-[13px] leading-relaxed py-2 min-h-[60px] max-h-[120px]"
                 style={{
                   color: 'var(--cw-text-primary)',

@@ -45,7 +45,7 @@ interface MenuItem {
   children?: MenuItem[];
 }
 
-// Chatwoot-style menu structure
+// Chatwoot-style menu structure — optimized (7 top-level items)
 const menuStructure: MenuItem[] = [
   {
     id: 'dashboard', label: 'Minha Caixa', icon: Inbox,
@@ -60,11 +60,7 @@ const menuStructure: MenuItem[] = [
     ]
   },
   {
-    id: 'bot', label: 'Bot IA', icon: Bot,
-    roles: ['admin', 'tech_ti'],
-  },
-  {
-    id: 'usuarios', label: 'Contatos', icon: Users,
+    id: 'contatos', label: 'Contatos', icon: Users,
     roles: ['admin', 'manager', 'tech_elect'],
   },
   {
@@ -84,10 +80,6 @@ const menuStructure: MenuItem[] = [
     roles: ['admin', 'tech_ti', 'tech_elect'],
   },
   {
-    id: 'faq', label: 'FAQ', icon: HelpCircle,
-    roles: ['admin', 'tech_ti'],
-  },
-  {
     id: 'chat', label: 'Chat Equipe', icon: Edit3,
     roles: ['admin', 'tech_ti', 'tech_elect', 'manager'],
   },
@@ -100,6 +92,8 @@ const menuStructure: MenuItem[] = [
       { id: 'teams', label: 'Equipes', icon: UsersRound, roles: ['admin'] },
       { id: 'labels', label: 'Labels', icon: Tag, roles: ['admin', 'tech_ti'] },
       { id: 'sla', label: 'SLA', icon: Timer, roles: ['admin'] },
+      { id: 'bot', label: 'Bot IA', icon: Bot, roles: ['admin', 'tech_ti'] },
+      { id: 'faq', label: 'FAQ', icon: HelpCircle, roles: ['admin', 'tech_ti'] },
       { id: 'respostas-prontas', label: 'Respostas Prontas', icon: MessageSquare, roles: ['admin', 'tech_ti'] },
       { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['admin'] },
       { id: 'roles', label: 'Roles & Permissões', icon: Shield, roles: ['admin'] },

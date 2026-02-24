@@ -358,6 +358,13 @@ export const usersApi = {
         return apiFetch<User[]>('/users/technicians');
     },
 
+    create: (data: any): Promise<User> => {
+        return apiFetch<User>('/users', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
     createGlpiUser: (data: any): Promise<any> => {
         return apiFetch('/users/glpi', {
             method: 'POST',
@@ -516,11 +523,11 @@ export const ticketsApi = {
         return apiFetch<Message[]>(`/tickets/${ticketId}/messages`);
     },
 
-    // Send message
-    sendMessage: (ticketId: string, content: string): Promise<Message> => {
+    // Enviar mensagem (com suporte a notas internas e @mentions)
+    sendMessage: (ticketId: string, content: string, isInternal?: boolean, mentions?: string[]): Promise<Message> => {
         return apiFetch<Message>(`/tickets/${ticketId}/messages`, {
             method: 'POST',
-            body: JSON.stringify({ content }),
+            body: JSON.stringify({ content, isInternal: isInternal || false, mentions: mentions || [] }),
         });
     },
 };

@@ -2,7 +2,7 @@
  * Users Service
  */
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
 @Injectable()
@@ -95,6 +95,44 @@ export class UsersService {
   async delete(id: string) {
     await this.prisma.user.delete({ where: { id } });
     return { message: 'Usuário deletado' };
+  }
+
+  async createLocal(data: { name: string; email: string; password?: string; role?: 'ADMIN' | 'AGENT' | 'STOCK_MANAGER'; active?: boolean }) {
+    // 1. Verify email uniqueness
+    const existing = await this.prisma.user.findFirst({
+      where: { email: data.email },
+    });
+
+    if (existing) {
+      throw new BadRequestException('E-mail já está em uso');
+    }
+
+    // 2. Hash password
+    let hashedPassword = '';
+    if (data.password) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const bcrypt = require('bcryptjs');
+      hashedPassword = await bcrypt.hash(data.password, 12);
+    }
+
+    // 3. Create user
+    return this.prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        password: hashedPassword,
+        role: data.role || 'AGENT',
+        active: data.active ?? true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        active: true,
+        createdAt: true,
+      },
+    });
   }
 
   async createFromGlpi(data: {
