@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { GlpiService } from '../../../infrastructure/external/glpi.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
+import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { Direction, MessageType } from '@prisma/client';
 
 interface CreateMessageDto {
@@ -25,6 +26,7 @@ export class MessagesService {
     private prisma: PrismaService,
     private glpi: GlpiService,
     private rabbitmq: RabbitMQService,
+    private automationEngine: AutomationEngineService,
   ) { }
 
   async findByTicket(ticketId: string) {
@@ -92,6 +94,31 @@ export class MessagesService {
       payload: message,
     });
 
+    // 🤖 Trigger automation: message_sent (apenas se for OUTGOING)
+    if (dto.direction === 'OUTGOING') {
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: dto.ticketId },
+        select: {
+          id: true,
+          phoneNumber: true,
+          assignedToId: true,
+          priority: true,
+          status: true,
+        },
+      });
+
+      await this.automationEngine.processEvent('message_sent', {
+        ticketId: dto.ticketId,
+        messageId: message.id,
+        message,
+        content: dto.content,
+        senderId: dto.senderId,
+        isInternal: dto.isInternal || false,
+        mentions: dto.mentions || [],
+        ticket,
+      });
+    }
+
     return message;
   }
 
@@ -119,6 +146,33 @@ export class MessagesService {
       direction: 'INCOMING',
       waMessageId,
       type,
+    });
+
+    // 🤖 Trigger automation: message_received
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        id: true,
+        phoneNumber: true,
+        customerName: true,
+        assignedToId: true,
+        priority: true,
+        status: true,
+        category: true,
+        sector: true,
+      },
+    });
+
+    await this.automationEngine.processEvent('message_received', {
+      ticketId,
+      messageId: message.id,
+      message,
+      content,
+      waMessageId,
+      type,
+      ticket,
+      phoneNumber: ticket?.phoneNumber,
+      customerName: ticket?.customerName,
     });
 
     return { message, isNew: true };

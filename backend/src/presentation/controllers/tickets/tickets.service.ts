@@ -6,6 +6,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { GlpiService } from '../../../infrastructure/external/glpi.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
+import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { TicketStatus, Priority, TicketType } from '@prisma/client';
 
 interface CreateTicketDto {
@@ -31,6 +32,7 @@ export class TicketsService {
     private prisma: PrismaService,
     private glpi: GlpiService,
     private rabbitmq: RabbitMQService,
+    private automationEngine: AutomationEngineService,
   ) { }
 
   async findAll(filters?: {
@@ -170,6 +172,47 @@ export class TicketsService {
       payload: ticket,
     });
 
+    // 🤖 Trigger automation: ticket_created
+    await this.automationEngine.processEvent('ticket_created', {
+      ticketId: ticket.id,
+      ticket,
+      phoneNumber: ticket.phoneNumber,
+      customerName: ticket.customerName,
+      priority: ticket.priority,
+      category: ticket.category,
+      sector: ticket.sector,
+      status: ticket.status,
+      type: ticket.type,
+    });
+
+    // 🤖 Auto-assignment (se habilitado e ticket não tem assignedToId)
+    if (!ticket.assignedToId && ticket.type !== 'SERVICE_REPORT') {
+      try {
+        // Verificar se auto-assignment está habilitado
+        const config = await this.prisma.autoAssignmentConfig.findFirst({
+          where: { enabled: true },
+        });
+
+        if (config) {
+          // Verificar se deve aplicar a este ticket
+          const shouldApply =
+            (config.applyToSectors.length === 0 || config.applyToSectors.includes(ticket.sector || '')) &&
+            (config.applyToPriorities.length === 0 || config.applyToPriorities.includes(ticket.priority)) &&
+            (config.applyToCategories.length === 0 || !ticket.category || config.applyToCategories.includes(ticket.category));
+
+          if (shouldApply) {
+            console.log(`🤖 Auto-assignment enabled for ticket ${ticket.id}`);
+            await this.autoAssignAgent(ticket.id, {
+              sector: config.respectSector ? ticket.sector : undefined,
+            });
+          }
+        }
+      } catch (error: any) {
+        console.error(`⚠️ Auto-assignment failed for ticket ${ticket.id}:`, error.message);
+        // Não bloqueia a criação do ticket se auto-assignment falhar
+      }
+    }
+
     return ticket;
   }
 
@@ -236,6 +279,17 @@ export class TicketsService {
       ticketId: id,
       userId: dto.userId,
       payload: ticket,
+    });
+
+    // 🤖 Trigger automation: ticket_assigned
+    await this.automationEngine.processEvent('ticket_assigned', {
+      ticketId: ticket.id,
+      ticket,
+      assignedToId: dto.userId,
+      assignedToName: technician?.name,
+      phoneNumber: ticket.phoneNumber,
+      priority: ticket.priority,
+      status: ticket.status,
     });
 
     return ticket;
@@ -343,6 +397,22 @@ export class TicketsService {
       type: 'ticket_updated',
       ticketId: id,
       payload: ticket,
+    });
+
+    // 🤖 Trigger automation: ticket_updated / ticket_resolved / ticket_closed
+    let eventType = 'ticket_updated';
+    if (status === 'RESOLVED') eventType = 'ticket_resolved';
+    if (status === 'CLOSED') eventType = 'ticket_closed';
+
+    await this.automationEngine.processEvent(eventType, {
+      ticketId: ticket.id,
+      ticket,
+      status,
+      previousStatus: ticket.status, // Note: this is the OLD status before update
+      assignedToId: ticket.assignedToId,
+      assignedToName: ticket.assignedTo?.name,
+      phoneNumber: ticket.phoneNumber,
+      priority: ticket.priority,
     });
 
     return ticket;
@@ -518,6 +588,20 @@ export class TicketsService {
       payload: ticket,
     });
 
+    // 🤖 Trigger automation: ticket_closed
+    await this.automationEngine.processEvent('ticket_closed', {
+      ticketId: ticket.id,
+      ticket,
+      status: 'CLOSED',
+      assignedToId: ticket.assignedToId,
+      assignedToName: ticket.assignedTo?.name,
+      phoneNumber: ticket.phoneNumber,
+      priority: ticket.priority,
+      solution: closeData?.solution,
+      timeWorked: closeData?.timeWorked,
+      partsUsed: partUsages.length,
+    });
+
     return ticket;
   }
 
@@ -599,5 +683,98 @@ export class TicketsService {
 
     console.log(`📎 Anexo adicionado ao ticket ${ticketId}: ${file.originalname}`);
     return attachment;
+  }
+
+  /**
+   * Auto-atribuir ticket para técnico disponível
+   * Estratégia: Round-robin (técnico com menos tickets ativos)
+   */
+  async autoAssignAgent(ticketId: string, options?: {
+    sector?: string;
+    technicianLevel?: 'N1' | 'N2' | 'N3';
+    priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  }): Promise<any> {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        id: true,
+        sector: true,
+        priority: true,
+        phoneNumber: true,
+        title: true,
+        glpiId: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket não encontrado');
+    }
+
+    // Filtros para buscar técnicos elegíveis
+    const where: any = {
+      active: true,
+      receiveAlerts: true,
+    };
+
+    // Filtrar por setor se especificado
+    if (options?.sector || ticket.sector) {
+      where.sector = options?.sector || ticket.sector;
+    }
+
+    // Filtrar por nível técnico se especificado
+    if (options?.technicianLevel) {
+      where.technicianLevel = options.technicianLevel;
+    }
+
+    // Buscar técnicos elegíveis
+    const technicians = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        phoneNumber: true,
+        technicianLevel: true,
+        sector: true,
+        _count: {
+          select: {
+            tickets: {
+              where: {
+                status: {
+                  in: ['NEW', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_CLIENT'],
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (technicians.length === 0) {
+      console.warn(`⚠️ Nenhum técnico disponível para auto-atribuição (setor: ${options?.sector || ticket.sector})`);
+      return null;
+    }
+
+    // Ordenar por quantidade de tickets ativos (round-robin)
+    technicians.sort((a, b) => a._count.tickets - b._count.tickets);
+
+    // Selecionar técnico com menos tickets
+    const selectedTechnician = technicians[0];
+
+    console.log(`🤖 Auto-atribuindo ticket ${ticketId} para ${selectedTechnician.name} (${selectedTechnician._count.tickets} tickets ativos)`);
+
+    // Atribuir ticket
+    const updatedTicket = await this.assign(ticketId, {
+      userId: selectedTechnician.id,
+    });
+
+    return {
+      ticket: updatedTicket,
+      technician: {
+        id: selectedTechnician.id,
+        name: selectedTechnician.name,
+        activeTickets: selectedTechnician._count.tickets,
+        technicianLevel: selectedTechnician.technicianLevel,
+      },
+    };
   }
 }
