@@ -5,6 +5,7 @@
 
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { AutomationEngineService } from './automation-engine.service';
 
 interface SendCsatDto {
   ticketId: string;
@@ -17,7 +18,7 @@ interface SubmitCsatDto {
   feedback?: string;
 }
 
-interface CsatStats {
+export interface CsatStats {
   totalResponses: number;
   averageRating: number;
   distribution: {
@@ -34,7 +35,10 @@ interface CsatStats {
 export class CsatService {
   private readonly logger = new Logger(CsatService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private automationEngine: AutomationEngineService,
+  ) { }
 
   /**
    * Envia pesquisa CSAT para um ticket
@@ -119,6 +123,17 @@ export class CsatService {
     });
 
     this.logger.log(`✅ CSAT submitted: ${dto.rating}/5 stars`);
+
+    // 🤖 Trigger automation: csat_received
+    await this.automationEngine.processEvent('csat_received', {
+      ticketId: dto.ticketId,
+      csatId: updated.id,
+      rating: dto.rating,
+      feedback: dto.feedback,
+      assignedToId: updated.assignedToId,
+      assignedToName: updated.assignedTo?.name,
+      ticket: updated.ticket,
+    });
 
     return updated;
   }
