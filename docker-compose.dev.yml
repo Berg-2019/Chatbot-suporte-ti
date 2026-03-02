@@ -136,6 +136,8 @@ services:
       GLPI_URL: http://glpi/apirest.php
       GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-dev-app-token}
       GLPI_USER_TOKEN: ${GLPI_USER_TOKEN:-dev-user-token}
+      GLPI_ADMIN_USER: ${GLPI_ADMIN_USER:-glpi}
+      GLPI_ADMIN_PASSWORD: ${GLPI_ADMIN_PASSWORD:-M4YQYceYVsAeKay}
       FRONTEND_URL: http://localhost:5173,http://192.168.7.118,http://192.168.7.118:5173,http://helpdeskmsm.com.br,https://helpdeskmsm.com.br,https://www.helpdeskmsm.com.br
     volumes:
       - ./backend:/app:delegated

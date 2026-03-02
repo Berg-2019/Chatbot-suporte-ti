@@ -24,6 +24,14 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
     });
 
     if (!response.ok) {
+        if (response.status === 401) {
+            // Se o token expirar, limpa a sessão e redireciona para login
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('helpdesk_user');
+            localStorage.removeItem('helpdesk_profile');
+            // Recarregar a página para forçar o login
+            window.location.href = '/';
+        }
         const error = await response.json().catch(() => ({ message: 'Request failed' }));
         // NestJS retorna { message, error, statusCode } - extrair a mensagem corretamente
         const errorMessage = error.message || error.error || `HTTP ${response.status}`;
