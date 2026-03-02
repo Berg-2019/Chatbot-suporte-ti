@@ -277,4 +277,10 @@ export class UsersController {
     }
     return this.usersService.delete(id);
   }
+
+  @Get('mentionable')
+  async getMentionableUsers(@Request() req: any) {
+    // Retorna usuários que podem ser mencionados em notas internas
+    return this.usersService.getMentionableUsers();
+  }
 }

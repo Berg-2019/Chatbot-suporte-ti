@@ -119,7 +119,93 @@ export class MessagesService {
       });
     }
 
+    // 💬 Notificar usuários mencionados (@mentions)
+    if (dto.mentions && dto.mentions.length > 0) {
+      await this.notifyMentionedUsers(message.id, dto.ticketId, dto.mentions, dto.senderId, dto.content);
+    }
+
     return message;
+  }
+
+  /**
+   * Notificar usuários mencionados em uma mensagem
+   */
+  private async notifyMentionedUsers(
+    messageId: string,
+    ticketId: string,
+    mentions: string[],
+    senderId: string | undefined,
+    content: string,
+  ): Promise<void> {
+    try {
+      // Buscar informações do ticket e sender
+      const [ticket, sender] = await Promise.all([
+        this.prisma.ticket.findUnique({
+          where: { id: ticketId },
+          select: { id: true, title: true, glpiId: true },
+        }),
+        senderId
+          ? this.prisma.user.findUnique({
+              where: { id: senderId },
+              select: { id: true, name: true },
+            })
+          : null,
+      ]);
+
+      if (!ticket) return;
+
+      // Buscar usuários mencionados que têm phoneNumber e receiveAlerts
+      const mentionedUsers = await this.prisma.user.findMany({
+        where: {
+          id: { in: mentions },
+          phoneNumber: { not: null },
+          receiveAlerts: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          phoneNumber: true,
+        },
+      });
+
+      // Enviar notificação para cada usuário mencionado
+      for (const user of mentionedUsers) {
+        const senderName = sender?.name || 'Alguém';
+        const ticketRef = ticket.glpiId ? `#${ticket.glpiId}` : `#${ticket.id.slice(-6)}`;
+
+        // Truncar conteúdo se muito longo
+        const truncatedContent = content.length > 100
+          ? content.substring(0, 100) + '...'
+          : content;
+
+        const notificationMessage = `💬 *Você foi mencionado!*\n\n*${senderName}* mencionou você no ticket *${ticketRef}*:\n\n"${truncatedContent}"\n\n_Acesse o painel para ver a mensagem completa._`;
+
+        await this.rabbitmq.publishOutgoingMessage({
+          to: user.phoneNumber!.includes('@')
+            ? user.phoneNumber!
+            : `${user.phoneNumber}@s.whatsapp.net`,
+          text: notificationMessage,
+          ticketId,
+        });
+
+        console.log(`💬 Notificação de @mention enviada para ${user.name}`);
+      }
+
+      // Notificar via Socket.IO também (para notificações no painel)
+      await this.rabbitmq.publishNotification({
+        type: 'user_mentioned',
+        ticketId,
+        payload: {
+          messageId,
+          mentions,
+          sender: sender?.name,
+          ticketRef: ticket.glpiId || ticket.id,
+        },
+      });
+    } catch (error: any) {
+      console.error('⚠️ Erro ao notificar usuários mencionados:', error.message);
+      // Não bloqueia a criação da mensagem se notificação falhar
+    }
   }
 
   async createFromWhatsApp(

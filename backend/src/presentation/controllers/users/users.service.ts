@@ -246,5 +246,28 @@ export class UsersService {
 
     return this.update(user.id, data);
   }
+
+  /**
+   * Buscar usuários que podem ser mencionados (@mentions)
+   * Retorna apenas usuários ativos, ordenados por nome
+   */
+  async getMentionableUsers() {
+    return this.prisma.user.findMany({
+      where: {
+        active: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        department: true,
+        sector: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+  }
 }
 
