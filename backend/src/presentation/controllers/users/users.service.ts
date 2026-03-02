@@ -60,7 +60,7 @@ export class UsersService {
     return user;
   }
 
-  async update(id: string, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT' | 'STOCK_MANAGER'; active?: boolean; phone?: string; department?: string; permissions?: string[] }) {
+  async update(id: string, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; department?: string; permissions?: string[] }) {
     // Prepare data for update
     const updateData: Record<string, unknown> = {};
 
@@ -97,7 +97,7 @@ export class UsersService {
     return { message: 'Usuário deletado' };
   }
 
-  async createLocal(data: { name: string; email: string; password?: string; role?: 'ADMIN' | 'AGENT' | 'STOCK_MANAGER'; active?: boolean }) {
+  async createLocal(data: { name: string; email: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean }) {
     // 1. Verify email uniqueness
     const existing = await this.prisma.user.findFirst({
       where: { email: data.email },
@@ -143,7 +143,7 @@ export class UsersService {
     department?: string;
     permissions?: string[];
     password?: string;
-    role?: 'ADMIN' | 'AGENT' | 'STOCK_MANAGER';
+    role?: 'ADMIN' | 'AGENT';
   }) {
     // Verificar se já existe por glpiUserId
     const existingByGlpi = await this.prisma.user.findFirst({
@@ -214,7 +214,7 @@ export class UsersService {
       } as any,
     });
   }
-  async updateByGlpiId(glpiId: number, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT' | 'STOCK_MANAGER'; active?: boolean; phone?: string; department?: string; permissions?: string[] }) {
+  async updateByGlpiId(glpiId: number, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; department?: string; permissions?: string[] }) {
     // Find local user by glpiId
     let user = await this.prisma.user.findFirst({
       where: { glpiUserId: glpiId },
