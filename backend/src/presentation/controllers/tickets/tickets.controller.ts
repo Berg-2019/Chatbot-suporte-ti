@@ -150,4 +150,17 @@ export class TicketsController {
     if (!file) throw new Error('Arquivo não enviado');
     return this.ticketsService.addAttachment(id, file);
   }
+
+  @Post(':id/auto-assign')
+  @UseGuards(AuthGuard('jwt'))
+  async autoAssign(
+    @Param('id') id: string,
+    @Body() options?: {
+      sector?: string;
+      technicianLevel?: 'N1' | 'N2' | 'N3';
+      priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+    },
+  ) {
+    return this.ticketsService.autoAssignAgent(id, options);
+  }
 }

@@ -871,3 +871,34 @@ model TicketLabel {
   @@index([label])
 }
 
+// ✅ PHASE 2 - Feature 3: Auto-Assignment Configuration
+model AutoAssignmentConfig {
+  id        String   @id @default(uuid())
+
+  // Configuração
+  enabled   Boolean  @default(false)
+  strategy  String   @default("round_robin") // "round_robin", "least_busy", "random"
+
+  // Filtros
+  applyToSectors      String[]  @default([]) // [] = todos os setores
+  applyToPriorities   String[]  @default([]) // [] = todas as prioridades
+  applyToCategories   String[]  @default([]) // [] = todas as categorias
+
+  // Regras de atribuição
+  respectSector       Boolean   @default(true)  // Atribuir apenas ao técnico do mesmo setor
+  respectLevel        Boolean   @default(false) // Considerar nível técnico (N1, N2, N3)
+
+  // Limites
+  maxTicketsPerAgent  Int?      // Máximo de tickets ativos por agente (null = sem limite)
+
+  // Horário de funcionamento
+  workingHoursStart   String?   // "08:00"
+  workingHoursEnd     String?   // "18:00"
+  workingDays         String[]  @default(["mon", "tue", "wed", "thu", "fri"])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auto_assignment_config")
+}
+

@@ -35,6 +35,9 @@ import { WebsocketModule } from './presentation/websockets/websocket.module';
 import { CannedResponsesModule } from './presentation/controllers/canned-responses/canned-responses.module';
 import { WebhooksModule } from './presentation/controllers/webhooks/webhooks.module';
 import { RolesModule } from './presentation/controllers/roles/roles.module';
+import { CsatModule } from './presentation/controllers/csat/csat.module';
+import { AutomationModule } from './presentation/controllers/automation/automation.module';
+import { AutoAssignmentModule } from './presentation/controllers/auto-assignment/auto-assignment.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -81,6 +84,9 @@ import { HealthController } from './presentation/controllers/health.controller';
     CannedResponsesModule,
     WebhooksModule,
     RolesModule,
+    CsatModule,
+    AutomationModule,
+    AutoAssignmentModule,
   ],
   controllers: [HealthController],
   providers: [
