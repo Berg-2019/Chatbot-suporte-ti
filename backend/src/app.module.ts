@@ -43,9 +43,12 @@ import { IntentModule } from './presentation/controllers/intent/intent.module';
 import { AgentMetricsModule } from './presentation/controllers/agent-metrics/agent-metrics.module';
 import { LabelsModule } from './presentation/controllers/labels/labels.module';
 import { BotVariablesModule } from './presentation/controllers/bot-variables/bot-variables.module';
+import { EmailConfigModule } from './presentation/controllers/email-config/email-config.module';
+import { KnowledgeModule } from './presentation/controllers/knowledge/knowledge.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
+import { LogsController } from './presentation/controllers/admin/logs.controller';
 
 @Module({
   imports: [
@@ -99,8 +102,10 @@ import { HealthController } from './presentation/controllers/health.controller';
     AgentMetricsModule,
     LabelsModule,
     BotVariablesModule,
+    EmailConfigModule,
+    KnowledgeModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, LogsController],
   providers: [
     // Apply rate limiting globally
     {
