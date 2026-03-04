@@ -26,29 +26,30 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Integração GLPI
-  glpiUserId    Int?              // ID do usuário no GLPI
-  glpiGroupId   Int?              // ID do grupo no GLPI (N1, N2, N3)
+  glpiUserId  Int? // ID do usuário no GLPI
+  glpiGroupId Int? // ID do grupo no GLPI (N1, N2, N3)
 
   // Nível técnico
   technicianLevel TechnicianLevel @default(N1)
 
   // Alertas
-  phoneNumber   String?           // WhatsApp para receber alertas
-  receiveAlerts Boolean           @default(true)
-  sector        String            @default("TI")  // TI ou ELECTRIC
+  phoneNumber   String? // WhatsApp para receber alertas
+  receiveAlerts Boolean @default(true)
+  sector        String  @default("TI") // TI ou ELECTRIC
 
-  tickets   Ticket[]
-  messages  Message[]
-  alerts    TechnicianAlert[]
-  teamMessages TeamMessage[]
-  csatResponses CsatResponse[]
-  cannedResponses CannedResponse[]
+  tickets           Ticket[]
+  messages          Message[]
+  alerts            TechnicianAlert[]
+  teamMessages      TeamMessage[]
+  csatResponses     CsatResponse[]
+  cannedResponses   CannedResponse[]
   knowledgeArticles KnowledgeArticle[]
-  agentMetrics AgentMetric[]
+  agentMetrics      AgentMetric[]
+  articleFeedback   ArticleFeedback[]
 
-  @@map("users")
   @@index([role, active])
   @@index([email])
+  @@map("users")
 }
 
 // ✅ NOVO: Roles customizáveis
@@ -59,9 +60,9 @@ enum Role {
 }
 
 enum TechnicianLevel {
-  N1   // Primeiro nível - atendimento básico
-  N2   // Segundo nível - suporte intermediário
-  N3   // Terceiro nível - especialista
+  N1 // Primeiro nível - atendimento básico
+  N2 // Segundo nível - suporte intermediário
+  N3 // Terceiro nível - especialista
 }
 
 // ===========================================================================
@@ -69,45 +70,45 @@ enum TechnicianLevel {
 // ===========================================================================
 
 model Ticket {
-  id          String       @id @default(uuid())
-  glpiId      Int?         @unique    // ID do ticket no GLPI
-  title       String
-  description String
-  status      TicketStatus @default(NEW)
-  priority    Priority     @default(NORMAL)
-  phoneNumber String                  // Telefone do cliente
-  customerName String?                // Nome do cliente (coletado pelo bot)
-  sector      String?                 // Setor do cliente
-  category    String?                 // Categoria/tipo do problema
+  id           String       @id @default(uuid())
+  glpiId       Int?         @unique // ID do ticket no GLPI
+  title        String
+  description  String
+  status       TicketStatus @default(NEW)
+  priority     Priority     @default(NORMAL)
+  phoneNumber  String // Telefone do cliente
+  customerName String? // Nome do cliente (coletado pelo bot)
+  sector       String? // Setor do cliente
+  category     String? // Categoria/tipo do problema
 
   // Campos de fechamento
-  solution     String?                // Texto da solução aplicada
-  solutionType String?                // Categoria da solução (Hardware, Software, etc)
-  timeWorked   Int?                   // Tempo trabalhado em minutos
+  solution     String? // Texto da solução aplicada
+  solutionType String? // Categoria da solução (Hardware, Software, etc)
+  timeWorked   Int? // Tempo trabalhado em minutos
 
   // Avaliação
-  rating        Int?                  // Nota 1-5 dada pelo cliente
-  ratedAt       DateTime?             // Quando avaliou
-  awaitingRating Boolean  @default(false)  // Se está aguardando avaliação
+  rating         Int? // Nota 1-5 dada pelo cliente
+  ratedAt        DateTime? // Quando avaliou
+  awaitingRating Boolean   @default(false) // Se está aguardando avaliação
 
   assignedToId String?
   assignedTo   User?   @relation(fields: [assignedToId], references: [id])
 
-  type        TicketType @default(SUPPORT)
-  location    String?    // Local do serviço (ex: Filial X, Torre Y)
+  type     TicketType @default(SUPPORT)
+  location String? // Local do serviço (ex: Filial X, Torre Y)
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   closedAt    DateTime?
-  escalatedAt DateTime?   // Timestamp do último escalonamento
+  escalatedAt DateTime? // Timestamp do último escalonamento
 
-  messages    Message[]
-  partUsages  PartUsage[]
-  attachments Attachment[]
+  messages     Message[]
+  partUsages   PartUsage[]
+  attachments  Attachment[]
   csatResponse CsatResponse?
-  labels      TicketLabel[]
+  labels       TicketLabel[]
+  emailMapping EmailTicketMapping?
 
-  @@map("tickets")
   @@index([phoneNumber])
   @@index([status])
   @@index([glpiId])
@@ -115,20 +116,21 @@ model Ticket {
   @@index([createdAt(sort: Desc)])
   @@index([type]) // Index para relatórios
   @@index([status, createdAt(sort: Desc)])
+  @@map("tickets")
 }
 
 enum TicketType {
-  SUPPORT         // Chamado padrão (Reativo)
-  SERVICE_REPORT  // Relatório de Serviço (Proativo/Externo)
+  SUPPORT // Chamado padrão (Reativo)
+  SERVICE_REPORT // Relatório de Serviço (Proativo/Externo)
 }
 
 enum TicketStatus {
-  NEW            // Novo - aguardando atendimento
-  ASSIGNED       // Atribuído a um técnico
-  IN_PROGRESS    // Em atendimento
+  NEW // Novo - aguardando atendimento
+  ASSIGNED // Atribuído a um técnico
+  IN_PROGRESS // Em atendimento
   WAITING_CLIENT // Aguardando resposta do cliente
-  RESOLVED       // Resolvido
-  CLOSED         // Fechado
+  RESOLVED // Resolvido
+  CLOSED // Fechado
 }
 
 enum Priority {
@@ -143,29 +145,29 @@ enum Priority {
 // ===========================================================================
 
 model Message {
-  id        String      @id @default(uuid())
-  ticketId  String
-  ticket    Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   content   String
   type      MessageType @default(TEXT)
   direction Direction
 
-  senderId  String?
-  sender    User?       @relation(fields: [senderId], references: [id])
+  senderId String?
+  sender   User?   @relation(fields: [senderId], references: [id])
 
-  waMessageId String?   // ID da mensagem no WhatsApp
+  waMessageId String? // ID da mensagem no WhatsApp
 
   // ✅ NOVO: Notas internas e mentions (Chatwoot)
-  isInternal  Boolean  @default(false)  // Nota interna (invisível ao cliente)
-  mentions    String[] @default([])     // IDs dos usuários mencionados
+  isInternal Boolean  @default(false) // Nota interna (invisível ao cliente)
+  mentions   String[] @default([]) // IDs dos usuários mencionados
 
-  createdAt DateTime    @default(now())
+  createdAt DateTime @default(now())
 
-  @@map("messages")
   @@index([ticketId])
   @@index([ticketId, createdAt(sort: Desc)])
   @@index([isInternal])
+  @@map("messages")
 }
 
 enum MessageType {
@@ -176,8 +178,8 @@ enum MessageType {
 }
 
 enum Direction {
-  INCOMING  // Cliente → Sistema
-  OUTGOING  // Sistema → Cliente
+  INCOMING // Cliente → Sistema
+  OUTGOING // Sistema → Cliente
 }
 
 // ===========================================================================
@@ -187,14 +189,14 @@ enum Direction {
 model BotSession {
   id          String   @id @default(uuid())
   phoneNumber String   @unique
-  state       String   // Estado atual da conversa (JSON)
-  data        String?  // Dados coletados (JSON)
+  state       String // Estado atual da conversa (JSON)
+  data        String? // Dados coletados (JSON)
   expiresAt   DateTime
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@map("bot_sessions")
   @@index([phoneNumber])
+  @@map("bot_sessions")
 }
 
 // ===========================================================================
@@ -205,7 +207,7 @@ model Queue {
   id          String   @id @default(uuid())
   name        String   @unique
   description String?
-  skills      String   // JSON array de skills
+  skills      String // JSON array de skills
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -219,16 +221,16 @@ model Queue {
 model Part {
   id          String   @id @default(uuid())
   name        String
-  code        String   @unique  // SKU/Código interno
+  code        String   @unique // SKU/Código interno
   description String?
   quantity    Int      @default(0)
-  minQuantity Int      @default(5)  // Alerta de estoque baixo
-  unitCost    Decimal  @db.Decimal(10,2)
+  minQuantity Int      @default(5) // Alerta de estoque baixo
+  unitCost    Decimal  @db.Decimal(10, 2)
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  usages      PartUsage[]
+  usages PartUsage[]
 
   @@map("parts")
 }
@@ -243,14 +245,14 @@ model PartUsage {
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   partId    String?
   part      Part?    @relation(fields: [partId], references: [id])
-  partName  String   // Nome da peça (útil para peças compradas avulso)
+  partName  String // Nome da peça (útil para peças compradas avulso)
   quantity  Int
-  unitCost  Decimal  @db.Decimal(10,2)
-  purchased Boolean  @default(false)  // Se foi comprada para este chamado
+  unitCost  Decimal  @db.Decimal(10, 2)
+  purchased Boolean  @default(false) // Se foi comprada para este chamado
   createdAt DateTime @default(now())
 
-  @@map("part_usages")
   @@index([ticketId])
+  @@map("part_usages")
 }
 
 // ===========================================================================
@@ -258,19 +260,19 @@ model PartUsage {
 // ===========================================================================
 
 model Faq {
-  id          String   @id @default(uuid())
-  question    String
-  answer      String   @db.Text
-  keywords    String   // Palavras-chave separadas por vírgula
-  category    String?
-  views       Int      @default(0)
-  helpful     Int      @default(0)
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  question  String
+  answer    String   @db.Text
+  keywords  String // Palavras-chave separadas por vírgula
+  category  String?
+  views     Int      @default(0)
+  helpful   Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("faqs")
   @@index([keywords])
+  @@map("faqs")
 }
 
 // ===========================================================================
@@ -278,35 +280,35 @@ model Faq {
 // ===========================================================================
 
 model TechnicianAlert {
-  id          String     @id @default(uuid())
-  
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  ticketId    String?    // ID local do ticket
-  glpiId      Int?       // ID do ticket no GLPI
-  
-  type        AlertType
-  message     String
-  
-  sentViaWa   Boolean    @default(false)  // Enviado via WhatsApp
-  sentViaPush Boolean    @default(false)  // Enviado via Socket.IO
-  readAt      DateTime?
-  
-  createdAt   DateTime   @default(now())
+  id String @id @default(uuid())
 
-  @@map("technician_alerts")
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  ticketId String? // ID local do ticket
+  glpiId   Int? // ID do ticket no GLPI
+
+  type    AlertType
+  message String
+
+  sentViaWa   Boolean   @default(false) // Enviado via WhatsApp
+  sentViaPush Boolean   @default(false) // Enviado via Socket.IO
+  readAt      DateTime?
+
+  createdAt DateTime @default(now())
+
   @@index([userId])
   @@index([ticketId])
+  @@map("technician_alerts")
 }
 
 enum AlertType {
-  NEW_TICKET    // Novo ticket atribuído
-  ESCALATED     // Ticket escalonado do nível anterior
-  SLA_WARNING   // 75% do tempo SLA atingido
-  SLA_BREACH    // SLA estourado
-  NEW_MESSAGE   // Nova mensagem do cliente
-  TRANSFERRED   // Ticket transferido para você
+  NEW_TICKET // Novo ticket atribuído
+  ESCALATED // Ticket escalonado do nível anterior
+  SLA_WARNING // 75% do tempo SLA atingido
+  SLA_BREACH // SLA estourado
+  NEW_MESSAGE // Nova mensagem do cliente
+  TRANSFERRED // Ticket transferido para você
 }
 
 // ===========================================================================
@@ -314,20 +316,20 @@ enum AlertType {
 // ===========================================================================
 
 model Attachment {
-  id        String   @id @default(uuid())
-  
-  ticketId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
-  filename  String           // Nome original do arquivo
-  path      String           // Caminho no servidor
-  mimeType  String           // image/jpeg, etc
-  size      Int              // Tamanho em bytes
-  
+  id String @id @default(uuid())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  filename String // Nome original do arquivo
+  path     String // Caminho no servidor
+  mimeType String // image/jpeg, etc
+  size     Int // Tamanho em bytes
+
   createdAt DateTime @default(now())
 
-  @@map("attachments")
   @@index([ticketId])
+  @@map("attachments")
 }
 
 // ===========================================================================
@@ -335,33 +337,33 @@ model Attachment {
 // ===========================================================================
 
 model Contact {
-  id          String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  jid         String   @unique  // JID completo do WhatsApp (ex: "123456789:0@s.whatsapp.net")
-  phoneNumber String?           // Número para exibição (opcional temporariamente)
-  name        String            // Nome do contato
-  email       String?           // Email do contato
-  sector      String            // Setor do contato (mantido obrigatório por compatibilidade)
-  company     String?           // Empresa/Organização
-  department  String?           // Departamento/subdivisão
-  ramal       String?           // Ramal telefônico
+  jid         String  @unique // JID completo do WhatsApp (ex: "123456789:0@s.whatsapp.net")
+  phoneNumber String? // Número para exibição (opcional temporariamente)
+  name        String // Nome do contato
+  email       String? // Email do contato
+  sector      String // Setor do contato (mantido obrigatório por compatibilidade)
+  company     String? // Empresa/Organização
+  department  String? // Departamento/subdivisão
+  ramal       String? // Ramal telefônico
 
   // Custom attributes (inspirado no Chatwoot)
-  customAttributes Json? @default("{}")  // { "cargo": "Gerente", "ramal": "2045" }
+  customAttributes Json? @default("{}") // { "cargo": "Gerente", "ramal": "2045" }
 
   // Estatísticas
   firstContactAt DateTime @default(now())
   lastContactAt  DateTime @default(now())
   totalTickets   Int      @default(0)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("contacts")
   @@index([jid])
   @@index([phoneNumber])
   @@index([sector])
   @@index([email])
+  @@map("contacts")
 }
 
 // ===========================================================================
@@ -369,31 +371,31 @@ model Contact {
 // ===========================================================================
 
 model Printer {
-  id          String   @id @default(uuid())
-  
-  name        String            // Nome amigável
-  ip          String   @unique  // IP da impressora
-  port        Int      @default(161) // Porta SNMP
-  community   String   @default("public")  // Community SNMP
-  model       String?           // Modelo detectado via SNMP
-  serialNumber String?          // Número de série
-  location    String?           // Localização física
-  
-  // Cache do último status
-  lastStatus     String?        // online, offline, error
-  lastTonerBlack Int?           // Nível toner preto (0-100)
-  lastTonerCyan  Int?           // Nível toner ciano
-  lastTonerMagenta Int?         // Nível toner magenta
-  lastTonerYellow Int?          // Nível toner amarelo
-  lastPageCount  Int?           // Contador de páginas
-  lastCheckedAt  DateTime?      // Última verificação
-  
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id String @id @default(uuid())
 
-  @@map("printers")
+  name         String // Nome amigável
+  ip           String  @unique // IP da impressora
+  port         Int     @default(161) // Porta SNMP
+  community    String  @default("public") // Community SNMP
+  model        String? // Modelo detectado via SNMP
+  serialNumber String? // Número de série
+  location     String? // Localização física
+
+  // Cache do último status
+  lastStatus       String? // online, offline, error
+  lastTonerBlack   Int? // Nível toner preto (0-100)
+  lastTonerCyan    Int? // Nível toner ciano
+  lastTonerMagenta Int? // Nível toner magenta
+  lastTonerYellow  Int? // Nível toner amarelo
+  lastPageCount    Int? // Contador de páginas
+  lastCheckedAt    DateTime? // Última verificação
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([ip])
+  @@map("printers")
 }
 
 // ===========================================================================
@@ -405,12 +407,12 @@ model TeamMessage {
   content   String
   senderId  String
   sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  sector    String   @default("TI")  // TI ou ELECTRIC
+  sector    String   @default("TI") // TI ou ELECTRIC
   createdAt DateTime @default(now())
 
-  @@map("team_messages")
   @@index([createdAt])
   @@index([sector])
+  @@map("team_messages")
 }
 
 // ===========================================================================
@@ -418,18 +420,18 @@ model TeamMessage {
 // ===========================================================================
 
 model Supplier {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  cnpj        String?
-  phone       String?
-  email       String?
-  address     String?
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  purchases   Purchase[]
-  
+  id        String   @id @default(uuid())
+  name      String   @unique
+  cnpj      String?
+  phone     String?
+  email     String?
+  address   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases Purchase[]
+
   @@map("suppliers")
 }
 
@@ -448,46 +450,46 @@ enum EquipmentCategory {
 }
 
 model Purchase {
-  id            String           @id @default(uuid())
-  
+  id String @id @default(uuid())
+
   // Equipamento
-  name          String           // Ex: "Impressora HP LaserJet Pro"
-  category      EquipmentCategory @default(OTHER)
-  serialNumber  String?
-  assetTag      String?          // Patrimônio
-  quantity      Int              @default(1)
-  unitPrice     Decimal          @db.Decimal(10,2)
-  
+  name         String // Ex: "Impressora HP LaserJet Pro"
+  category     EquipmentCategory @default(OTHER)
+  serialNumber String?
+  assetTag     String? // Patrimônio
+  quantity     Int               @default(1)
+  unitPrice    Decimal           @db.Decimal(10, 2)
+
   // Fornecedor
-  supplierId    String?
-  supplier      Supplier?        @relation(fields: [supplierId], references: [id])
-  supplierName  String?          // Backup caso não use fornecedor cadastrado
-  
+  supplierId   String?
+  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+  supplierName String? // Backup caso não use fornecedor cadastrado
+
   // Destino
-  sector        String           // Setor destino (Engenharia, RH, etc)
-  location      String?          // Local específico
-  responsibleName String?        // Responsável pelo recebimento
-  
+  sector          String // Setor destino (Engenharia, RH, etc)
+  location        String? // Local específico
+  responsibleName String? // Responsável pelo recebimento
+
   // Documento fiscal
-  invoiceNumber String?          // Número da NF
-  invoiceDate   DateTime?        // Data da NF
-  warrantyMonths Int?            // Meses de garantia
-  
+  invoiceNumber  String? // Número da NF
+  invoiceDate    DateTime? // Data da NF
+  warrantyMonths Int? // Meses de garantia
+
   // GLPI
-  glpiAssetId   Int?             // ID do ativo no GLPI após sincronização
-  syncedToGlpi  Boolean          @default(false)
-  
+  glpiAssetId  Int? // ID do ativo no GLPI após sincronização
+  syncedToGlpi Boolean @default(false)
+
   // Controle
-  purchaseDate  DateTime         @default(now())
-  notes         String?
-  createdById   String?          // Quem registrou
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  
-  @@map("purchases")
+  purchaseDate DateTime @default(now())
+  notes        String?
+  createdById  String? // Quem registrou
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
   @@index([sector])
   @@index([category])
   @@index([purchaseDate])
+  @@map("purchases")
 }
 
 // ===========================================================================
@@ -509,48 +511,48 @@ model ReportRecipient {
 // ===========================================================================
 
 model StockItem {
-  id          String        @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
-  code        String?       @unique  // SKU/Código interno
+  code        String? @unique // SKU/Código interno
   description String?
-  
+
   // Classificação
-  stockType   StockType     @default(TI)      // TI ou ELECTRIC
-  category    ItemCategory  @default(SUPPLY)  // SUPPLY, INK, ASSET
-  
+  stockType StockType    @default(TI) // TI ou ELECTRIC
+  category  ItemCategory @default(SUPPLY) // SUPPLY, INK, ASSET
+
   // Quantidades e Unidades
-  quantity    Decimal       @default(0) @db.Decimal(10,2)  // Suporta frações (1.5m, 0.5L)
-  minQuantity Decimal       @default(5) @db.Decimal(10,2)
+  quantity    Decimal       @default(0) @db.Decimal(10, 2) // Suporta frações (1.5m, 0.5L)
+  minQuantity Decimal       @default(5) @db.Decimal(10, 2)
   unit        UnitOfMeasure @default(UN)
-  unitCost    Decimal?      @db.Decimal(10,2)
-  
+  unitCost    Decimal?      @db.Decimal(10, 2)
+
   // Localização
-  location    String?       // "Almoxarifado A", "Armário TI", ou Filial
-  
+  location String? // "Almoxarifado A", "Armário TI", ou Filial
+
   // Específico de Tintas
-  printerModel String?      // Para qual impressora serve
-  inkColor     InkColor?    // CYAN, MAGENTA, YELLOW, BLACK
-  
+  printerModel String? // Para qual impressora serve
+  inkColor     InkColor? // CYAN, MAGENTA, YELLOW, BLACK
+
   // Específico de Patrimônio
-  assetTag     String?      // Plaqueta de patrimônio (pode repetir por local)
-  assetStatus  AssetStatus  @default(AVAILABLE)
-  isReservable Boolean      @default(false) // Pode ser reservado?
-  
+  assetTag     String? // Plaqueta de patrimônio (pode repetir por local)
+  assetStatus  AssetStatus @default(AVAILABLE)
+  isReservable Boolean     @default(false) // Pode ser reservado?
+
   // Controle
-  active      Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   reservations Reservation[]
   movements    StockMovement[]
 
-  @@map("stock_items")
-  @@unique([assetTag, location])  // Patrimônio único por localização/filial
+  @@unique([assetTag, location]) // Patrimônio único por localização/filial
   @@index([stockType])
   @@index([category])
   @@index([assetStatus])
   @@index([stockType, active])
   @@index([category, assetStatus])
+  @@map("stock_items")
 }
 
 enum StockType {
@@ -559,19 +561,19 @@ enum StockType {
 }
 
 enum ItemCategory {
-  SUPPLY   // Insumos (mouse, cabo, disjuntor)
-  INK      // Tintas e Toners
-  ASSET    // Patrimônio (projetor, notebook)
+  SUPPLY // Insumos (mouse, cabo, disjuntor)
+  INK // Tintas e Toners
+  ASSET // Patrimônio (projetor, notebook)
 }
 
 enum UnitOfMeasure {
-  UN   // Unidade
-  M    // Metro
-  L    // Litro
-  ML   // Mililitro
-  CX   // Caixa
-  PCT  // Pacote
-  KG   // Quilograma
+  UN // Unidade
+  M // Metro
+  L // Litro
+  ML // Mililitro
+  CX // Caixa
+  PCT // Pacote
+  KG // Quilograma
 }
 
 enum InkColor {
@@ -582,10 +584,10 @@ enum InkColor {
 }
 
 enum AssetStatus {
-  AVAILABLE    // Disponível para reserva
-  RESERVED     // Reservado
-  IN_USE       // Em uso
-  MAINTENANCE  // Em manutenção
+  AVAILABLE // Disponível para reserva
+  RESERVED // Reservado
+  IN_USE // Em uso
+  MAINTENANCE // Em manutenção
 }
 
 // ===========================================================================
@@ -593,28 +595,28 @@ enum AssetStatus {
 // ===========================================================================
 
 model StockMovement {
-  id          String        @id @default(uuid())
-  
-  stockItemId String
-  stockItem   StockItem     @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
-  
-  type        MovementType  // IN (entrada) ou OUT (saída)
-  quantity    Decimal       @db.Decimal(10,2)
-  reason      String?       // Motivo (ex: "Reposição", "Uso em ticket #123")
-  performedBy String?       // Nome/ID de quem realizou
-  
-  createdAt   DateTime      @default(now())
+  id String @id @default(uuid())
 
-  @@map("stock_movements")
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  type        MovementType // IN (entrada) ou OUT (saída)
+  quantity    Decimal      @db.Decimal(10, 2)
+  reason      String? // Motivo (ex: "Reposição", "Uso em ticket #123")
+  performedBy String? // Nome/ID de quem realizou
+
+  createdAt DateTime @default(now())
+
   @@index([stockItemId])
   @@index([createdAt])
   @@index([type])
   @@index([stockItemId, createdAt])
+  @@map("stock_movements")
 }
 
 enum MovementType {
-  IN   // Entrada
-  OUT  // Saída
+  IN // Entrada
+  OUT // Saída
 }
 
 // ===========================================================================
@@ -622,48 +624,48 @@ enum MovementType {
 // ===========================================================================
 
 model Reservation {
-  id            String            @id @default(uuid())
-  
-  stockItemId   String
-  stockItem     StockItem         @relation(fields: [stockItemId], references: [id])
-  
-  // Solicitante
-  userId        String?           // Se for usuário do sistema
-  userName      String            // Nome do solicitante
-  userPhone     String?           // Telefone/WhatsApp
-  userSector    String?           // Setor do solicitante
-  
-  // Período
-  startTime     DateTime
-  endTime       DateTime
-  
-  // Status
-  status        ReservationStatus @default(PENDING)
-  
-  // Link com Ticket (se criado pelo bot)
-  ticketId      String?
-  
-  // Controle
-  notes         String?
-  approvedById  String?           // Quem aprovou
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id String @id @default(uuid())
 
-  @@map("reservations")
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
+
+  // Solicitante
+  userId     String? // Se for usuário do sistema
+  userName   String // Nome do solicitante
+  userPhone  String? // Telefone/WhatsApp
+  userSector String? // Setor do solicitante
+
+  // Período
+  startTime DateTime
+  endTime   DateTime
+
+  // Status
+  status ReservationStatus @default(PENDING)
+
+  // Link com Ticket (se criado pelo bot)
+  ticketId String?
+
+  // Controle
+  notes        String?
+  approvedById String? // Quem aprovou
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
   @@index([stockItemId])
   @@index([status])
   @@index([startTime])
   @@index([status, startTime])
   @@index([stockItemId, status])
+  @@map("reservations")
 }
 
 enum ReservationStatus {
-  PENDING     // Aguardando aprovação
-  APPROVED    // Aprovada
-  REJECTED    // Rejeitada
-  IN_USE      // Em uso (retirado)
-  COMPLETED   // Devolvido
-  CANCELLED   // Cancelada
+  PENDING // Aguardando aprovação
+  APPROVED // Aprovada
+  REJECTED // Rejeitada
+  IN_USE // Em uso (retirado)
+  COMPLETED // Devolvido
+  CANCELLED // Cancelada
 }
 
 // ===========================================================================
@@ -675,29 +677,29 @@ enum ReservationStatus {
 // ===========================================================================
 
 model CsatResponse {
-  id           String   @id @default(uuid())
-  ticketId     String   @unique
-  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  ticketId String @unique
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
-  rating       Int      // 1-5 (😡 a 😍)
-  feedback     String?  // Texto opcional
+  rating   Int // 1-5 (😡 a 😍)
+  feedback String? // Texto opcional
 
-  assignedToId String?  // Técnico que atendeu
-  assignedTo   User?    @relation(fields: [assignedToId], references: [id])
+  assignedToId String? // Técnico que atendeu
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
 
-  respondedAt  DateTime @default(now())
-  sentAt       DateTime // Quando foi enviada
-  channel      String   // 'whatsapp', 'web', 'email'
+  respondedAt DateTime @default(now())
+  sentAt      DateTime // Quando foi enviada
+  channel     String // 'whatsapp', 'web', 'email'
 
   // Review notes (do Chatwoot) — notas internas sobre o feedback
-  reviewNote   String?
-  reviewedBy   String?
+  reviewNote String?
+  reviewedBy String?
 
-  @@map("csat_responses")
   @@index([assignedToId])
   @@index([respondedAt])
   @@index([rating])
   @@index([ticketId])
+  @@map("csat_responses")
 }
 
 // ===========================================================================
@@ -705,33 +707,33 @@ model CsatResponse {
 // ===========================================================================
 
 model AutomationRule {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
-  active      Boolean  @default(true)
+  active      Boolean @default(true)
 
   // Evento gatilho
-  event       String   // 'ticket_created', 'message_received', 'ticket_updated',
-                       // 'ticket_assigned', 'csat_received'
+  event String // 'ticket_created', 'message_received', 'ticket_updated',
+  // 'ticket_assigned', 'csat_received'
 
   // Condições (JSON) — Array de condições com operador AND/OR
-  conditions  Json     // [{ field: "priority", operator: "equals", value: "URGENT" }]
+  conditions        Json // [{ field: "priority", operator: "equals", value: "URGENT" }]
   conditionOperator String @default("AND") // AND | OR
 
   // Ações (JSON) — Array de ações a executar
-  actions     Json     // [{ type: "assign_agent", value: "user-id" },
-                       //  { type: "add_label", value: "urgente" }]
+  actions Json // [{ type: "assign_agent", value: "user-id" },
+  //  { type: "add_label", value: "urgente" }]
 
   // Auditoria
-  createdBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  executionCount Int   @default(0)
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  executionCount Int       @default(0)
   lastExecutedAt DateTime?
 
-  @@map("automation_rules")
   @@index([event, active])
   @@index([active])
+  @@map("automation_rules")
 }
 
 // ===========================================================================
@@ -739,19 +741,19 @@ model AutomationRule {
 // ===========================================================================
 
 model CannedResponse {
-  id        String   @id @default(uuid())
-  shortcode String   @unique  // Ex: "saudacao", "reiniciar_pc"
-  content   String   @db.Text // Texto da resposta (suporta {{variáveis}})
-  category  String?  // "Geral", "TI", "Elétrica"
+  id        String  @id @default(uuid())
+  shortcode String  @unique // Ex: "saudacao", "reiniciar_pc"
+  content   String  @db.Text // Texto da resposta (suporta {{variáveis}})
+  category  String? // "Geral", "TI", "Elétrica"
 
   createdBy String
   creator   User     @relation(fields: [createdBy], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("canned_responses")
   @@index([shortcode])
   @@index([category])
+  @@map("canned_responses")
 }
 
 // ===========================================================================
@@ -759,29 +761,29 @@ model CannedResponse {
 // ===========================================================================
 
 model Webhook {
-  id        String   @id @default(uuid())
-  url       String
-  events    String[] // ['ticket_created', 'ticket_resolved', 'message_received']
-  active    Boolean  @default(true)
-  secret    String?  // Para validar HMAC
+  id     String   @id @default(uuid())
+  url    String
+  events String[] // ['ticket_created', 'ticket_resolved', 'message_received']
+  active Boolean  @default(true)
+  secret String? // Para validar HMAC
 
-  headers   Json?    // Headers customizados
+  headers Json? // Headers customizados
 
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Logs
-  logs      WebhookLog[]
+  logs WebhookLog[]
 
-  @@map("webhooks")
   @@index([active])
+  @@map("webhooks")
 }
 
 model WebhookLog {
-  id         String   @id @default(uuid())
-  webhookId  String
-  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  id        String  @id @default(uuid())
+  webhookId String
+  webhook   Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
   event      String
   payload    Json
@@ -789,12 +791,12 @@ model WebhookLog {
   response   String?
   error      String?
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  @@map("webhook_logs")
   @@index([webhookId, createdAt])
   @@index([webhookId])
   @@index([createdAt])
+  @@map("webhook_logs")
 }
 
 // ===========================================================================
@@ -802,30 +804,32 @@ model WebhookLog {
 // ===========================================================================
 
 model KnowledgeArticle {
-  id          String   @id @default(uuid())
-  title       String
-  content     String   @db.Text // Markdown
-  category    String   // "Procedimentos", "Troubleshooting", "Onboarding"
+  id       String @id @default(uuid())
+  title    String
+  content  String @db.Text // Markdown
+  category String // "Procedimentos", "Troubleshooting", "Onboarding"
 
-  isPublic    Boolean  @default(false) // Se true, visível no Help Center
-  isInternal  Boolean  @default(true)  // Visível apenas para agentes
+  isPublic   Boolean @default(false) // Se true, visível no Help Center
+  isInternal Boolean @default(true) // Visível apenas para agentes
 
-  tags        String[]
+  tags String[]
 
-  authorId    String
-  author      User     @relation(fields: [authorId], references: [id])
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
 
-  views       Int      @default(0)
-  helpful     Int      @default(0)    // Contagem de "útil"
+  views   Int @default(0)
+  helpful Int @default(0) // Contagem de "útil"
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("knowledge_articles")
+  feedback ArticleFeedback[]
+
   @@index([category])
   @@index([isPublic])
   @@index([tags])
   @@index([authorId])
+  @@map("knowledge_articles")
 }
 
 // ===========================================================================
@@ -833,45 +837,45 @@ model KnowledgeArticle {
 // ===========================================================================
 
 model TicketLabel {
-  id        String   @id @default(uuid())
-  ticketId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
-  label     String   // "urgente", "vip", "hardware", etc
-  color     String?  // Hex color para UI
+  label String // "urgente", "vip", "hardware", etc
+  color String? // Hex color para UI
 
   createdAt DateTime @default(now())
 
-  @@map("ticket_labels")
   @@unique([ticketId, label]) // Evita labels duplicadas no mesmo ticket
   @@index([ticketId])
   @@index([label])
+  @@map("ticket_labels")
 }
 
 // ✅ PHASE 2 - Feature 3: Auto-Assignment Configuration
 model AutoAssignmentConfig {
-  id        String   @id @default(uuid())
+  id String @id @default(uuid())
 
   // Configuração
-  enabled   Boolean  @default(false)
-  strategy  String   @default("round_robin") // "round_robin", "least_busy", "random"
+  enabled  Boolean @default(false)
+  strategy String  @default("round_robin") // "round_robin", "least_busy", "random"
 
   // Filtros
-  applyToSectors      String[]  @default([]) // [] = todos os setores
-  applyToPriorities   String[]  @default([]) // [] = todas as prioridades
-  applyToCategories   String[]  @default([]) // [] = todas as categorias
+  applyToSectors    String[] @default([]) // [] = todos os setores
+  applyToPriorities String[] @default([]) // [] = todas as prioridades
+  applyToCategories String[] @default([]) // [] = todas as categorias
 
   // Regras de atribuição
-  respectSector       Boolean   @default(true)  // Atribuir apenas ao técnico do mesmo setor
-  respectLevel        Boolean   @default(false) // Considerar nível técnico (N1, N2, N3)
+  respectSector Boolean @default(true) // Atribuir apenas ao técnico do mesmo setor
+  respectLevel  Boolean @default(false) // Considerar nível técnico (N1, N2, N3)
 
   // Limites
-  maxTicketsPerAgent  Int?      // Máximo de tickets ativos por agente (null = sem limite)
+  maxTicketsPerAgent Int? // Máximo de tickets ativos por agente (null = sem limite)
 
   // Horário de funcionamento
-  workingHoursStart   String?   // "08:00"
-  workingHoursEnd     String?   // "18:00"
-  workingDays         String[]  @default(["mon", "tue", "wed", "thu", "fri"])
+  workingHoursStart String? // "08:00"
+  workingHoursEnd   String? // "18:00"
+  workingDays       String[] @default(["mon", "tue", "wed", "thu", "fri"])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -881,94 +885,168 @@ model AutoAssignmentConfig {
 
 // ✅ PHASE 3 - Feature 1: Intent Detection & Classification
 model IntentClassification {
-  id             String   @id @default(uuid())
+  id String @id @default(uuid())
 
   // Mensagem original
-  userMessage    String
-  phoneNumber    String?  // Usuário que enviou
+  userMessage String
+  phoneNumber String? // Usuário que enviou
 
   // Classificação
-  intent         String   // "abrir_ticket_ti", "reservar_equipamento", "consultar_faq", etc
-  confidence     Float    // 0.0 - 1.0
+  intent     String // "abrir_ticket_ti", "reservar_equipamento", "consultar_faq", etc
+  confidence Float // 0.0 - 1.0
 
   // Entidades extraídas (JSON)
-  entities       Json?    // { "equipamento": "impressora", "problema": "não liga", "setor": "RH" }
+  entities Json? // { "equipamento": "impressora", "problema": "não liga", "setor": "RH" }
 
   // Modelo usado
-  provider       String   // "openai", "anthropic", "local"
-  model          String?  // "gpt-4", "claude-3-sonnet", etc
+  provider String // "openai", "anthropic", "local"
+  model    String? // "gpt-4", "claude-3-sonnet", etc
 
   // Ação tomada
-  actionTaken    String?  // "created_ticket", "showed_faq", "manual_menu", etc
-  ticketId       String?  // Se criou ticket
+  actionTaken String? // "created_ticket", "showed_faq", "manual_menu", etc
+  ticketId    String? // Se criou ticket
 
   // Performance
-  processingTime Int?     // Milissegundos
+  processingTime Int? // Milissegundos
 
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  @@map("intent_classifications")
   @@index([intent])
   @@index([phoneNumber])
   @@index([confidence])
   @@index([createdAt(sort: Desc)])
+  @@map("intent_classifications")
 }
 
 // ✅ PHASE 3 - Feature 2: Agent Performance Metrics
 model AgentMetric {
-  id       String   @id @default(uuid())
-  agentId  String
-  agent    User     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  agentId String
+  agent   User   @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   // Período
-  date     DateTime @db.Date  // Data do dia
+  date DateTime @db.Date // Data do dia
 
   // Métricas do dia
-  ticketsCreated       Int @default(0)
-  ticketsResolved      Int @default(0)
-  ticketsInProgress    Int @default(0)
+  ticketsCreated    Int @default(0)
+  ticketsResolved   Int @default(0)
+  ticketsInProgress Int @default(0)
 
   // Tempos (em segundos)
-  totalFirstResponseTime   Int @default(0)  // Soma de todos os tempos de 1ª resposta
-  totalResolutionTime      Int @default(0)  // Soma de todos os tempos de resolução
-  firstResponseCount       Int @default(0)  // Quantidade de primeiras respostas (para calcular média)
-  resolutionCount          Int @default(0)  // Quantidade de resoluções (para calcular média)
+  totalFirstResponseTime Int @default(0) // Soma de todos os tempos de 1ª resposta
+  totalResolutionTime    Int @default(0) // Soma de todos os tempos de resolução
+  firstResponseCount     Int @default(0) // Quantidade de primeiras respostas (para calcular média)
+  resolutionCount        Int @default(0) // Quantidade de resoluções (para calcular média)
 
   // CSAT
-  csatSum              Int @default(0)  // Soma das notas
-  csatCount            Int @default(0)  // Quantidade de avaliações
+  csatSum   Int @default(0) // Soma das notas
+  csatCount Int @default(0) // Quantidade de avaliações
 
   // Calculados (campos virtuais computados no service)
-  avgFirstResponseTime Float?  // Calculado: totalFirstResponseTime / firstResponseCount
-  avgResolutionTime    Float?  // Calculado: totalResolutionTime / resolutionCount
-  avgCsat              Float?  // Calculado: csatSum / csatCount
+  avgFirstResponseTime Float? // Calculado: totalFirstResponseTime / firstResponseCount
+  avgResolutionTime    Float? // Calculado: totalResolutionTime / resolutionCount
+  avgCsat              Float? // Calculado: csatSum / csatCount
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("agent_metrics")
-  @@unique([agentId, date])  // Uma métrica por agente por dia
+  @@unique([agentId, date]) // Uma métrica por agente por dia
   @@index([agentId, date(sort: Desc)])
   @@index([date(sort: Desc)])
+  @@map("agent_metrics")
 }
 
 // ✅ PHASE 3 - Feature 4: Dynamic Bot Variables
 model BotVariable {
-  id          String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  key         String   @unique  // "company_name", "support_hours", "sla_normal", etc
-  value       String              // Valor da variável
-  description String?             // Descrição do que a variável faz
-  category    String   @default("general")  // "general", "sla", "messages", "contact"
+  key         String  @unique // "company_name", "support_hours", "sla_normal", etc
+  value       String // Valor da variável
+  description String? // Descrição do que a variável faz
+  category    String  @default("general") // "general", "sla", "messages", "contact"
 
-  isSystem    Boolean  @default(false)  // Variáveis do sistema não podem ser deletadas
+  isSystem Boolean @default(false) // Variáveis do sistema não podem ser deletadas
 
-  createdBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("bot_variables")
   @@index([category])
   @@index([isSystem])
+  @@map("bot_variables")
 }
 
+// ===========================================================================
+// PHASE 4 - CANAIS & KNOWLEDGE
+// ===========================================================================
+
+// ✅ PHASE 4 - Feature 1: Email-to-Ticket Configuration
+model EmailConfig {
+  id String @id @default(uuid())
+
+  // IMAP Configuration
+  imapHost     String
+  imapPort     Int     @default(993)
+  imapUser     String
+  imapPassword String // Encrypted
+  imapTls      Boolean @default(true)
+
+  // SMTP Configuration (para respostas)
+  smtpHost     String?
+  smtpPort     Int?    @default(587)
+  smtpUser     String?
+  smtpPassword String? // Encrypted
+  smtpTls      Boolean @default(true)
+
+  // Settings
+  enabled      Boolean @default(false)
+  pollInterval Int     @default(60) // seconds
+  autoAssign   Boolean @default(true)
+
+  // Auto-categorization
+  defaultPriority String  @default("NORMAL")
+  defaultSector   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_configs")
+}
+
+model EmailTicketMapping {
+  id       String @id @default(uuid())
+  ticketId String @unique
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  emailId   String  @unique // Message-ID do email
+  threadId  String? // Para agrupar conversas
+  fromEmail String
+  toEmail   String
+  subject   String
+
+  createdAt DateTime @default(now())
+
+  @@index([emailId])
+  @@index([threadId])
+  @@index([ticketId])
+  @@map("email_ticket_mappings")
+}
+
+// ✅ PHASE 4 - Feature 2: Article Feedback
+model ArticleFeedback {
+  id        String           @id @default(uuid())
+  articleId String
+  article   KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  helpful Boolean // true = helpful, false = not helpful
+  comment String?
+
+  createdAt DateTime @default(now())
+
+  @@index([articleId])
+  @@index([userId])
+  @@map("article_feedback")
+}
