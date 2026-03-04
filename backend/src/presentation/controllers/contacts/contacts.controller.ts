@@ -12,9 +12,11 @@ import {
     Body,
     Query,
     UseGuards,
+    SetMetadata,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ContactsService } from './contacts.service';
+import { UpsertContactDto, CreateContactDto, UpdateContactDto } from './contacts.dto';
 
 @Controller('contacts')
 @UseGuards(AuthGuard('jwt'))
@@ -37,32 +39,23 @@ export class ContactsController {
     }
 
     @Post()
-    async create(
-        @Body()
-        dto: {
-            jid: string;
-            phoneNumber?: string;
-            name: string;
-            sector: string;
-            department?: string;
-            ramal?: string;
-        },
-    ) {
+    async create(@Body() dto: CreateContactDto) {
         return this.contactsService.create(dto);
     }
 
+    /**
+     * Upsert contact by JID - Create or Update
+     * Used by WhatsApp bot to auto-create/update contacts
+     */
+    @Post('upsert')
+    @SetMetadata('isPublic', true) // Allow bot to call without JWT
+    async upsert(@Body() dto: UpsertContactDto) {
+        const { jid, ...contactData } = dto;
+        return this.contactsService.upsertByJid(jid, contactData);
+    }
+
     @Put(':id')
-    async update(
-        @Param('id') id: string,
-        @Body()
-        dto: {
-            phoneNumber?: string;
-            name?: string;
-            sector?: string;
-            department?: string;
-            ramal?: string;
-        },
-    ) {
+    async update(@Param('id') id: string, @Body() dto: UpdateContactDto) {
         return this.contactsService.update(id, dto);
     }
 

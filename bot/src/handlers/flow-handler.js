@@ -96,13 +96,23 @@ class FlowHandler {
 
       if (contactRes?.data) {
         const contact = contactRes.data;
+
+        // ✅ Preencher TODOS os dados disponíveis
         session.data.contactName = contact.name;
         session.data.sector = contact.sector;
+        session.data.userDepartment = contact.department || contact.sector;
+        session.data.company = contact.company;
+        session.data.ramal = contact.ramal;
+        session.data.email = contact.email;
+
         await redisService.setSession(phone, session);
+
+        console.log(`📋 Dados do contato carregados: ${contact.name} (${contact.sector})`);
         return true;
       }
     } catch (e) {
       // Contato não encontrado, continua para coletar
+      console.log(`⚠️  Contato não encontrado para ${from}, coletando dados...`);
     }
 
     // 3. Precisa coletar dados - salvar próximo estado e ir para ASK_NAME
@@ -692,7 +702,35 @@ class FlowHandler {
     const phone = from.split('@')[0];
 
     if (['sim', 's', 'yes', 'confirmar', 'confirmo'].includes(text)) {
-      // Criar ticket via RabbitMQ
+      // ✅ PASSO 1: Criar/atualizar contato ANTES de criar ticket
+      try {
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+
+        const contactData = {
+          jid: from,                                    // JID completo
+          phoneNumber: phone,                           // Apenas números
+          name: session.data.contactName,               // Nome coletado
+          sector: session.data.userDepartment || session.data.sector || 'Não informado',
+          department: session.data.userDepartment,      // Departamento específico
+          company: session.data.company,                // Se coletado
+          ramal: session.data.ramal,                    // Se coletado
+          email: session.data.email,                    // Se coletado
+        };
+
+        // Upsert: cria se não existe, atualiza se existe
+        const contact = await axios.post(
+          `${backendUrl}/api/contacts/upsert`,
+          contactData,
+          { timeout: 5000 }
+        );
+
+        console.log(`✅ Contato criado/atualizado: ${contactData.name} (${from})`);
+      } catch (error) {
+        console.error('⚠️  Falha ao criar contato:', error.message);
+        // Não bloqueia criação do ticket
+      }
+
+      // PASSO 2: Criar ticket via RabbitMQ
       // IMPORTANTE: usar 'from' completo (com @s.whatsapp.net) para envio funcionar
       const category = session.data.category || session.data.sector || 'Geral';
       const userDepartment = session.data.userDepartment || session.data.sector || 'Não informado';

@@ -71,10 +71,29 @@ export class ContactsService {
     }
 
     async upsertByJid(jid: string, dto: Omit<CreateContactDto, 'jid'>) {
+        const now = new Date();
+
+        // Buscar contato existente para verificar se já existe
+        const existing = await this.prisma.contact.findUnique({
+            where: { jid },
+        });
+
         return this.prisma.contact.upsert({
             where: { jid },
-            create: { jid, ...dto },
-            update: dto,
+            create: {
+                jid,
+                ...dto,
+                firstContactAt: now,
+                lastContactAt: now,
+                totalTickets: 0,
+                customAttributes: dto.customAttributes || {},
+            },
+            update: {
+                ...dto,
+                lastContactAt: now, // Sempre atualiza último contato
+                totalTickets: existing ? { increment: 1 } : 1, // Incrementa contador
+                customAttributes: dto.customAttributes || existing?.customAttributes || {},
+            },
         });
     }
 
