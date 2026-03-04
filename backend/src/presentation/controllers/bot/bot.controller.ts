@@ -12,6 +12,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { AlertService } from '../../../infrastructure/services/alert.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
+import { IntentService } from '../intent/intent.service';
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://bot:3002';
 
@@ -26,6 +27,7 @@ export class BotController {
     private config: ConfigService,
     private alertService: AlertService,
     private rabbitmq: RabbitMQService, // Injected RabbitMQService
+    private intentService: IntentService,
   ) { }
 
   @Get('status')
@@ -150,6 +152,32 @@ export class BotController {
     });
 
     return ticket;
+  }
+
+  /**
+   * Endpoint interno para o bot processar detecção de intenção.
+   */
+  @Post('intent/classify')
+  async classifyIntent(@Body() dto: { text: string; has_active_ticket?: boolean; phoneNumber?: string }) {
+    const result = await this.intentService.classify(dto.text, dto.phoneNumber);
+
+    // Logica simples nativa adaptada para o Bot:
+    const isNewTicket = result.intent === 'abrir_ticket_ti' || result.intent === 'abrir_ticket_eletrica';
+    let shouldRouteToTech = dto.has_active_ticket && result.intent !== 'abrir_ticket_ti' && result.intent !== 'abrir_ticket_eletrica';
+
+    if (result.intent === 'chat_with_tech' || result.intent === 'saudacao' || result.intent === 'falar_tecnico') {
+      if (dto.has_active_ticket) {
+        shouldRouteToTech = true;
+      }
+    }
+
+    return {
+      intent: result.intent,
+      confidence: result.confidence,
+      should_route_to_tech: shouldRouteToTech,
+      provider: (result as any).provider || 'unknown',
+      processingTime: result.processingTime,
+    };
   }
 
   @Post('users/link')

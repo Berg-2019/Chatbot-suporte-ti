@@ -15,9 +15,9 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { JwtAuthGuard } from '../../../infrastructure/auth/jwt-auth.guard';
-import { RequirePermissions } from '../../../infrastructure/auth/permissions.decorator';
+import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import {
   CreateAutomationRuleDto,
   UpdateAutomationRuleDto,
@@ -25,7 +25,7 @@ import {
 } from './automation.dto';
 
 @Controller('automation')
-@UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard('jwt'))
 export class AutomationController {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -34,8 +34,8 @@ export class AutomationController {
    * Criar nova regra de automação
    */
   @Post()
-  @RequirePermissions(['admin:automation'])
-  async create(@Body() dto: CreateAutomationRuleDto, @Request() req) {
+  @RequirePermissions('admin:automation')
+  async create(@Body() dto: CreateAutomationRuleDto, @Request() req: any) {
     const rule = await this.prisma.automationRule.create({
       data: {
         name: dto.name,
@@ -61,7 +61,7 @@ export class AutomationController {
    * Listar todas as regras de automação
    */
   @Get()
-  @RequirePermissions(['admin:automation', 'automation:read'], 'any')
+  @RequirePermissions('admin:automation', 'automation:read')
   async findAll(@Query() query: AutomationRuleQueryDto) {
     const where: any = {};
 
@@ -90,7 +90,7 @@ export class AutomationController {
    * Buscar regra específica
    */
   @Get(':id')
-  @RequirePermissions(['admin:automation', 'automation:read'], 'any')
+  @RequirePermissions('admin:automation', 'automation:read')
   async findOne(@Param('id') id: string) {
     const rule = await this.prisma.automationRule.findUnique({
       where: { id },
@@ -114,7 +114,7 @@ export class AutomationController {
    * Estatísticas de execução da regra
    */
   @Get(':id/stats')
-  @RequirePermissions(['admin:automation', 'reports:read'], 'any')
+  @RequirePermissions('admin:automation', 'reports:read')
   async getStats(@Param('id') id: string) {
     const rule = await this.prisma.automationRule.findUnique({
       where: { id },
@@ -158,7 +158,7 @@ export class AutomationController {
    * Atualizar regra
    */
   @Patch(':id')
-  @RequirePermissions(['admin:automation'])
+  @RequirePermissions('admin:automation')
   async update(@Param('id') id: string, @Body() dto: UpdateAutomationRuleDto) {
     const rule = await this.prisma.automationRule.update({
       where: { id },
@@ -185,7 +185,7 @@ export class AutomationController {
    * Ativar/desativar regra rapidamente
    */
   @Patch(':id/toggle')
-  @RequirePermissions(['admin:automation'])
+  @RequirePermissions('admin:automation')
   async toggle(@Param('id') id: string) {
     const rule = await this.prisma.automationRule.findUnique({
       where: { id },
@@ -215,7 +215,7 @@ export class AutomationController {
    * Deletar regra
    */
   @Delete(':id')
-  @RequirePermissions(['admin:automation'])
+  @RequirePermissions('admin:automation')
   async remove(@Param('id') id: string) {
     const rule = await this.prisma.automationRule.findUnique({
       where: { id },
@@ -243,7 +243,7 @@ export class AutomationController {
    * Listar eventos disponíveis para automação
    */
   @Get('events/available')
-  @RequirePermissions(['admin:automation', 'automation:read'], 'any')
+  @RequirePermissions('admin:automation', 'automation:read')
   async getAvailableEvents() {
     return {
       success: true,
@@ -297,7 +297,7 @@ export class AutomationController {
    * Listar ações disponíveis
    */
   @Get('actions/available')
-  @RequirePermissions(['admin:automation', 'automation:read'], 'any')
+  @RequirePermissions('admin:automation', 'automation:read')
   async getAvailableActions() {
     return {
       success: true,

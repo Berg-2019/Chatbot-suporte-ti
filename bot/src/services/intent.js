@@ -5,26 +5,21 @@
 
 import axios from 'axios';
 
-const INTENT_SERVICE_URL = process.env.INTENT_SERVICE_URL || 'http://localhost:5000';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://backend:3000';
+const INTENT_API_URL = `${BACKEND_URL}/api/bot/intent/classify`;
 
 class IntentService {
     constructor() {
-        this.available = false;
-        this.checkAvailability();
+        this.available = true; // Assuming NestJS backend is always up when bot is up
     }
 
     /**
      * Verifica se o serviço de intenção está disponível
      */
     async checkAvailability() {
-        try {
-            const response = await axios.get(`${INTENT_SERVICE_URL}/health`, { timeout: 3000 });
-            this.available = response.data?.status === 'ok';
-            console.log(`🧠 Intent Service: ${this.available ? '✅ Disponível' : '❌ Indisponível'}`);
-        } catch (e) {
-            this.available = false;
-            console.log('🧠 Intent Service: ❌ Indisponível (fallback para regras simples)');
-        }
+        // Backend health isn't strictly necessary to ping here, but we can do a dummy check or simply assume it's up
+        this.available = true;
+        console.log(`🧠 Intent Service: ✅ Configurado via Backend NestJS`);
     }
 
     /**
@@ -34,16 +29,11 @@ class IntentService {
      * @returns {Promise<{intent: string, confidence: number, shouldRouteToTech: boolean}>}
      */
     async classify(text, hasActiveTicket = false) {
-        // Se serviço indisponível, usar regras simples
-        if (!this.available) {
-            return this.classifyWithRules(text, hasActiveTicket);
-        }
-
         try {
             const response = await axios.post(
-                `${INTENT_SERVICE_URL}/classify`,
+                INTENT_API_URL,
                 { text, has_active_ticket: hasActiveTicket },
-                { timeout: 3000 }
+                { timeout: 30000 } // Aumentar timeout para lidar com modelos locais pesados (Ollama)
             );
 
             return {
@@ -52,7 +42,7 @@ class IntentService {
                 shouldRouteToTech: response.data.should_route_to_tech
             };
         } catch (e) {
-            console.warn('⚠️ Falha ao classificar via serviço, usando regras:', e.message);
+            console.warn('⚠️ Falha ao classificar via NestJS Backend (Ollama/Claude), usando fallback de regras locale:', e.message);
             return this.classifyWithRules(text, hasActiveTicket);
         }
     }

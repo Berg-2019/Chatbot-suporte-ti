@@ -20,6 +20,16 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://backend:3000',
+        changeOrigin: true
+      },
+      '/socket.io': {
+        target: 'http://backend:3000',
+        ws: true
+      }
+    }
   },
   optimizeDeps: {
     include: ['socket.io-parser'],

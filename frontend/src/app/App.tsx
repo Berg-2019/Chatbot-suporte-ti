@@ -26,6 +26,7 @@ const TeamChatView = lazy(() => import('@/app/components/views/TeamChatView'));
 const CannedResponsesView = lazy(() => import('@/app/components/views/CannedResponsesView'));
 const WebhooksView = lazy(() => import('@/app/components/views/WebhooksView'));
 const RolesView = lazy(() => import('@/app/components/views/RolesView'));
+const ContactsView = lazy(() => import('@/app/components/views/ContactsView'));
 
 // Fase 2 - Chatwoot-inspired Settings
 const TeamsView = lazy(() => import('@/app/components/views/TeamsView'));
@@ -101,6 +102,8 @@ function MainContent() {
         return <FAQView />;
       case 'estoque':
         return <StockView />;
+      case 'contatos':
+        return <ContactsView />;
       case 'usuarios':
         return <UsersView />;
       case 'chat':
@@ -146,15 +149,17 @@ function MainContent() {
       {isConversationView && !isManagerTvMode ? (
         <>
           {/* Middle column: Conversation list */}
-          <ConversationListPanel
-            onTicketClick={handleTicketClick}
-            selectedTicketId={selectedTicketData?.id || null}
-            refreshTrigger={refreshTrigger}
-          />
+          <div className={`${selectedTicketData ? 'hidden md:block' : 'w-full md:w-auto h-full'}`}>
+            <ConversationListPanel
+              onTicketClick={handleTicketClick}
+              selectedTicketId={selectedTicketData?.id || null}
+              refreshTrigger={refreshTrigger}
+            />
+          </div>
 
           {/* Right column: Chat or empty state */}
           {selectedTicketData ? (
-            <div className="flex-1 flex flex-col border-l" style={{ borderColor: 'var(--cw-border)' }}>
+            <div className={`flex-1 flex flex-col border-l ${selectedTicketData ? 'flex' : 'hidden md:flex'}`} style={{ borderColor: 'var(--cw-border)' }}>
               <ChatView
                 ticket={selectedTicketData}
                 onClose={() => setSelectedTicketData(null)}
@@ -162,7 +167,9 @@ function MainContent() {
               />
             </div>
           ) : (
-            <EmptyConversationState />
+            <div className="hidden md:flex flex-1">
+              <EmptyConversationState />
+            </div>
           )}
         </>
       ) : (

@@ -105,6 +105,7 @@ export class AuthService {
           password: hashedPassword,
           name: adminName,
           role: 'ADMIN',
+          sector: 'TI',
         },
       });
       console.log(`✅ Admin criado: ${adminEmail}`);
@@ -119,9 +120,6 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
-      include: {
-        customRole: true, // Incluir role customizada se existir
-      }
     });
 
     if (!user) {
@@ -146,11 +144,8 @@ export class AuthService {
 
     console.log(`✅ User active, generating token...`);
 
-    // Determinar permissões baseado na role customizada ou role padrão
-    let permissions: string[] = user.permissions || [];
-    if (user.customRole) {
-      permissions = user.customRole.permissions as string[];
-    }
+    // Permissões baseadas no campo user.permissions
+    let permissions: string[] = [];
 
     // Determinar perfil para o frontend
     const profile: UserProfile = user.role === 'ADMIN' ? 'admin' :
@@ -175,10 +170,6 @@ export class AuthService {
         profile,
         permissions,
         sector: user.sector,
-        customRole: user.customRole ? {
-          id: user.customRole.id,
-          name: user.customRole.name,
-        } : null,
       },
     };
   }
@@ -327,7 +318,7 @@ export class AuthService {
         name: user.name,
         role: user.role,
         profile, // Perfil para redirecionamento: admin, manager, tech_elect, tech_ti
-        permissions: user.permissions || [],
+        permissions: [],
       },
     };
   }
@@ -372,9 +363,7 @@ export class AuthService {
     }
 
     // Determinar perfil baseado no setor/role para o frontend
-    const profile: UserProfile = user.role === 'ADMIN' ? 'admin' :
-      user.sector === 'ELECTRIC' ? 'tech_elect' :
-        user.department?.toLowerCase().includes('gestao') ? 'manager' : 'tech_ti';
+    const profile: UserProfile = user.role === 'ADMIN' ? 'admin' : user.sector === 'ELECTRIC' ? 'tech_elect' : 'tech_ti';
 
     return {
       id: user.id,
@@ -382,7 +371,7 @@ export class AuthService {
       name: user.name,
       role: user.role,
       profile,
-      permissions: user.permissions || [],
+      permissions: [],
     };
   }
 }

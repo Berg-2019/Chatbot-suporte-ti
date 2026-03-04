@@ -18,8 +18,6 @@ export class UsersService {
         role: true,
         active: true,
         createdAt: true,
-        department: true,
-        permissions: true,
         phoneNumber: true,
       } as any,
       orderBy: { name: 'asc' },
@@ -70,7 +68,6 @@ export class UsersService {
     if (data.active !== undefined) updateData.active = data.active;
     if (data.phone !== undefined) updateData.phoneNumber = data.phone;
     if (data.department !== undefined) updateData.department = data.department;
-    if (data.permissions !== undefined) updateData.permissions = data.permissions;
 
     // Hash password if provided
     if (data.password) {
@@ -141,7 +138,6 @@ export class UsersService {
     email: string;
     phone?: string;
     department?: string;
-    permissions?: string[];
     password?: string;
     role?: 'ADMIN' | 'AGENT';
   }) {
@@ -169,8 +165,6 @@ export class UsersService {
           glpiUserId: data.glpiUserId,
           name: data.name || existingByEmail.name,
           phoneNumber: data.phone || (existingByEmail as any).phoneNumber,
-          department: data.department || (existingByEmail as any).department,
-          permissions: data.permissions || (existingByEmail as any).permissions || [],
         } as any,
         select: {
           id: true,
@@ -179,8 +173,6 @@ export class UsersService {
           role: true,
           glpiUserId: true,
           active: true,
-          department: true,
-          permissions: true,
         } as any,
       });
     }
@@ -198,8 +190,6 @@ export class UsersService {
         role: data.role || 'AGENT',
         glpiUserId: data.glpiUserId,
         phoneNumber: data.phone,
-        department: data.department,
-        permissions: data.permissions || [],
         active: true,
       } as any,
       select: {
@@ -209,8 +199,6 @@ export class UsersService {
         role: true,
         glpiUserId: true,
         active: true,
-        department: true,
-        permissions: true,
       } as any,
     });
   }
@@ -235,8 +223,6 @@ export class UsersService {
         name: data.name || 'Usuário GLPI',
         email: data.email,
         phone: data.phone,
-        department: data.department,
-        permissions: data.permissions,
         password: data.password,
         role: data.role,
       }) as any;
@@ -261,7 +247,6 @@ export class UsersService {
         name: true,
         email: true,
         role: true,
-        department: true,
         sector: true,
       },
       orderBy: {

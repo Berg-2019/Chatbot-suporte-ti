@@ -21,8 +21,6 @@ model User {
   password  String
   name      String
   role      Role     @default(AGENT) // Campo original mantido
-  roleId    String?  // ✅ NOVO: Referência para role customizável
-  customRole CustomRole? @relation(fields: [roleId], references: [id])
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -37,8 +35,6 @@ model User {
   // Alertas
   phoneNumber   String?           // WhatsApp para receber alertas
   receiveAlerts Boolean           @default(true)
-  department    String?
-  permissions   String[]          @default([]) // DEPRECATED: usar role.permissions
   sector        String            @default("TI")  // TI ou ELECTRIC
 
   tickets   Ticket[]
@@ -48,33 +44,14 @@ model User {
   csatResponses CsatResponse[]
   cannedResponses CannedResponse[]
   knowledgeArticles KnowledgeArticle[]
+  agentMetrics AgentMetric[]
 
   @@map("users")
   @@index([role, active])
   @@index([email])
-  @@index([roleId])
 }
 
 // ✅ NOVO: Roles customizáveis
-model CustomRole {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-
-  // Permissões granulares (JSON array)
-  permissions Json     @default("[]")
-  // Exemplos: ["tickets:read", "tickets:write", "tickets:assign", "tickets:delete",
-  //            "stock:read", "stock:write", "users:read", "admin:settings"]
-
-  isSystem    Boolean  @default(false) // Roles do sistema não podem ser deletadas
-  users       User[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("custom_roles")
-  @@index([name])
-}
 
 enum Role {
   ADMIN
@@ -900,5 +877,98 @@ model AutoAssignmentConfig {
   updatedAt DateTime @updatedAt
 
   @@map("auto_assignment_config")
+}
+
+// ✅ PHASE 3 - Feature 1: Intent Detection & Classification
+model IntentClassification {
+  id             String   @id @default(uuid())
+
+  // Mensagem original
+  userMessage    String
+  phoneNumber    String?  // Usuário que enviou
+
+  // Classificação
+  intent         String   // "abrir_ticket_ti", "reservar_equipamento", "consultar_faq", etc
+  confidence     Float    // 0.0 - 1.0
+
+  // Entidades extraídas (JSON)
+  entities       Json?    // { "equipamento": "impressora", "problema": "não liga", "setor": "RH" }
+
+  // Modelo usado
+  provider       String   // "openai", "anthropic", "local"
+  model          String?  // "gpt-4", "claude-3-sonnet", etc
+
+  // Ação tomada
+  actionTaken    String?  // "created_ticket", "showed_faq", "manual_menu", etc
+  ticketId       String?  // Se criou ticket
+
+  // Performance
+  processingTime Int?     // Milissegundos
+
+  createdAt      DateTime @default(now())
+
+  @@map("intent_classifications")
+  @@index([intent])
+  @@index([phoneNumber])
+  @@index([confidence])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ✅ PHASE 3 - Feature 2: Agent Performance Metrics
+model AgentMetric {
+  id       String   @id @default(uuid())
+  agentId  String
+  agent    User     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Período
+  date     DateTime @db.Date  // Data do dia
+
+  // Métricas do dia
+  ticketsCreated       Int @default(0)
+  ticketsResolved      Int @default(0)
+  ticketsInProgress    Int @default(0)
+
+  // Tempos (em segundos)
+  totalFirstResponseTime   Int @default(0)  // Soma de todos os tempos de 1ª resposta
+  totalResolutionTime      Int @default(0)  // Soma de todos os tempos de resolução
+  firstResponseCount       Int @default(0)  // Quantidade de primeiras respostas (para calcular média)
+  resolutionCount          Int @default(0)  // Quantidade de resoluções (para calcular média)
+
+  // CSAT
+  csatSum              Int @default(0)  // Soma das notas
+  csatCount            Int @default(0)  // Quantidade de avaliações
+
+  // Calculados (campos virtuais computados no service)
+  avgFirstResponseTime Float?  // Calculado: totalFirstResponseTime / firstResponseCount
+  avgResolutionTime    Float?  // Calculado: totalResolutionTime / resolutionCount
+  avgCsat              Float?  // Calculado: csatSum / csatCount
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_metrics")
+  @@unique([agentId, date])  // Uma métrica por agente por dia
+  @@index([agentId, date(sort: Desc)])
+  @@index([date(sort: Desc)])
+}
+
+// ✅ PHASE 3 - Feature 4: Dynamic Bot Variables
+model BotVariable {
+  id          String   @id @default(uuid())
+
+  key         String   @unique  // "company_name", "support_hours", "sla_normal", etc
+  value       String              // Valor da variável
+  description String?             // Descrição do que a variável faz
+  category    String   @default("general")  // "general", "sla", "messages", "contact"
+
+  isSystem    Boolean  @default(false)  // Variáveis do sistema não podem ser deletadas
+
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("bot_variables")
+  @@index([category])
+  @@index([isSystem])
 }
 

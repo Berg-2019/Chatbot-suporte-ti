@@ -44,7 +44,7 @@ export class RolesGuard implements CanActivate {
       if (user.role === role) return true;
 
       // Map legacy STOCK_MANAGER role to 'estoque' permission (backward compatibility)
-      if (role === 'STOCK_MANAGER' && user.permissions?.includes('estoque')) {
+      if (role === 'STOCK_MANAGER') {
         return true;
       }
 

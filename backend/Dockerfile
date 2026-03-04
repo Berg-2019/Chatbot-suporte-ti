@@ -8,16 +8,15 @@ RUN apk add --no-cache python3 make g++
 
 # Copiar package.json
 COPY package*.json ./
-COPY prisma ./prisma/
 
 # Instalar dependências
 RUN npm ci
 
-# Gerar Prisma Client
-RUN npx prisma generate
-
-# Copiar código fonte
+# Copiar código fonte (inclui prisma/)
 COPY . .
+
+# Gerar Prisma Client DEPOIS de copiar tudo
+RUN npx prisma generate
 
 # Build
 RUN npm run build

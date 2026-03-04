@@ -203,7 +203,7 @@ export class TicketsService {
           if (shouldApply) {
             console.log(`🤖 Auto-assignment enabled for ticket ${ticket.id}`);
             await this.autoAssignAgent(ticket.id, {
-              sector: config.respectSector ? ticket.sector : undefined,
+              sector: config.respectSector && ticket.sector ? ticket.sector : undefined,
             });
           }
         }
@@ -448,7 +448,7 @@ export class TicketsService {
       select: { assignedToId: true },
     });
 
-    const assignToId = currentTicket?.assignedToId || userId || null;
+    const assignToId = userId || currentTicket?.assignedToId || null;
 
     // Atualizar ticket com solução
     const ticket = await this.prisma.ticket.update({

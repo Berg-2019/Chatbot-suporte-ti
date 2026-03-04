@@ -7,6 +7,7 @@ import {
   Mic,
   Code2,
   ChevronDown,
+  ChevronLeft,
   Clock,
   Pause,
   User,
@@ -74,7 +75,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
 
   // Socket.IO setup
   useEffect(() => {
-    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const SOCKET_URL = import.meta.env.VITE_API_URL || '';
     socketRef.current = io(SOCKET_URL, {
       transports: ['websocket'],
       auth: { token: localStorage.getItem('authToken') },
@@ -290,6 +291,15 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
         }}
       >
         <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="md:hidden p-1.5 -ml-2 rounded-lg transition-colors"
+            style={{ color: 'var(--cw-text-secondary)' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <ChevronLeft size={20} />
+          </button>
           <div
             className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold"
             style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
@@ -436,7 +446,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
               const isOutgoing = msg.direction === 'OUTGOING';
               const isInternal = msg.isInternal === true;
               const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+              const apiUrl = import.meta.env.VITE_API_URL || '';
               const mediaSrc = msg.content.startsWith('/api/bot/media') ? `${apiUrl}${msg.content}` : msg.content;
 
               return (

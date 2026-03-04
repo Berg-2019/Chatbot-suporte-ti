@@ -76,7 +76,7 @@ export default function TeamChatView() {
   const connectSocket = () => {
     const token = localStorage.getItem('authToken');
     // Ensure we use the correct Backend URL from environment or default
-    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const SOCKET_URL = import.meta.env.VITE_API_URL || '';
 
     socketRef.current = io(`${SOCKET_URL}/team-chat`, {
       auth: { token },
@@ -189,8 +189,8 @@ export default function TeamChatView() {
                         {msg.sender.name}
                         {msg.sender.sector && (
                           <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${msg.sender.sector === 'ELECTRIC'
-                              ? 'bg-yellow-500/20 text-yellow-400'
-                              : 'bg-blue-500/20 text-blue-400'
+                            ? 'bg-yellow-500/20 text-yellow-400'
+                            : 'bg-blue-500/20 text-blue-400'
                             }`}>
                             {msg.sender.sector === 'ELECTRIC' ? 'Elétrica' : 'TI'}
                           </span>

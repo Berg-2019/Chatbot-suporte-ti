@@ -34,6 +34,8 @@ const STATES = {
   CONFIRM: 'confirm',
   WAITING_TECHNICIAN: 'waiting_technician',
   RATING_TICKET: 'rating_ticket',  // Aguardando avaliação 1-5
+  CSAT_RATING: 'csat_rating',      // Aguardando avaliação CSAT (1-5)
+  CSAT_FEEDBACK: 'csat_feedback',  // Aguardando feedback opcional
   // Reservation states
   SELECT_EQUIPMENT_TYPE: 'select_equipment_type',
   SELECT_EQUIPMENT: 'select_equipment',
@@ -311,6 +313,14 @@ class FlowHandler {
 
       case STATES.RATING_TICKET:
         await this.handleRatingTicket(sock, from, normalizedText, session);
+        break;
+
+      case STATES.CSAT_RATING:
+        await this.handleCsatRating(sock, from, text, session);
+        break;
+
+      case STATES.CSAT_FEEDBACK:
+        await this.handleCsatFeedback(sock, from, text, session);
         break;
 
       // Reservation flow states
@@ -1186,6 +1196,126 @@ class FlowHandler {
 
     // Clear session after completion
     await redisService.deleteSession(phone);
+  }
+
+  /**
+   * Envia pesquisa CSAT quando ticket é resolvido
+   */
+  async sendCsatSurvey(sock, from, ticketId) {
+    const phone = from.split('@')[0];
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+
+    try {
+      // Registrar envio no backend
+      await axios.post(`${backendUrl}/api/csat/send`, {
+        ticketId,
+        channel: 'whatsapp'
+      }, { timeout: 5000 });
+
+      // Enviar mensagem WhatsApp
+      const message = `✅ *Seu chamado foi resolvido!*\n\n` +
+        `Como você avalia o atendimento?\n\n` +
+        `*1* - 😡 Péssimo\n` +
+        `*2* - 😕 Ruim\n` +
+        `*3* - 😐 Regular\n` +
+        `*4* - 🙂 Bom\n` +
+        `*5* - 😍 Excelente\n\n` +
+        `Digite o número da sua avaliação:`;
+
+      await this.sendMessage(sock, from, message);
+
+      // Mudar estado da sessão
+      const session = await redisService.getSession(phone) || { state: STATES.IDLE, data: {} };
+      session.state = STATES.CSAT_RATING;
+      session.data.csatTicketId = ticketId;
+      session.data.csatSentAt = new Date().toISOString();
+      await redisService.setSession(phone, session);
+
+      console.log(`📊 CSAT enviado para ${phone} - Ticket #${ticketId}`);
+    } catch (error) {
+      console.error('❌ Erro ao enviar CSAT:', error.message);
+    }
+  }
+
+  /**
+   * Handler para avaliação CSAT (1-5)
+   */
+  async handleCsatRating(sock, from, text, session) {
+    const phone = from.split('@')[0];
+    const rating = parseInt(text);
+
+    if (rating < 1 || rating > 5 || isNaN(rating)) {
+      await this.sendMessage(sock, from, '❓ Por favor, digite um número de *1* a *5*:');
+      return;
+    }
+
+    session.data.csatRating = rating;
+
+    if (rating <= 3) {
+      // Pedir feedback se nota baixa ou média
+      session.state = STATES.CSAT_FEEDBACK;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from,
+        `Obrigado pela avaliação! 📝\n\n` +
+        `Poderia nos dizer o que podemos melhorar?\n\n` +
+        `_(ou digite *pular* para finalizar)_`
+      );
+    } else {
+      // Salvar e agradecer
+      await this.saveCsatResponse(session.data.csatTicketId, rating, null, phone);
+      const emoji = rating === 5 ? '😍' : '🙂';
+      await this.sendMessage(sock, from,
+        `${emoji} *Obrigado pela avaliação!*\n\n` +
+        `Estamos sempre à disposição.\n\n` +
+        `Digite *menu* para voltar ao início.`
+      );
+      await redisService.deleteSession(phone);
+    }
+  }
+
+  /**
+   * Handler para feedback opcional do CSAT
+   */
+  async handleCsatFeedback(sock, from, text, session) {
+    const phone = from.split('@')[0];
+    const feedback = text.toLowerCase() === 'pular' ? null : text;
+
+    await this.saveCsatResponse(
+      session.data.csatTicketId,
+      session.data.csatRating,
+      feedback,
+      phone
+    );
+
+    await this.sendMessage(sock, from,
+      `💪 *Obrigado pelo feedback!*\n\n` +
+      `Vamos trabalhar para melhorar cada vez mais.\n\n` +
+      `Digite *menu* para voltar ao início.`
+    );
+
+    await redisService.deleteSession(phone);
+  }
+
+  /**
+   * Salva resposta CSAT no backend
+   */
+  async saveCsatResponse(ticketId, rating, feedback, phoneNumber) {
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+
+    try {
+      await axios.post(`${backendUrl}/api/csat/submit`, {
+        ticketId,
+        rating,
+        feedback,
+        phoneNumber,
+        channel: 'whatsapp',
+        respondedAt: new Date().toISOString()
+      }, { timeout: 5000 });
+
+      console.log(`✅ CSAT salvo - Ticket #${ticketId}: ${rating} estrelas`);
+    } catch (error) {
+      console.error('❌ Erro ao salvar CSAT:', error.message);
+    }
   }
 }
 

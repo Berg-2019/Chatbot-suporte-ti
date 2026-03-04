@@ -100,7 +100,7 @@ Digite o número:`,
 
     askProblem: '📝 Descreva brevemente o seu problema:',
 
-    askLocation: '📍 Qual sua localização? (Setor/Sala)',
+    askLocation: '📍 Qual é o local exato do problema? (Ex: Sala de Reuniões, Predio Administrativo, Mesa 04, etc.)',
 
     confirmTicket: (data) => `✅ Vou criar seu chamado com os dados:
 

@@ -155,7 +155,6 @@ export class UsersController {
       email: dto.email || `${dto.login}@glpi.local`,
       phone: dto.phone,
       department: dto.department,
-      permissions: dto.permissions,
       role: dto.role,
       password: dto.password, // Pass password to hash and store locally
     });
@@ -222,7 +221,6 @@ export class UsersController {
         phone: data.phone,
         department: data.department,
         role: data.role,
-        permissions: data.permissions,
         password: data.password,
         email: data.email,
       });

@@ -111,7 +111,7 @@ export default function UsersView() {
       const response = await fetch(`/api/users/${user.id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('cw_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         }
       });
       if (!response.ok) throw new Error('Falha ao excluir');

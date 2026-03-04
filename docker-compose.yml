@@ -114,6 +114,28 @@ services:
         condition: service_healthy
 
   # ============================================================================
+  # Ollama - LLM Local (Intent Detection)
+  # ============================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: helpdesk_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - helpdesk_network
+    # Uncomment if you have NVIDIA GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ============================================================================
   # Backend NestJS
   # ============================================================================
   backend:
@@ -138,6 +160,9 @@ services:
       GLPI_USER_TOKEN: ${GLPI_USER_TOKEN}
       GLPI_ADMIN_USER: ${GLPI_ADMIN_USER}
       GLPI_ADMIN_PASSWORD: ${GLPI_ADMIN_PASSWORD}
+      # Ollama Configuration
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
     volumes:
       - backend_logs:/app/logs
     networks:
@@ -149,6 +174,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      ollama:
+        condition: service_started
 
   # ============================================================================
   # Frontend Next.js
@@ -212,6 +239,8 @@ volumes:
     name: helpdesk_rabbitmq
   glpi_data:
     name: helpdesk_glpi
+  ollama_data:
+    name: helpdesk_ollama
   backend_logs:
     name: helpdesk_backend_logs
   bot_sessions:

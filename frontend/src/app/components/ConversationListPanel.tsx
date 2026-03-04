@@ -11,7 +11,7 @@ interface ConversationListPanelProps {
     refreshTrigger?: number;
 }
 
-type TabType = 'mine' | 'unassigned' | 'all';
+type TabType = 'mine' | 'unassigned' | 'all' | 'closed';
 
 export default function ConversationListPanel({ onTicketClick, selectedTicketId, refreshTrigger }: ConversationListPanelProps) {
     const { user, profile } = useAuth();
@@ -21,6 +21,52 @@ export default function ConversationListPanel({ onTicketClick, selectedTicketId,
     const [activeTab, setActiveTab] = useState<TabType>('mine');
     const [searchQuery, setSearchQuery] = useState('');
     const previousTicketIdsRef = useRef<Set<string>>(new Set());
+
+    const [panelWidth, setPanelWidth] = useState(340);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const resizerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
+        const resizer = resizerRef.current;
+        if (!resizer) return;
+
+        let isResizing = false;
+
+        const startResize = (e: MouseEvent) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            e.preventDefault();
+        };
+
+        const stopResize = () => {
+            isResizing = false;
+            document.body.style.cursor = 'default';
+        };
+
+        const resize = (e: MouseEvent) => {
+            if (!isResizing) return;
+            let newWidth = e.clientX;
+            if (newWidth < 280) newWidth = 280;
+            if (newWidth > 600) newWidth = 600;
+            setPanelWidth(newWidth);
+        };
+
+        resizer.addEventListener('mousedown', startResize);
+        window.addEventListener('mousemove', resize);
+        window.addEventListener('mouseup', stopResize);
+
+        return () => {
+            resizer.removeEventListener('mousedown', startResize);
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResize);
+        };
+    }, []);
 
     const fetchTickets = useCallback(async (isAutoRefresh = false) => {
         if (isAutoRefresh) setRefreshing(true);
@@ -69,6 +115,7 @@ export default function ConversationListPanel({ onTicketClick, selectedTicketId,
     const myTickets = tickets.filter(t => t.technician === user?.email && t.status !== 'CLOSED');
     const unassignedTickets = tickets.filter(t => !t.technician && t.status !== 'CLOSED');
     const allOpenTickets = tickets.filter(t => t.status !== 'CLOSED');
+    const closedTickets = tickets.filter(t => t.status === 'CLOSED');
 
     const getTabTickets = () => {
         let base: Ticket[];
@@ -76,6 +123,7 @@ export default function ConversationListPanel({ onTicketClick, selectedTicketId,
             case 'mine': base = myTickets; break;
             case 'unassigned': base = unassignedTickets; break;
             case 'all': base = allOpenTickets; break;
+            case 'closed': base = closedTickets; break;
             default: base = allOpenTickets;
         }
         if (searchQuery.trim()) {
@@ -96,6 +144,7 @@ export default function ConversationListPanel({ onTicketClick, selectedTicketId,
         { id: 'mine', label: 'Minhas', count: myTickets.length },
         { id: 'unassigned', label: 'Não atribuídas', count: unassignedTickets.length },
         { id: 'all', label: 'Todos', count: allOpenTickets.length },
+        { id: 'closed', label: 'Fechadas', count: closedTickets.length },
     ];
 
     const getTimeAgo = (dateStr: string) => {
@@ -111,12 +160,36 @@ export default function ConversationListPanel({ onTicketClick, selectedTicketId,
 
     return (
         <div
-            className="w-[340px] min-w-[340px] flex flex-col border-r h-screen"
-            style={{
+            className={`flex flex-col border-r h-screen relative group ${isMobile ? 'w-full' : ''}`}
+            style={isMobile ? {
+                backgroundColor: 'var(--cw-bg-secondary)',
+                borderColor: 'var(--cw-border)',
+            } : {
+                width: `${panelWidth}px`,
+                minWidth: '280px',
+                maxWidth: '600px',
                 backgroundColor: 'var(--cw-bg-secondary)',
                 borderColor: 'var(--cw-border)',
             }}
         >
+            {/* Handle Resizer */}
+            {!isMobile && (
+                <div
+                    ref={resizerRef}
+                    className="absolute top-0 -right-1 w-2 h-full cursor-col-resize z-50 hover:bg-blue-500/50 transition-colors"
+                />
+            )}
+
+            <style>{`
+                .hide-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .hide-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+            `}</style>
+
             {/* Header */}
             <div className="px-4 pt-4 pb-2" style={{ borderBottom: '1px solid var(--cw-border)' }}>
                 <div className="flex items-center justify-between mb-3">
@@ -127,11 +200,11 @@ export default function ConversationListPanel({ onTicketClick, selectedTicketId,
                         <span
                             className="text-[11px] px-2 py-0.5 rounded-full font-medium"
                             style={{
-                                backgroundColor: 'var(--cw-accent-subtle)',
-                                color: 'var(--cw-accent)',
+                                backgroundColor: activeTab === 'closed' ? 'var(--cw-bg-tertiary)' : 'var(--cw-accent-subtle)',
+                                color: activeTab === 'closed' ? 'var(--cw-text-secondary)' : 'var(--cw-accent)',
                             }}
                         >
-                            Abertas
+                            {activeTab === 'closed' ? 'Fechadas' : 'Abertas'}
                         </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -157,12 +230,12 @@ export default function ConversationListPanel({ onTicketClick, selectedTicketId,
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-0">
+                <div className="flex gap-0 overflow-x-auto hide-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-all border-b-2"
+                            className="flex items-center gap-1.5 px-2 py-2 text-[12px] font-medium transition-all border-b-2 whitespace-nowrap"
                             style={{
                                 color: activeTab === tab.id ? 'var(--cw-accent)' : 'var(--cw-text-tertiary)',
                                 borderColor: activeTab === tab.id ? 'var(--cw-accent)' : 'transparent',
@@ -243,14 +316,14 @@ export default function ConversationListPanel({ onTicketClick, selectedTicketId,
                                     {/* Content */}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between mb-0.5">
-                                            <span className="text-[13px] font-semibold truncate" style={{ color: 'var(--cw-text-primary)' }}>
+                                            <span className="text-[13px] font-semibold line-clamp-2 pr-2" style={{ color: 'var(--cw-text-primary)' }}>
                                                 {ticket.customerName || ticket.client || 'Cliente'}
                                             </span>
-                                            <span className="text-[11px] ml-2 whitespace-nowrap" style={{ color: 'var(--cw-text-tertiary)' }}>
+                                            <span className="text-[11px] ml-auto whitespace-nowrap mt-0.5" style={{ color: 'var(--cw-text-tertiary)' }}>
                                                 {timeAgo}
                                             </span>
                                         </div>
-                                        <p className="text-[12px] truncate mb-1" style={{ color: 'var(--cw-text-secondary)' }}>
+                                        <p className="text-[12px] line-clamp-2 mb-1" style={{ color: 'var(--cw-text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                                             {ticket.title || ticket.description || 'Sem mensagem'}
                                         </p>
                                         <div className="flex items-center gap-1.5">

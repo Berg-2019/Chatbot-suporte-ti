@@ -5,6 +5,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { validate } from './config/env.validation';
 
@@ -34,10 +35,14 @@ import { PrinterModule } from './presentation/controllers/printers/printer.modul
 import { WebsocketModule } from './presentation/websockets/websocket.module';
 import { CannedResponsesModule } from './presentation/controllers/canned-responses/canned-responses.module';
 import { WebhooksModule } from './presentation/controllers/webhooks/webhooks.module';
-import { RolesModule } from './presentation/controllers/roles/roles.module';
+// import { RolesModule } from './presentation/controllers/roles/roles.module'; // DISABLED - requires customRole model
 import { CsatModule } from './presentation/controllers/csat/csat.module';
 import { AutomationModule } from './presentation/controllers/automation/automation.module';
 import { AutoAssignmentModule } from './presentation/controllers/auto-assignment/auto-assignment.module';
+import { IntentModule } from './presentation/controllers/intent/intent.module';
+import { AgentMetricsModule } from './presentation/controllers/agent-metrics/agent-metrics.module';
+import { LabelsModule } from './presentation/controllers/labels/labels.module';
+import { BotVariablesModule } from './presentation/controllers/bot-variables/bot-variables.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -56,6 +61,9 @@ import { HealthController } from './presentation/controllers/health.controller';
       ttl: 60000, // 60 seconds
       limit: 60,  // 60 requests
     }]),
+
+    // Cron Jobs (for Agent Metrics)
+    ScheduleModule.forRoot(),
 
     // Infrastructure
     PrismaModule,
@@ -83,10 +91,14 @@ import { HealthController } from './presentation/controllers/health.controller';
     WebsocketModule,
     CannedResponsesModule,
     WebhooksModule,
-    RolesModule,
+    // RolesModule, // DISABLED - requires customRole model
     CsatModule,
     AutomationModule,
     AutoAssignmentModule,
+    IntentModule,
+    AgentMetricsModule,
+    LabelsModule,
+    BotVariablesModule,
   ],
   controllers: [HealthController],
   providers: [

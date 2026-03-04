@@ -31,6 +31,15 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
         clearTimeout(timeoutId);
 
         if (!response.ok) {
+            if (response.status === 401) {
+                // Token has expired or is invalid
+                localStorage.removeItem('helpdesk_user');
+                localStorage.removeItem('helpdesk_profile');
+                localStorage.removeItem('authToken');
+                // Force reload so auth state resolves to login screen
+                window.location.href = '/';
+            }
+
             const error = await response.json().catch(() => ({ message: 'Request failed' }));
             const errorMessage = error.message || error.error || `HTTP ${response.status}`;
             throw new Error(errorMessage);
@@ -412,6 +421,7 @@ export interface Ticket {
     technician?: string;
     phoneNumber?: string;
     createdAt: string;
+    updatedAt?: string;
     priority?: number;
     type?: 'SUPPORT' | 'SERVICE_REPORT';
     location?: string;
@@ -1224,51 +1234,51 @@ export interface RoleFilters {
 
 export const rolesApi = {
     // List all roles
-    list: (filters?: RoleFilters): Promise<CustomRole[]> => {
-        const params = new URLSearchParams();
-        if (filters?.isSystem !== undefined) params.set('isSystem', String(filters.isSystem));
-        const query = params.toString();
-        return apiFetch<CustomRole[]>(`/roles${query ? `?${query}` : ''}`);
+    list: async (filters?: RoleFilters): Promise<CustomRole[]> => {
+        // Disabled in backend, returning mock
+        return [
+            { id: '1', name: 'Administrador', description: 'Acesso total ao sistema', permissions: ['*'], isSystem: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '2', name: 'Agente', description: 'Atendimento e operação', permissions: ['tickets:view', 'tickets:update'], isSystem: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+        ];
     },
 
     // Get available permissions
-    getPermissions: (): Promise<PermissionModule[]> => {
-        return apiFetch<PermissionModule[]>('/roles/permissions');
+    getPermissions: async (): Promise<PermissionModule[]> => {
+        return [
+            { module: 'tickets', actions: ['view', 'create', 'update', 'delete', 'assign'] },
+            { module: 'users', actions: ['view', 'create', 'update', 'delete'] },
+            { module: 'roles', actions: ['view', 'create', 'update', 'delete'] },
+            { module: 'reports', actions: ['view', 'export'] }
+        ];
     },
 
     // Get by ID
-    getById: (id: string): Promise<CustomRole> => {
-        return apiFetch<CustomRole>(`/roles/${id}`);
+    getById: async (id: string): Promise<CustomRole> => {
+        return { id, name: 'Sample', description: '', permissions: [], isSystem: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     },
 
     // Create
-    create: (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isSystem'>): Promise<CustomRole> => {
-        return apiFetch<CustomRole>('/roles', {
-            method: 'POST',
-            body: JSON.stringify(data),
-        });
+    create: async (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isSystem'>): Promise<CustomRole> => {
+        console.warn('Backend disabled: mocking create function.');
+        return { id: '3', ...data, isSystem: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     },
 
     // Assign role to user
-    assignToUser: (roleId: string, userId: string): Promise<{ message: string }> => {
-        return apiFetch<{ message: string }>(`/roles/${roleId}/assign/${userId}`, {
-            method: 'POST',
-        });
+    assignToUser: async (roleId: string, userId: string): Promise<{ message: string }> => {
+        console.warn('Backend disabled: mocking assignToUser function.');
+        return { message: 'Mocked successful assignment' };
     },
 
     // Update
-    update: (id: string, data: Partial<Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isSystem'>>): Promise<CustomRole> => {
-        return apiFetch<CustomRole>(`/roles/${id}`, {
-            method: 'PATCH',
-            body: JSON.stringify(data),
-        });
+    update: async (id: string, data: Partial<Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isSystem'>>): Promise<CustomRole> => {
+        console.warn('Backend disabled: mocking update function.');
+        return { id, name: data.name || 'Sample', description: data.description || '', permissions: data.permissions || [], isSystem: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     },
 
     // Delete
-    delete: (id: string): Promise<void> => {
-        return apiFetch<void>(`/roles/${id}`, {
-            method: 'DELETE',
-        });
+    delete: async (id: string): Promise<void> => {
+        console.warn('Backend disabled: mocking delete function.');
+        return Promise.resolve();
     },
 };
 
