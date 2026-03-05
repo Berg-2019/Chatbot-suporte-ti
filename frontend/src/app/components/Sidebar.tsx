@@ -25,7 +25,10 @@ import {
   AtSign,
   UsersRound,
   Tag,
-  Timer
+  Timer,
+  Mail,
+  BookOpen,
+  ScrollText
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth, UserProfile } from '@/app/context/AuthContext';
@@ -94,9 +97,12 @@ const menuStructure: MenuItem[] = [
       { id: 'sla', label: 'SLA', icon: Timer, roles: ['admin'] },
       { id: 'bot', label: 'Bot IA', icon: Bot, roles: ['admin', 'tech_ti'] },
       { id: 'faq', label: 'FAQ', icon: HelpCircle, roles: ['admin', 'tech_ti'] },
+      { id: 'knowledge', label: 'Base de Conhecimento', icon: BookOpen, roles: ['admin', 'tech_ti'] },
       { id: 'respostas-prontas', label: 'Respostas Prontas', icon: MessageSquare, roles: ['admin', 'tech_ti'] },
+      { id: 'email-config', label: 'Email (IMAP)', icon: Mail, roles: ['admin'] },
       { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['admin'] },
       { id: 'roles', label: 'Roles & Permissões', icon: Shield, roles: ['admin'] },
+      { id: 'logs', label: 'Logs do Sistema', icon: ScrollText, roles: ['admin'] },
     ]
   },
 ];

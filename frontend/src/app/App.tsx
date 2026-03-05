@@ -33,6 +33,11 @@ const TeamsView = lazy(() => import('@/app/components/views/TeamsView'));
 const LabelsView = lazy(() => import('@/app/components/views/LabelsView'));
 const SLAView = lazy(() => import('@/app/components/views/SLAView'));
 
+// Phase 4 - Channels & Knowledge
+const EmailConfigView = lazy(() => import('@/app/components/views/EmailConfigView'));
+const KnowledgeArticlesView = lazy(() => import('@/app/components/views/KnowledgeArticlesView'));
+const LogsView = lazy(() => import('@/app/components/views/LogsView'));
+
 // Loading fallback component
 const LoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
@@ -120,6 +125,12 @@ function MainContent() {
         return <LabelsView />;
       case 'sla':
         return <SLAView />;
+      case 'email-config':
+        return <EmailConfigView />;
+      case 'knowledge':
+        return <KnowledgeArticlesView />;
+      case 'logs':
+        return <LogsView />;
       default:
         return null;
     }
