@@ -13,6 +13,7 @@ import {
     Query,
     UseGuards,
     SetMetadata,
+    Patch,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ContactsService } from './contacts.service';
@@ -62,5 +63,57 @@ export class ContactsController {
     @Delete(':id')
     async delete(@Param('id') id: string) {
         return this.contactsService.delete(id);
+    }
+
+    // =====================================================
+    // Spam & Blocking Endpoints
+    // =====================================================
+
+    @Get('blocked')
+    async getBlockedContacts() {
+        return this.contactsService.getBlockedContacts();
+    }
+
+    @Get('spam/stats')
+    async getSpamStats() {
+        return this.contactsService.getSpamStats();
+    }
+
+    @Post(':id/block')
+    async blockContact(
+        @Param('id') id: string,
+        @Body() body: { blockedBy: string; reason?: string },
+    ) {
+        return this.contactsService.blockContact(id, body.blockedBy, body.reason);
+    }
+
+    @Post(':id/unblock')
+    async unblockContact(@Param('id') id: string) {
+        return this.contactsService.unblockContact(id);
+    }
+
+    @Get('jid/:jid/is-blocked')
+    @SetMetadata('isPublic', true) // Allow bot to check
+    async isBlocked(@Param('jid') jid: string) {
+        const blocked = await this.contactsService.isBlocked(decodeURIComponent(jid));
+        return { jid, isBlocked: blocked };
+    }
+
+    @Post('spam/detect')
+    @SetMetadata('isPublic', true) // Allow bot to use
+    async detectSpam(@Body() body: { message: string }) {
+        return this.contactsService.detectSpamPatterns(body.message);
+    }
+
+    @Patch('jid/:jid/spam-score')
+    @SetMetadata('isPublic', true) // Allow bot to increment
+    async incrementSpamScore(
+        @Param('jid') jid: string,
+        @Body() body: { points?: number },
+    ) {
+        return this.contactsService.incrementSpamScore(
+            decodeURIComponent(jid),
+            body.points || 10,
+        );
     }
 }

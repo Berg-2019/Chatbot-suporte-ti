@@ -356,6 +356,13 @@ model Contact {
   lastContactAt  DateTime @default(now())
   totalTickets   Int      @default(0)
 
+  // Spam & Blocking
+  isBlocked     Boolean  @default(false)
+  blockedAt     DateTime?
+  blockedBy     String? // UserID que bloqueou
+  blockReason   String? // Motivo do bloqueio
+  spamScore     Int      @default(0) // Score de spam (0-100)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -363,6 +370,8 @@ model Contact {
   @@index([phoneNumber])
   @@index([sector])
   @@index([email])
+  @@index([isBlocked])
+  @@index([spamScore])
   @@map("contacts")
 }
 
