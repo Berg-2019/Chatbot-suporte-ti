@@ -1,12 +1,27 @@
-import React, { useState } from 'react';
-import { X, Save, Plus, Trash2, Box, DollarSign, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Plus, Trash2, Box, DollarSign, Clock, User, Mail, Building, Phone, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
+
+interface ContactInfo {
+  id: string;
+  name: string;
+  email?: string;
+  phoneNumber?: string;
+  sector?: string;
+  department?: string;
+  company?: string;
+  ramal?: string;
+  totalTickets?: number;
+  lastContactAt?: string;
+}
 
 interface CloseTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (data: CloseTicketData) => void;
   ticketId: string | number;
+  customerJid?: string; // JID do cliente para buscar informações
+  customerName?: string; // Nome do cliente do ticket
 }
 
 export interface CloseTicketData {
@@ -30,7 +45,7 @@ const STOCK_ITEMS = [
   { id: 8, name: 'Adaptador Wi-Fi USB', cost: 55.00, stock: 10 },
 ];
 
-export default function CloseTicketModal({ isOpen, onClose, onConfirm, ticketId }: CloseTicketModalProps) {
+export default function CloseTicketModal({ isOpen, onClose, onConfirm, ticketId, customerJid, customerName }: CloseTicketModalProps) {
   const [solution, setSolution] = useState('');
   const [category, setCategory] = useState('software');
   const [timeHours, setTimeHours] = useState('0');
@@ -38,11 +53,44 @@ export default function CloseTicketModal({ isOpen, onClose, onConfirm, ticketId 
   const [parts, setParts] = useState<Array<{ id: number; name: string; quantity: number; cost: number }>>([]);
   const [saveContact, setSaveContact] = useState(false);
   const [showPartForm, setShowPartForm] = useState(false);
-  
+
   // Custom part form
   const [customPartName, setCustomPartName] = useState('');
   const [customPartCost, setCustomPartCost] = useState('');
   const [customPartQty, setCustomPartQty] = useState('1');
+
+  // Contact info state
+  const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null);
+  const [isLoadingContact, setIsLoadingContact] = useState(false);
+
+  // Fetch contact info when modal opens
+  useEffect(() => {
+    if (isOpen && customerJid) {
+      fetchContactInfo();
+    }
+  }, [isOpen, customerJid]);
+
+  const fetchContactInfo = async () => {
+    if (!customerJid) return;
+
+    setIsLoadingContact(true);
+    try {
+      const response = await fetch(`http://localhost:3000/api/contacts/jid/${encodeURIComponent(customerJid)}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setContactInfo(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch contact info:', error);
+    } finally {
+      setIsLoadingContact(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -113,7 +161,128 @@ export default function CloseTicketModal({ isOpen, onClose, onConfirm, ticketId 
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          
+
+          {/* Contact Information */}
+          {contactInfo && (
+            <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2 mb-3">
+                <User size={16} className="text-blue-400" />
+                <h3 className="text-sm font-semibold text-slate-200">Informações do Contato</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <User size={14} className="text-slate-500 mt-0.5" />
+                  <div>
+                    <div className="text-slate-500 text-xs">Nome</div>
+                    <div className="text-slate-200 font-medium">{contactInfo.name}</div>
+                  </div>
+                </div>
+
+                {contactInfo.phoneNumber && contactInfo.phoneNumber !== 'email-only' && (
+                  <div className="flex items-start gap-2">
+                    <Phone size={14} className="text-slate-500 mt-0.5" />
+                    <div>
+                      <div className="text-slate-500 text-xs">Telefone</div>
+                      <div className="text-slate-200 font-medium">{contactInfo.phoneNumber}</div>
+                    </div>
+                  </div>
+                )}
+
+                {contactInfo.email && (
+                  <div className="flex items-start gap-2">
+                    <Mail size={14} className="text-slate-500 mt-0.5" />
+                    <div>
+                      <div className="text-slate-500 text-xs">Email</div>
+                      <div className="text-slate-200 font-medium truncate">{contactInfo.email}</div>
+                    </div>
+                  </div>
+                )}
+
+                {contactInfo.sector && (
+                  <div className="flex items-start gap-2">
+                    <Building size={14} className="text-slate-500 mt-0.5" />
+                    <div>
+                      <div className="text-slate-500 text-xs">Setor</div>
+                      <div className="text-slate-200 font-medium">{contactInfo.sector}</div>
+                    </div>
+                  </div>
+                )}
+
+                {contactInfo.department && (
+                  <div className="flex items-start gap-2">
+                    <MapPin size={14} className="text-slate-500 mt-0.5" />
+                    <div>
+                      <div className="text-slate-500 text-xs">Departamento</div>
+                      <div className="text-slate-200 font-medium">{contactInfo.department}</div>
+                    </div>
+                  </div>
+                )}
+
+                {contactInfo.company && (
+                  <div className="flex items-start gap-2">
+                    <Building size={14} className="text-slate-500 mt-0.5" />
+                    <div>
+                      <div className="text-slate-500 text-xs">Empresa</div>
+                      <div className="text-slate-200 font-medium">{contactInfo.company}</div>
+                    </div>
+                  </div>
+                )}
+
+                {contactInfo.ramal && (
+                  <div className="flex items-start gap-2">
+                    <Phone size={14} className="text-slate-500 mt-0.5" />
+                    <div>
+                      <div className="text-slate-500 text-xs">Ramal</div>
+                      <div className="text-slate-200 font-medium">{contactInfo.ramal}</div>
+                    </div>
+                  </div>
+                )}
+
+                {contactInfo.totalTickets !== undefined && (
+                  <div className="flex items-start gap-2">
+                    <Box size={14} className="text-slate-500 mt-0.5" />
+                    <div>
+                      <div className="text-slate-500 text-xs">Total de Chamados</div>
+                      <div className="text-slate-200 font-medium">{contactInfo.totalTickets}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!contactInfo.email && !contactInfo.department && (
+                <div className="mt-3 pt-3 border-t border-slate-700">
+                  <p className="text-xs text-yellow-400 flex items-center gap-2">
+                    <X size={12} />
+                    Algumas informações do contato estão incompletas. Marque "Salvar Contato no CRM" para atualizar.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isLoadingContact && (
+            <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-slate-400">
+                <div className="w-4 h-4 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-sm">Carregando informações do contato...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Nome do cliente se não houver info completa */}
+          {!contactInfo && !isLoadingContact && customerName && (
+            <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <User size={16} className="text-blue-400" />
+                <div>
+                  <div className="text-sm text-slate-200 font-medium">{customerName}</div>
+                  <div className="text-xs text-slate-500">Contato não cadastrado no sistema</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Solução */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-slate-300">Solução Aplicada <span className="text-red-500">*</span></label>
@@ -281,15 +450,21 @@ export default function CloseTicketModal({ isOpen, onClose, onConfirm, ticketId 
           {/* CRM */}
           <div className="pt-4 border-t border-slate-800">
             <label className="flex items-center gap-3 p-3 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={saveContact}
                 onChange={(e) => setSaveContact(e.target.checked)}
                 className="w-4 h-4 rounded border-slate-600 text-green-600 focus:ring-green-500 bg-slate-950"
               />
               <div className="text-sm">
-                <span className="text-slate-200 font-medium">Salvar Contato no CRM</span>
-                <p className="text-slate-500 text-xs">Atualizar dados do cliente para futuros atendimentos</p>
+                <span className="text-slate-200 font-medium">
+                  {contactInfo ? 'Atualizar Contato no CRM' : 'Criar Contato no CRM'}
+                </span>
+                <p className="text-slate-500 text-xs">
+                  {contactInfo
+                    ? `Atualizar dados do contato e registrar este atendimento (${(contactInfo.totalTickets || 0) + 1}º chamado)`
+                    : 'Salvar dados do cliente para futuros atendimentos'}
+                </p>
               </div>
             </label>
           </div>
