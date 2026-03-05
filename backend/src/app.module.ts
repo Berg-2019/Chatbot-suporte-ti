@@ -45,6 +45,7 @@ import { LabelsModule } from './presentation/controllers/labels/labels.module';
 import { BotVariablesModule } from './presentation/controllers/bot-variables/bot-variables.module';
 import { EmailConfigModule } from './presentation/controllers/email-config/email-config.module';
 import { KnowledgeModule } from './presentation/controllers/knowledge/knowledge.module';
+import { MacrosModule } from './presentation/controllers/macros/macros.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -104,6 +105,7 @@ import { LogsController } from './presentation/controllers/admin/logs.controller
     BotVariablesModule,
     EmailConfigModule,
     KnowledgeModule,
+    MacrosModule,
   ],
   controllers: [HealthController, LogsController],
   providers: [
