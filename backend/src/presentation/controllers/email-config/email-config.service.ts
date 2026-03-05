@@ -125,4 +125,8 @@ export class EmailConfigService {
       message: 'Email ingestion stopped',
     };
   }
+
+  async getHealth() {
+    return this.emailIngestion.getHealthStatus();
+  }
 }
