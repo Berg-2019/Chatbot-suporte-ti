@@ -46,6 +46,7 @@ import { BotVariablesModule } from './presentation/controllers/bot-variables/bot
 import { EmailConfigModule } from './presentation/controllers/email-config/email-config.module';
 import { KnowledgeModule } from './presentation/controllers/knowledge/knowledge.module';
 import { MacrosModule } from './presentation/controllers/macros/macros.module';
+import { LiveViewModule } from './presentation/controllers/live-view/live-view.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -106,6 +107,7 @@ import { LogsController } from './presentation/controllers/admin/logs.controller
     EmailConfigModule,
     KnowledgeModule,
     MacrosModule,
+    LiveViewModule,
   ],
   controllers: [HealthController, LogsController],
   providers: [
