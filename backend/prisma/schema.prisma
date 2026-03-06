@@ -37,6 +37,12 @@ model User {
   receiveAlerts Boolean @default(true)
   sector        String  @default("TI") // TI ou ELECTRIC
 
+  // Notification Preferences (Phase 5)
+  notificationSound String  @default("default") // default, bell, chime, ping, custom
+  customSoundUrl    String? // URL to custom sound file
+  soundEnabled      Boolean @default(true)
+  soundVolume       Int     @default(80) // 0-100
+
   tickets           Ticket[]
   messages          Message[]
   alerts            TechnicianAlert[]

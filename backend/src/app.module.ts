@@ -47,6 +47,7 @@ import { EmailConfigModule } from './presentation/controllers/email-config/email
 import { KnowledgeModule } from './presentation/controllers/knowledge/knowledge.module';
 import { MacrosModule } from './presentation/controllers/macros/macros.module';
 import { LiveViewModule } from './presentation/controllers/live-view/live-view.module';
+import { NotificationPreferencesModule } from './presentation/controllers/notification-preferences/notification-preferences.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -108,6 +109,7 @@ import { LogsController } from './presentation/controllers/admin/logs.controller
     KnowledgeModule,
     MacrosModule,
     LiveViewModule,
+    NotificationPreferencesModule,
   ],
   controllers: [HealthController, LogsController],
   providers: [
