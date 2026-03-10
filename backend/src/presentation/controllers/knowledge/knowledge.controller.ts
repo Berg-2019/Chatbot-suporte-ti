@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 import { KnowledgeService } from './knowledge.service';
 import { KnowledgeSearchService } from './knowledge-search.service';
 
@@ -73,7 +73,7 @@ export class KnowledgeController {
   }
 
   @Post('articles')
-  @Roles('ADMIN', 'AGENT')
+  @Roles(UserRole.ADMIN, UserRole.AGENT)
   async create(
     @Body()
     dto: {
@@ -84,7 +84,7 @@ export class KnowledgeController {
       isInternal?: boolean;
       tags?: string[];
     },
-    @Request() req,
+    @Request() req: any,
   ) {
     return this.knowledgeService.create({
       ...dto,
@@ -93,7 +93,7 @@ export class KnowledgeController {
   }
 
   @Put('articles/:id')
-  @Roles('ADMIN', 'AGENT')
+  @Roles(UserRole.ADMIN, UserRole.AGENT)
   async update(
     @Param('id') id: string,
     @Body()
@@ -110,7 +110,7 @@ export class KnowledgeController {
   }
 
   @Delete('articles/:id')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async delete(@Param('id') id: string) {
     return this.knowledgeService.delete(id);
   }
@@ -119,7 +119,7 @@ export class KnowledgeController {
   async markHelpful(
     @Param('id') id: string,
     @Body() dto: { helpful: boolean; comment?: string },
-    @Request() req,
+    @Request() req: any,
   ) {
     return this.knowledgeService.markHelpful(
       id,

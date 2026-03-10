@@ -5,9 +5,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
-interface ActiveConversation {
+export interface ActiveConversation {
     ticketId: string;
-    customerName: string;
+    customerName: string | null;
     customerJid: string;
     assignedTo?: {
         id: string;
@@ -19,11 +19,11 @@ interface ActiveConversation {
     lastMessageContent: string;
     unreadCount: number;
     responseTime?: number; // seconds since last message
-    sector: string;
+    sector: string | null;
     isActive: boolean; // Active in last 5 minutes
 }
 
-interface LiveViewStats {
+export interface LiveViewStats {
     totalActive: number;
     byStatus: Record<string, number>;
     byPriority: Record<string, number>;
@@ -32,7 +32,7 @@ interface LiveViewStats {
     longestWaiting: {
         ticketId: string;
         waitTime: number;
-        customerName: string;
+        customerName: string | null;
     } | null;
 }
 
@@ -56,7 +56,7 @@ export class LiveViewService {
 
         // Build where clause
         const where: any = {
-            status: { in: ['OPEN', 'IN_PROGRESS'] },
+            status: { in: ['NEW', 'ASSIGNED', 'IN_PROGRESS'] },
             updatedAt: { gte: thresholdTime },
         };
 
@@ -99,7 +99,7 @@ export class LiveViewService {
             return {
                 ticketId: ticket.id,
                 customerName: ticket.customerName,
-                customerJid: ticket.customerJid,
+                customerJid: ticket.phoneNumber, // Using phoneNumber as JID
                 assignedTo: ticket.assignedTo
                     ? {
                           id: ticket.assignedTo.id,
@@ -128,7 +128,7 @@ export class LiveViewService {
         const thresholdTime = new Date(now.getTime() - this.ACTIVE_THRESHOLD_MINUTES * 60 * 1000);
 
         const where: any = {
-            status: { in: ['OPEN', 'IN_PROGRESS'] },
+            status: { in: ['NEW', 'ASSIGNED', 'IN_PROGRESS'] },
             updatedAt: { gte: thresholdTime },
         };
 
@@ -161,7 +161,9 @@ export class LiveViewService {
             byPriority[ticket.priority] = (byPriority[ticket.priority] || 0) + 1;
 
             // Count by sector
-            bySector[ticket.sector] = (bySector[ticket.sector] || 0) + 1;
+            if (ticket.sector) {
+                bySector[ticket.sector] = (bySector[ticket.sector] || 0) + 1;
+            }
 
             // Calculate response time
             const lastMessage = ticket.messages[0];
@@ -213,7 +215,7 @@ export class LiveViewService {
                 const activeTickets = await this.prisma.ticket.count({
                     where: {
                         assignedToId: agent.id,
-                        status: { in: ['OPEN', 'IN_PROGRESS'] },
+                        status: { in: ['NEW', 'ASSIGNED', 'IN_PROGRESS'] },
                         updatedAt: { gte: thresholdTime },
                     },
                 });
@@ -221,7 +223,7 @@ export class LiveViewService {
                 const totalAssigned = await this.prisma.ticket.count({
                     where: {
                         assignedToId: agent.id,
-                        status: { in: ['OPEN', 'IN_PROGRESS'] },
+                        status: { in: ['NEW', 'ASSIGNED', 'IN_PROGRESS'] },
                     },
                 });
 
@@ -249,7 +251,7 @@ export class LiveViewService {
             where: { ticketId },
             orderBy: { createdAt: 'asc' },
             include: {
-                user: {
+                sender: {
                     select: { name: true, email: true },
                 },
             },
@@ -258,10 +260,12 @@ export class LiveViewService {
         return messages.map((msg) => ({
             id: msg.id,
             content: msg.content,
-            sender: msg.sender,
+            senderId: msg.senderId,
+            senderName: msg.sender?.name || 'System',
             isInternal: msg.isInternal,
             createdAt: msg.createdAt,
-            user: msg.user,
+            direction: msg.direction,
+            type: msg.type,
             mentions: msg.mentions || [],
         }));
     }
@@ -274,7 +278,7 @@ export class LiveViewService {
         const tickets = await this.prisma.ticket.findMany({
             where: {
                 assignedToId: null,
-                status: 'OPEN',
+                status: 'NEW',
             },
             orderBy: { createdAt: 'asc' },
             take: 50,
@@ -283,7 +287,8 @@ export class LiveViewService {
         return tickets.map((ticket) => ({
             ticketId: ticket.id,
             customerName: ticket.customerName,
-            subject: ticket.subject,
+            title: ticket.title,
+            description: ticket.description,
             priority: ticket.priority,
             sector: ticket.sector,
             createdAt: ticket.createdAt,

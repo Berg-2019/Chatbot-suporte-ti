@@ -29,7 +29,7 @@ export class KnowledgeSearchService {
       const articles = await this.searchByKeywords(keywords, limit * 2); // Get more initially
 
       // 4. Filter by category based on intent
-      const categoryMap = {
+      const categoryMap: Record<string, string> = {
         abrir_ticket_ti: 'Troubleshooting',
         abrir_ticket_eletrica: 'Manutenção',
         reservar_equipamento: 'Procedimentos',

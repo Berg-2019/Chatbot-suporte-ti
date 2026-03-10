@@ -6,7 +6,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { MacroActionType } from './macros.dto';
 
-interface BulkActionResult {
+export interface BulkActionResult {
     success: number;
     failed: number;
     errors: Array<{ ticketId: string; error: string }>;
@@ -72,26 +72,32 @@ export class MacrosService {
 
         switch (action) {
             case MacroActionType.ASSIGN_AGENT:
+                if (!value) throw new BadRequestException('Agent ID is required');
                 await this.assignAgent(ticketId, value);
                 break;
 
             case MacroActionType.CHANGE_STATUS:
+                if (!value) throw new BadRequestException('Status is required');
                 await this.changeStatus(ticketId, value);
                 break;
 
             case MacroActionType.CHANGE_PRIORITY:
+                if (!value) throw new BadRequestException('Priority is required');
                 await this.changePriority(ticketId, value);
                 break;
 
             case MacroActionType.ADD_LABEL:
+                if (!value) throw new BadRequestException('Label is required');
                 await this.addLabel(ticketId, value);
                 break;
 
             case MacroActionType.REMOVE_LABEL:
+                if (!value) throw new BadRequestException('Label is required');
                 await this.removeLabel(ticketId, value);
                 break;
 
             case MacroActionType.SEND_MESSAGE:
+                if (!value) throw new BadRequestException('Message is required');
                 await this.sendMessage(ticketId, value);
                 break;
 
@@ -237,24 +243,15 @@ export class MacrosService {
             throw new BadRequestException('Message is required');
         }
 
-        // Get ticket to find customer JID
-        const ticket = await this.prisma.ticket.findUnique({
-            where: { id: ticketId },
-            select: { customerJid: true },
-        });
-
-        if (!ticket) {
-            throw new NotFoundException(`Ticket ${ticketId} not found`);
-        }
-
         // Create internal note with macro message
         await this.prisma.message.create({
             data: {
                 ticketId,
-                sender: 'system',
                 content: `[Macro] ${message}`,
+                type: 'TEXT',
+                direction: 'OUTGOING',
                 isInternal: true, // Keep as internal note
-                timestamp: new Date(),
+                senderId: null, // System message
             },
         });
 
@@ -311,7 +308,7 @@ export class MacrosService {
             })),
             ticketsByPriority: ticketsByPriority.map((p) => ({
                 priority: p.priority,
-                count: s._count.priority,
+                count: p._count.priority,
             })),
         };
     }

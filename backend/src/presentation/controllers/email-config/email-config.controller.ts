@@ -5,7 +5,7 @@
 import { Controller, Get, Post, Put, Body, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 import { EmailConfigService } from './email-config.service';
 
 @Controller('email-config')
@@ -14,13 +14,13 @@ export class EmailConfigController {
   constructor(private emailConfigService: EmailConfigService) {}
 
   @Get()
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async getConfig() {
     return this.emailConfigService.getConfig();
   }
 
   @Post()
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async createConfig(
     @Body()
     dto: {
@@ -45,7 +45,7 @@ export class EmailConfigController {
   }
 
   @Put()
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async updateConfig(
     @Body()
     dto: {
@@ -70,19 +70,19 @@ export class EmailConfigController {
   }
 
   @Post('test-connection')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async testConnection() {
     return this.emailConfigService.testConnection();
   }
 
   @Post('start')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async startIngestion() {
     return this.emailConfigService.startIngestion();
   }
 
   @Post('stop')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async stopIngestion() {
     return this.emailConfigService.stopIngestion();
   }

@@ -7,7 +7,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 
 const execAsync = promisify(exec);
 
@@ -15,7 +15,7 @@ const execAsync = promisify(exec);
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LogsController {
   @Get()
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async getLogs(
     @Query('lines') lines: string = '500',
     @Query('level') level?: string, // ERROR, WARN, INFO, DEBUG
@@ -55,7 +55,7 @@ export class LogsController {
   }
 
   @Get('download')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   async downloadLogs() {
     const logPath = process.env.LOG_FILE_PATH || '/var/log/helpdesk/app.log';
 

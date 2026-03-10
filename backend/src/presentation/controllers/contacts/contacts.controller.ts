@@ -15,12 +15,12 @@ import {
     SetMetadata,
     Patch,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { ContactsService } from './contacts.service';
 import { UpsertContactDto, CreateContactDto, UpdateContactDto } from './contacts.dto';
 
 @Controller('contacts')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(JwtAuthGuard)
 export class ContactsController {
     constructor(private contactsService: ContactsService) { }
 

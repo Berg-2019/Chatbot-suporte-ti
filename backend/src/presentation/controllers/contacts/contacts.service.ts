@@ -78,6 +78,8 @@ export class ContactsService {
             where: { jid },
         });
 
+        const dtoWithAttributes = dto as any;
+
         return this.prisma.contact.upsert({
             where: { jid },
             create: {
@@ -86,13 +88,13 @@ export class ContactsService {
                 firstContactAt: now,
                 lastContactAt: now,
                 totalTickets: 0,
-                customAttributes: dto.customAttributes || {},
+                customAttributes: dtoWithAttributes.customAttributes || {},
             },
             update: {
                 ...dto,
                 lastContactAt: now, // Sempre atualiza último contato
                 totalTickets: existing ? { increment: 1 } : 1, // Incrementa contador
-                customAttributes: dto.customAttributes || existing?.customAttributes || {},
+                customAttributes: dtoWithAttributes.customAttributes || existing?.customAttributes || {},
             },
         });
     }

@@ -20,7 +20,7 @@ interface EmailConfig {
   enabled: boolean;
   pollInterval: number;
   defaultPriority: string;
-  defaultSector: string;
+  defaultSector: string | null;
 }
 
 @Injectable()
@@ -303,15 +303,20 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
 
           const emails: ParsedMail[] = [];
           const fetch = imap.fetch(results, { bodies: '' });
+          const parsePromises: Promise<ParsedMail>[] = [];
 
           fetch.on('message', (msg) => {
-            msg.on('body', async (stream) => {
-              try {
-                const parsed = await simpleParser(stream);
-                emails.push(parsed);
-              } catch (error) {
-                this.logger.error(`Failed to parse email: ${error.message}`);
-              }
+            msg.on('body', (stream) => {
+              const promise = simpleParser(stream as any)
+                .then((parsed) => {
+                  emails.push(parsed);
+                  return parsed;
+                })
+                .catch((error) => {
+                  this.logger.error(`Failed to parse email: ${error.message}`);
+                  throw error;
+                });
+              parsePromises.push(promise);
             });
           });
 
@@ -320,8 +325,11 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
             reject(err);
           });
 
-          fetch.once('end', () => {
+          fetch.once('end', async () => {
             clearTimeout(timeout);
+
+            // Wait for all emails to be parsed
+            await Promise.allSettled(parsePromises);
 
             // Mark as read
             if (results.length > 0) {
@@ -419,7 +427,6 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
         phoneNumber: 'email-only',
         name: fromName,
         sector: config.defaultSector || 'Email',
-        email: fromEmail,
       });
     }
 
@@ -427,18 +434,18 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
     const ticket = await this.ticketsService.create({
       title: subject,
       description: body,
-      phoneNumber: contact.phoneNumber,
+      phoneNumber: contact.phoneNumber || 'email-only',
       customerName: contact.name,
       sector: config.defaultSector || 'TI',
       category: 'Email',
-      priority: config.defaultPriority || 'NORMAL',
+      priority: config.defaultPriority as any || 'NORMAL',
     });
 
     // Create mapping
     await this.prisma.emailTicketMapping.create({
       data: {
         ticketId: ticket.id,
-        emailId: email.messageId,
+        emailId: email.messageId || `email-${Date.now()}`,
         threadId: this.extractThreadId(email) || email.messageId,
         fromEmail,
         toEmail: config.imapUser,
