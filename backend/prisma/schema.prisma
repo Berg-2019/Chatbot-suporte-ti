@@ -354,6 +354,10 @@ model Contact {
   department  String? // Departamento/subdivisão
   ramal       String? // Ramal telefônico
 
+  // WhatsApp Profile
+  profilePicUrl String? // URL da foto de perfil do WhatsApp
+  profilePicUpdatedAt DateTime? // Última atualização da foto de perfil
+
   // Custom attributes (inspirado no Chatwoot)
   customAttributes Json? @default("{}") // { "cargo": "Gerente", "ramal": "2045" }
 
@@ -1065,3 +1069,29 @@ model ArticleFeedback {
   @@index([userId])
   @@map("article_feedback")
 }
+
+// ===========================================================================
+// Settings - Sistema de Configurações Dinâmicas
+// ===========================================================================
+
+model Setting {
+  key   String @id // Chave única da configuração
+  value String @db.Text // Valor (pode ser JSON, string, number, etc)
+
+  description String? // Descrição da configuração
+  category    String  @default("general") // Categoria: general, bot, email, notifications, etc
+  dataType    String  @default("string") // string, number, boolean, json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@map("settings")
+}
+
+// Exemplos de configurações:
+// key: "bot.greeting.message", value: "Olá! Como posso ajudar?"
+// key: "bot.business.hours", value: '{"start": "08:00", "end": "18:00"}'
+// key: "notifications.sound.enabled", value: "true"
+// key: "email.poll.interval", value: "60"
+// key: "sla.warning.threshold", value: "75"

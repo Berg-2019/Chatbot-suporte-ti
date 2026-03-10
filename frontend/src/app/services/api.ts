@@ -1283,6 +1283,69 @@ export const rolesApi = {
 };
 
 // ================================================================
+// Settings API
+// ================================================================
+
+export interface Setting {
+    key: string;
+    value: string;
+    description?: string;
+    category: string;
+    dataType: 'string' | 'number' | 'boolean' | 'json';
+    createdAt: string;
+    updatedAt: string;
+}
+
+export const settingsApi = {
+    getAll: (category?: string): Promise<Setting[]> => {
+        const query = category ? `?category=${category}` : '';
+        return apiFetch<Setting[]>(`/settings${query}`);
+    },
+
+    getAsObject: (category?: string): Promise<Record<string, any>> => {
+        const query = category ? `?category=${category}` : '';
+        return apiFetch<Record<string, any>>(`/settings/object${query}`);
+    },
+
+    getOne: (key: string): Promise<Setting> => {
+        return apiFetch<Setting>(`/settings/${key}`);
+    },
+
+    upsert: (data: Partial<Setting>): Promise<Setting> => {
+        return apiFetch<Setting>('/settings', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    update: (key: string, data: Partial<Setting>): Promise<Setting> => {
+        return apiFetch<Setting>(`/settings/${key}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    delete: (key: string): Promise<void> => {
+        return apiFetch<void>(`/settings/${key}`, {
+            method: 'DELETE',
+        });
+    },
+
+    bulkUpdate: (settings: Record<string, string>): Promise<{ updated: number }> => {
+        return apiFetch<{ updated: number }>('/settings/bulk', {
+            method: 'POST',
+            body: JSON.stringify({ settings }),
+        });
+    },
+
+    initializeDefaults: (): Promise<Setting[]> => {
+        return apiFetch<Setting[]>('/settings/initialize', {
+            method: 'POST',
+        });
+    },
+};
+
+// ================================================================
 // Export all APIs
 // ================================================================
 
@@ -1301,6 +1364,7 @@ export const api = {
     webhooks: webhooksApi,
     contacts: contactsApi,
     roles: rolesApi,
+    settings: settingsApi,
 };
 
 export default api;

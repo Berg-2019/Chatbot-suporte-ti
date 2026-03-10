@@ -48,6 +48,7 @@ import { KnowledgeModule } from './presentation/controllers/knowledge/knowledge.
 import { MacrosModule } from './presentation/controllers/macros/macros.module';
 import { LiveViewModule } from './presentation/controllers/live-view/live-view.module';
 import { NotificationPreferencesModule } from './presentation/controllers/notification-preferences/notification-preferences.module';
+import { SettingsModule } from './presentation/controllers/settings/settings.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -110,6 +111,7 @@ import { LogsController } from './presentation/controllers/admin/logs.controller
     MacrosModule,
     LiveViewModule,
     NotificationPreferencesModule,
+    SettingsModule,
   ],
   controllers: [HealthController, LogsController],
   providers: [

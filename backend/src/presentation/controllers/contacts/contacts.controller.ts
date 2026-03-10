@@ -116,4 +116,36 @@ export class ContactsController {
             body.points || 10,
         );
     }
+
+    // =====================================================
+    // Profile Picture Endpoints
+    // =====================================================
+
+    /**
+     * Fetch profile picture from WhatsApp for a contact
+     */
+    @Post(':id/fetch-profile-picture')
+    async fetchProfilePicture(@Param('id') id: string) {
+        return this.contactsService.fetchProfilePicture(id);
+    }
+
+    /**
+     * Fetch profile picture by JID
+     */
+    @Post('jid/:jid/fetch-profile-picture')
+    @SetMetadata('isPublic', true) // Allow bot to fetch
+    async fetchProfilePictureByJid(@Param('jid') jid: string) {
+        return this.contactsService.fetchProfilePictureByJid(decodeURIComponent(jid));
+    }
+
+    /**
+     * Update profile picture URL manually
+     */
+    @Patch(':id/profile-picture')
+    async updateProfilePicture(
+        @Param('id') id: string,
+        @Body() body: { profilePicUrl: string | null },
+    ) {
+        return this.contactsService.updateProfilePicture(id, body.profilePicUrl);
+    }
 }

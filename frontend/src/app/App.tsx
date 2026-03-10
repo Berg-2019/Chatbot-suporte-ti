@@ -37,6 +37,7 @@ const SLAView = lazy(() => import('@/app/components/views/SLAView'));
 const EmailConfigView = lazy(() => import('@/app/components/views/EmailConfigView'));
 const KnowledgeArticlesView = lazy(() => import('@/app/components/views/KnowledgeArticlesView'));
 const LogsView = lazy(() => import('@/app/components/views/LogsView'));
+const SettingsView = lazy(() => import('@/app/components/views/SettingsView'));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -131,6 +132,8 @@ function MainContent() {
         return <KnowledgeArticlesView />;
       case 'logs':
         return <LogsView />;
+      case 'system-settings':
+        return <SettingsView />;
       default:
         return null;
     }

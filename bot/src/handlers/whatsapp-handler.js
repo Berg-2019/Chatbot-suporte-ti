@@ -283,6 +283,32 @@ class WhatsAppHandler {
     setTimeout(() => this.connect(), 1000);
   }
 
+  async getProfilePicture(jid) {
+    if (!this.sock || !this.isConnected) {
+      console.error('❌ WhatsApp não conectado');
+      return null;
+    }
+
+    try {
+      console.log(`📸 Buscando foto de perfil para: ${jid}`);
+
+      // Baileys method to get profile picture URL
+      const profilePicUrl = await this.sock.profilePictureUrl(jid, 'image');
+
+      console.log(`✅ Foto de perfil encontrada: ${profilePicUrl ? 'sim' : 'não'}`);
+      return profilePicUrl || null;
+    } catch (error) {
+      // Error 404 means no profile picture set
+      if (error.output?.statusCode === 404 || error.message?.includes('404')) {
+        console.log(`ℹ️ Contato ${jid} não possui foto de perfil`);
+        return null;
+      }
+
+      console.error('❌ Erro ao buscar foto de perfil:', error.message);
+      return null;
+    }
+  }
+
   async logout() {
     if (this.sock) {
       try {

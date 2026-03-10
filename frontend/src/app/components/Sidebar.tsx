@@ -102,6 +102,7 @@ const menuStructure: MenuItem[] = [
       { id: 'email-config', label: 'Email (IMAP)', icon: Mail, roles: ['admin'] },
       { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['admin'] },
       { id: 'roles', label: 'Roles & Permissões', icon: Shield, roles: ['admin'] },
+      { id: 'system-settings', label: 'Configurações', icon: Settings, roles: ['admin'] },
       { id: 'logs', label: 'Logs do Sistema', icon: ScrollText, roles: ['admin'] },
     ]
   },

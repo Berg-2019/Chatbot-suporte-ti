@@ -126,6 +126,44 @@ app.post('/api/logout', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/profile-picture/:jid - Busca foto de perfil de um contato
+ * Params: jid - JID do WhatsApp (ex: "5511999999999@s.whatsapp.net")
+ */
+app.get('/api/profile-picture/:jid', async (req, res) => {
+  try {
+    const { jid } = req.params;
+
+    if (!jid) {
+      return res.status(400).json({ error: 'JID obrigatório' });
+    }
+
+    // Verificar se está conectado
+    if (!whatsappHandler.isConnected) {
+      return res.status(503).json({
+        error: 'Bot não conectado',
+        profilePicUrl: null
+      });
+    }
+
+    // Buscar foto de perfil via Baileys
+    const profilePicUrl = await whatsappHandler.getProfilePicture(jid);
+
+    res.json({
+      jid,
+      profilePicUrl,
+      success: true
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar foto de perfil:', error.message);
+    res.status(500).json({
+      error: error.message,
+      profilePicUrl: null,
+      success: false
+    });
+  }
+});
+
 export function startApiServer() {
   return new Promise((resolve) => {
     app.listen(PORT, '0.0.0.0', () => {
