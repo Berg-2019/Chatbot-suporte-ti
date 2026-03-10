@@ -32,14 +32,14 @@ export class IntentService {
   private readonly logger = new Logger(IntentService.name);
   private ollamaUrl: string;
   private ollamaModel: string;
-  private anthropicApiKey: string;
+  private minimaxApiKey: string;
   private enabled: boolean = false;
 
   constructor(private prisma: PrismaService) {
     // Configuração Ollama (local ou remoto)
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
     this.ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5:3b'; // ou 'chatglm3:6b', 'llama3.2:3b'
-    this.anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
+    this.minimaxApiKey = process.env.MINIMAX_API_KEY || '';
 
     // Verificar se Ollama está disponível
     this.checkOllamaAvailability();
@@ -88,22 +88,22 @@ export class IntentService {
         try {
           result = await this.classifyWithOllama(userMessage);
         } catch (error) {
-          this.logger.warn(`Ollama falhou, tentando fallback para Claude...`);
-          if (this.anthropicApiKey) {
-            result = await this.classifyWithClaude(userMessage);
-            usedProvider = 'anthropic';
-            usedModel = 'claude-3-haiku-20240307';
+          this.logger.warn(`Ollama falhou, tentando fallback para MiniMax...`);
+          if (this.minimaxApiKey) {
+            result = await this.classifyWithMiniMax(userMessage);
+            usedProvider = 'minimax';
+            usedModel = 'abab6-chat';
           } else {
             throw error;
           }
         }
-      } else if (this.anthropicApiKey) {
-        this.logger.log(`Ollama desabilitado, usando Claude como fallback...`);
-        result = await this.classifyWithClaude(userMessage);
-        usedProvider = 'anthropic';
-        usedModel = 'claude-3-haiku-20240307';
+      } else if (this.minimaxApiKey) {
+        this.logger.log(`Ollama desabilitado, usando MiniMax como fallback...`);
+        result = await this.classifyWithMiniMax(userMessage);
+        usedProvider = 'minimax';
+        usedModel = 'abab6-chat';
       } else {
-        this.logger.warn('Intent Detection não disponível (Ollama offline e sem API Key do Claude)');
+        this.logger.warn('Intent Detection não disponível (Ollama offline e sem API Key do MiniMax)');
         return {
           intent: Intent.OTHER,
           confidence: 0,
@@ -178,43 +178,72 @@ Se não houver entidades relevantes, use entities vazio: "entities": {}`;
   }
 
   /**
-   * Classifica usando Anthropic Claude via API
+   * Classifica usando MiniMax AI via API
    */
-  private async classifyWithClaude(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
+  private async classifyWithMiniMax(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
     const prompt = this.getPrompt(userMessage);
 
     try {
       const response = await axios.post(
-        'https://api.anthropic.com/v1/messages',
+        'https://api.minimaxi.chat/v1/text/chatcompletion',
         {
-          model: 'claude-3-haiku-20240307',
-          max_tokens: 200,
+          model: 'abab6-chat',
+          messages: [
+            {
+              sender_type: 'USER',
+              sender_name: 'User',
+              text: prompt
+            }
+          ],
+          reply_constraints: {
+            sender_type: 'BOT',
+            sender_name: 'Assistant'
+          },
+          bot_setting: [
+            {
+              bot_name: 'Assistant',
+              content: 'Você é um classificador de intenções para helpdesk. Responda APENAS com JSON válido, sem explicações adicionais.'
+            }
+          ],
           temperature: 0.1,
-          messages: [{ role: 'user', content: prompt }]
+          top_p: 0.9,
+          max_tokens: 200
         },
         {
           headers: {
-            'x-api-key': this.anthropicApiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json'
+            'Authorization': `Bearer ${this.minimaxApiKey}`,
+            'Content-Type': 'application/json'
           },
           timeout: 15000
         }
       );
 
-      const responseText = response.data.content[0].text.trim();
+      // Verificar se há erro da API
+      if (response.data.base_resp && response.data.base_resp.status_code !== 0) {
+        this.logger.error(`MiniMax API error: ${response.data.base_resp.status_msg}`);
+        throw new Error(`MiniMax API error: ${response.data.base_resp.status_msg}`);
+      }
+
+      // MiniMax retorna no formato: response.data.reply
+      const responseText = response.data.reply?.trim();
+
+      if (!responseText) {
+        this.logger.error('MiniMax retornou resposta vazia');
+        throw new Error('Resposta vazia do MiniMax');
+      }
+
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
 
       if (!jsonMatch) {
-         this.logger.error(`Claude não retornou JSON válido: ${responseText}`);
-         throw new Error('Resposta inválida do Claude');
+         this.logger.error(`MiniMax não retornou JSON válido: ${responseText}`);
+         throw new Error('Resposta inválida do MiniMax');
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
-      
+
       const validIntents = Object.values(Intent);
       if (!validIntents.includes(parsed.intent)) {
-        this.logger.warn(`Intenção inválida do Claude: ${parsed.intent}`);
+        this.logger.warn(`Intenção inválida do MiniMax: ${parsed.intent}`);
         parsed.intent = Intent.OTHER;
       }
 
@@ -224,7 +253,10 @@ Se não houver entidades relevantes, use entities vazio: "entities": {}`;
         entities: parsed.entities || {},
       };
     } catch (error: any) {
-      this.logger.error(`Claude fallback failed: ${error.message}`);
+      this.logger.error(`MiniMax fallback failed: ${error.message}`);
+      if (error.response?.data) {
+        this.logger.error(`MiniMax error details: ${JSON.stringify(error.response.data)}`);
+      }
       throw error;
     }
   }
