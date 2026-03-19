@@ -2,9 +2,11 @@ import { useState, lazy, Suspense } from 'react';
 import Sidebar from '@/app/components/Sidebar';
 import ChatView from '@/app/components/ChatView';
 import ConversationListPanel from '@/app/components/ConversationListPanel';
+import MobileNavigation from '@/app/components/MobileNavigation';
 import { AuthProvider, useAuth } from '@/app/context/AuthContext';
 import { ThemeProvider, useTheme } from '@/app/context/ThemeContext';
 import { Toaster } from 'sonner';
+import { useIsMobile } from '@/app/hooks/useIsMobile';
 
 import { Ticket } from '@/app/services/api';
 
@@ -71,7 +73,9 @@ function MainContent() {
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
   const [selectedTicketData, setSelectedTicketData] = useState<Ticket | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const { profile, isAuthenticated, logout, isLoading } = useAuth();
+  const isMobile = useIsMobile();
 
   const handleTicketClick = (ticket: Ticket) => {
     setSelectedTicketData(ticket);
@@ -157,7 +161,29 @@ function MainContent() {
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
-      {!isManagerTvMode && <Sidebar activeItem={activeMenuItem} onItemClick={setActiveMenuItem} />}
+      {/* Desktop Sidebar */}
+      {!isManagerTvMode && !isMobile && (
+        <Sidebar activeItem={activeMenuItem} onItemClick={setActiveMenuItem} />
+      )}
+
+      {/* Mobile Sidebar Overlay */}
+      {!isManagerTvMode && isMobile && isMobileSidebarOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+          <div className="fixed inset-y-0 left-0 z-50 w-4/5 max-w-sm">
+            <Sidebar
+              activeItem={activeMenuItem}
+              onItemClick={(item) => {
+                setActiveMenuItem(item);
+                setIsMobileSidebarOpen(false);
+              }}
+            />
+          </div>
+        </>
+      )}
 
       {/* Conversation Layout (3 columns when dashboard) */}
       {isConversationView && !isManagerTvMode ? (
@@ -188,13 +214,22 @@ function MainContent() {
         </>
       ) : (
         /* Standard layout for non-conversation views */
-        <main className={`flex-1 overflow-auto relative ${isManagerTvMode ? 'h-screen overflow-hidden p-0' : ''}`}>
-          <div className={isManagerTvMode ? 'h-full' : 'p-6 lg:p-8'}>
+        <main className={`flex-1 overflow-auto relative ${isManagerTvMode ? 'h-screen overflow-hidden p-0' : ''} ${isMobile && !isManagerTvMode ? 'pb-16' : ''}`}>
+          <div className={isManagerTvMode ? 'h-full' : isMobile ? 'p-4' : 'p-6 lg:p-8'}>
             <Suspense fallback={<LoadingFallback />}>
               {isManagerTvMode ? <ManagerView /> : renderView()}
             </Suspense>
           </div>
         </main>
+      )}
+
+      {/* Mobile Bottom Navigation */}
+      {!isManagerTvMode && isMobile && (
+        <MobileNavigation
+          activeItem={activeMenuItem}
+          onItemClick={setActiveMenuItem}
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
+        />
       )}
     </div>
   );

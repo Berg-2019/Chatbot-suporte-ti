@@ -1,0 +1,147 @@
+/* Mobile Optimizations */
+
+/* Safe area support for notched devices */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Prevent text selection on buttons */
+button {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+/* Better touch targets (minimum 44x44px) */
+@media (max-width: 768px) {
+  button,
+  a,
+  input[type="button"],
+  input[type="submit"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Larger font sizes for mobile readability */
+  body {
+    font-size: 16px; /* Prevents iOS zoom on input focus */
+  }
+
+  /* Fixed positioning adjustments */
+  .mobile-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+  }
+
+  .mobile-content {
+    padding-top: 60px; /* Header height */
+    padding-bottom: 70px; /* Bottom nav height */
+  }
+
+  /* WhatsApp-style chat bubbles */
+  .chat-bubble {
+    max-width: 85%;
+    word-wrap: break-word;
+    padding: 8px 12px;
+    border-radius: 12px;
+  }
+
+  .chat-bubble-incoming {
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+
+  .chat-bubble-outgoing {
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+
+  /* Input optimization */
+  textarea,
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"] {
+    font-size: 16px !important; /* Prevents iOS zoom */
+  }
+
+  /* Smooth scrolling */
+  .messages-container {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide scrollbars on mobile */
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Landscape mode adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+  .mobile-header {
+    height: 50px;
+  }
+
+  .mobile-content {
+    padding-top: 50px;
+    padding-bottom: 60px;
+  }
+}
+
+/* iOS specific */
+@supports (-webkit-touch-callout: none) {
+  /* iOS safe area */
+  .mobile-bottom-nav {
+    padding-bottom: max(env(safe-area-inset-bottom), 8px);
+  }
+
+  /* Fix iOS input zoom */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Android specific */
+@supports not (-webkit-touch-callout: none) {
+  .mobile-bottom-nav {
+    padding-bottom: 8px;
+  }
+}
+
+/* Loading states */
+.skeleton {
+  animation: skeleton-loading 1s linear infinite alternate;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Pull to refresh indicator */
+.pull-to-refresh {
+  transform: translateY(-50px);
+  transition: transform 0.3s ease;
+}
+
+.pull-to-refresh.active {
+  transform: translateY(0);
+}

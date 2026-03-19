@@ -26,6 +26,8 @@ import CloseTicketModal, { CloseTicketData } from './modals/CloseTicketModal';
 import TransferTicketModal from './modals/TransferTicketModal';
 import { toast } from 'sonner';
 import { ticketsApi, usersApi, type Ticket, type Message as ApiMessage } from '@/app/services/api';
+import MobileChatHeader from './MobileChatHeader';
+import { useIsMobile } from '@/app/hooks/useIsMobile';
 
 interface ChatViewProps {
   ticket: Ticket;
@@ -58,6 +60,7 @@ interface Agent {
 type InputMode = 'reply' | 'private';
 
 export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewProps) {
+  const isMobile = useIsMobile();
   const [messageInput, setMessageInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -496,15 +499,23 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
   };
 
   return (
-    <div className="flex flex-col h-full relative" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
-      {/* Chatwoot-style Header */}
-      <div
-        className="flex items-center justify-between px-4 py-3 border-b"
-        style={{
-          backgroundColor: 'var(--cw-bg-secondary)',
-          borderColor: 'var(--cw-border)',
-        }}
-      >
+    <div className={`flex flex-col h-full relative ${isMobile ? 'fixed inset-0 z-50' : ''}`} style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
+      {/* Mobile Header (WhatsApp style) */}
+      {isMobile ? (
+        <MobileChatHeader
+          ticket={ticket}
+          onBack={onClose}
+          onMoreOptions={() => setShowContactPanel(!showContactPanel)}
+        />
+      ) : (
+        /* Desktop Chatwoot-style Header */
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b"
+          style={{
+            backgroundColor: 'var(--cw-bg-secondary)',
+            borderColor: 'var(--cw-border)',
+          }}
+        >
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
@@ -634,14 +645,15 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
             <User size={18} />
           </button>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Main area: messages + optional contact panel */}
       <div className="flex-1 flex overflow-hidden">
         {/* Messages Area */}
         <div className="flex-1 flex flex-col">
           <div
-            className="flex-1 overflow-y-auto px-6 py-4 space-y-3"
+            className={`flex-1 overflow-y-auto space-y-3 ${isMobile ? 'px-3 py-3 pt-16' : 'px-6 py-4'}`}
             style={{ backgroundColor: 'var(--cw-bg-chat)' }}
           >
             {/* Date separator */}
