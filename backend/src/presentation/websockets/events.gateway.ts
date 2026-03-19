@@ -62,12 +62,18 @@ export class EventsGateway
     );
   }
 
-  handleConnection(client: Socket) {
+  async handleConnection(client: Socket) {
     console.log(`📥 Cliente conectado: ${client.id}`);
   }
 
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
     console.log(`📤 Cliente desconectado: ${client.id}`);
+
+    // Se cliente tinha userId, marca como offline
+    const userId = (client as any).userId;
+    if (userId) {
+      await this.updateAgentStatus(userId, 'OFFLINE');
+    }
   }
 
   @SubscribeMessage('ticket:subscribe')
@@ -135,5 +141,62 @@ export class EventsGateway
 
   emitBotStatus(status: any) {
     this.server.emit('bot:status', status);
+  }
+
+  // --- Status do Agente ---
+
+  @SubscribeMessage('agent:identify')
+  async handleAgentIdentify(client: Socket, userId: string) {
+    (client as any).userId = userId;
+    console.log(`🆔 Agente ${userId} identificado no socket ${client.id}`);
+
+    // Atualizar lastSeenAt
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { lastSeenAt: new Date() },
+    });
+  }
+
+  @SubscribeMessage('agent:status:update')
+  async handleAgentStatusUpdate(
+    client: Socket,
+    payload: { userId: string; status: string },
+  ) {
+    const { userId, status } = payload;
+
+    await this.updateAgentStatus(userId, status as any);
+  }
+
+  async updateAgentStatus(userId: string, status: string) {
+    try {
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          status: status as any,
+          lastStatusChange: new Date(),
+          lastSeenAt: new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          status: true,
+          lastStatusChange: true,
+          sector: true,
+          role: true,
+        },
+      });
+
+      // Broadcast para todos os clientes
+      this.server.emit('agent:status:changed', updatedUser);
+      console.log(`📊 Status do agente ${updatedUser.name} alterado para ${status}`);
+    } catch (error) {
+      console.error('❌ Erro ao atualizar status do agente:', error);
+    }
+  }
+
+  // Método para emitir mudança de status programaticamente
+  emitAgentStatusChanged(agent: any) {
+    this.server.emit('agent:status:changed', agent);
   }
 }

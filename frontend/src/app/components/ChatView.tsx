@@ -21,6 +21,7 @@ import {
   Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import CloseTicketModal, { CloseTicketData } from './modals/CloseTicketModal';
 import TransferTicketModal from './modals/TransferTicketModal';
 import { toast } from 'sonner';
@@ -65,6 +66,18 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
   const [inputMode, setInputMode] = useState<InputMode>('reply');
   const [showResolveDropdown, setShowResolveDropdown] = useState(false);
   const [showContactPanel, setShowContactPanel] = useState(false);
+  const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<number | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [showAiAssist, setShowAiAssist] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
 
   // @Mentions state
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -279,6 +292,208 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
   };
 
   const isPrivateMode = inputMode === 'private';
+
+  // Handler para inserir emoji
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    const cursorPos = textareaRef.current?.selectionStart || messageInput.length;
+    const textBefore = messageInput.substring(0, cursorPos);
+    const textAfter = messageInput.substring(cursorPos);
+    const newText = textBefore + emojiData.emoji + textAfter;
+    setMessageInput(newText);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
+  };
+
+  // Handler para inserir código
+  const handleInsertCode = () => {
+    const cursorPos = textareaRef.current?.selectionStart || messageInput.length;
+    const textBefore = messageInput.substring(0, cursorPos);
+    const textAfter = messageInput.substring(cursorPos);
+    const codeBlock = '\n```\n// Cole seu código aqui\n```\n';
+    const newText = textBefore + codeBlock + textAfter;
+    setMessageInput(newText);
+    textareaRef.current?.focus();
+    // Posicionar cursor dentro do bloco de código
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const newCursorPos = cursorPos + 5; // Posição após ```\n
+        textareaRef.current.selectionStart = newCursorPos;
+        textareaRef.current.selectionEnd = newCursorPos + 24; // Selecionar o texto placeholder
+      }
+    }, 0);
+  };
+
+  // Handler para upload de arquivo
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tamanho (máximo 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast.error('Arquivo muito grande. Tamanho máximo: 10MB');
+      return;
+    }
+
+    setIsUploadingFile(true);
+    try {
+      await ticketsApi.uploadAttachment(ticket.id.toString(), file);
+      toast.success(`Arquivo "${file.name}" enviado com sucesso!`);
+      // Resetar input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err: any) {
+      console.error('Erro ao enviar arquivo:', err);
+      toast.error(err.message || 'Erro ao enviar arquivo');
+    } finally {
+      setIsUploadingFile(false);
+    }
+  };
+
+  // Handler para iniciar/parar gravação de áudio
+  const handleAudioRecording = async () => {
+    if (isRecording) {
+      // Parar gravação
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+      setIsRecording(false);
+      setRecordingTime(0);
+    } else {
+      // Iniciar gravação
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const audioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+
+          // Upload automático
+          setIsUploadingFile(true);
+          try {
+            await ticketsApi.uploadAttachment(ticket.id.toString(), audioFile);
+            toast.success('Áudio enviado com sucesso!');
+          } catch (err: any) {
+            console.error('Erro ao enviar áudio:', err);
+            toast.error(err.message || 'Erro ao enviar áudio');
+          } finally {
+            setIsUploadingFile(false);
+          }
+
+          // Parar stream
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+
+        // Timer
+        recordingIntervalRef.current = window.setInterval(() => {
+          setRecordingTime(prev => prev + 1);
+        }, 1000);
+
+        toast.info('Gravação iniciada');
+      } catch (err: any) {
+        console.error('Erro ao acessar microfone:', err);
+        toast.error('Não foi possível acessar o microfone. Verifique as permissões.');
+      }
+    }
+  };
+
+  // Limpar ao desmontar
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  // AI Assist - Gerar sugestões baseadas no contexto
+  const handleAiAssist = () => {
+    if (showAiAssist) {
+      setShowAiAssist(false);
+      return;
+    }
+
+    // Pegar as últimas mensagens do cliente
+    const lastClientMessages = messages
+      .filter(m => m.direction === 'INCOMING')
+      .slice(-3)
+      .map(m => m.content)
+      .join(' ');
+
+    // Gerar sugestões baseadas em palavras-chave comuns
+    const suggestions: string[] = [];
+    const lowerContent = lastClientMessages.toLowerCase();
+
+    if (lowerContent.includes('senha') || lowerContent.includes('login') || lowerContent.includes('acessar')) {
+      suggestions.push('Vou resetar sua senha. Aguarde alguns instantes.');
+      suggestions.push('Você já tentou recuperar a senha pelo sistema?');
+      suggestions.push('Vou encaminhar para o setor responsável pelo acesso.');
+    }
+
+    if (lowerContent.includes('impressora') || lowerContent.includes('imprimir') || lowerContent.includes('papel')) {
+      suggestions.push('Já verificou se há papel na impressora?');
+      suggestions.push('Vou enviar um técnico para verificar a impressora.');
+      suggestions.push('Tente desligar e ligar a impressora novamente.');
+    }
+
+    if (lowerContent.includes('internet') || lowerContent.includes('wifi') || lowerContent.includes('rede')) {
+      suggestions.push('Vou verificar a conexão de rede aí. Aguarde.');
+      suggestions.push('Já tentou reiniciar o roteador?');
+      suggestions.push('Vou encaminhar para a equipe de infraestrutura.');
+    }
+
+    if (lowerContent.includes('computador') || lowerContent.includes('pc') || lowerContent.includes('notebook') || lowerContent.includes('lento')) {
+      suggestions.push('Vou agendar uma manutenção no seu equipamento.');
+      suggestions.push('Você já tentou reiniciar o computador?');
+      suggestions.push('Vou abrir um chamado para verificar o equipamento.');
+    }
+
+    if (lowerContent.includes('email') || lowerContent.includes('e-mail') || lowerContent.includes('outlook')) {
+      suggestions.push('Vou verificar a configuração do seu email.');
+      suggestions.push('Já tentou acessar o webmail?');
+      suggestions.push('Vou encaminhar para o suporte de email.');
+    }
+
+    if (lowerContent.includes('sistema') || lowerContent.includes('erro') || lowerContent.includes('bug')) {
+      suggestions.push('Vou reportar esse erro para a equipe de desenvolvimento.');
+      suggestions.push('Você pode enviar um print do erro?');
+      suggestions.push('Já tentou limpar o cache do navegador?');
+    }
+
+    // Sugestões genéricas sempre disponíveis
+    suggestions.push('Obrigado por aguardar. Estou verificando sua solicitação.');
+    suggestions.push('Entendi. Vou resolver isso para você agora.');
+    suggestions.push('Agradeço o contato. Seu chamado foi registrado com sucesso.');
+
+    setAiSuggestions(suggestions.slice(0, 5)); // Máximo 5 sugestões
+    setShowAiAssist(true);
+  };
+
+  // Aplicar sugestão
+  const applySuggestion = (suggestion: string) => {
+    setMessageInput(suggestion);
+    setShowAiAssist(false);
+    textareaRef.current?.focus();
+  };
 
   return (
     <div className="flex flex-col h-full relative" style={{ backgroundColor: 'var(--cw-bg-primary)' }}>
@@ -569,10 +784,20 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
               </div>
 
               <div className="flex items-center gap-1">
-                <button className="p-1.5 rounded transition-colors" style={{ color: 'var(--cw-accent)' }} title="AI Assist">
+                <button
+                  onClick={handleAiAssist}
+                  className="p-1.5 rounded transition-colors"
+                  style={{ color: showAiAssist ? 'var(--cw-accent)' : 'var(--cw-text-tertiary)' }}
+                  title="Sugestões de IA"
+                >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" /></svg>
                 </button>
-                <button className="p-1.5 rounded transition-colors" style={{ color: 'var(--cw-text-tertiary)' }} title="Expandir">
+                <button
+                  onClick={() => setIsTextareaExpanded(!isTextareaExpanded)}
+                  className="p-1.5 rounded transition-colors"
+                  style={{ color: isTextareaExpanded ? 'var(--cw-accent)' : 'var(--cw-text-tertiary)' }}
+                  title={isTextareaExpanded ? "Recolher" : "Expandir"}
+                >
                   <Expand size={14} />
                 </button>
               </div>
@@ -580,6 +805,57 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
 
             {/* Text Input com @mention dropdown */}
             <form onSubmit={handleSendMessage} className="px-4 pb-2 relative">
+              {/* AI Suggestions */}
+              {showAiAssist && aiSuggestions.length > 0 && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowAiAssist(false)} />
+                  <div
+                    className="absolute bottom-full left-4 right-4 mb-2 rounded-lg shadow-xl border overflow-hidden z-50 max-h-64 overflow-y-auto"
+                    style={{
+                      backgroundColor: 'var(--cw-bg-tertiary)',
+                      borderColor: 'var(--cw-border)',
+                    }}
+                  >
+                    <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--cw-border)' }}>
+                      <div className="flex items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--cw-accent)">
+                          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+                        </svg>
+                        <span className="text-[11px] font-semibold" style={{ color: 'var(--cw-text-primary)' }}>
+                          Sugestões de Resposta
+                        </span>
+                      </div>
+                    </div>
+                    {aiSuggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => applySuggestion(suggestion)}
+                        className="w-full text-left px-3 py-2.5 text-[13px] transition-colors border-b last:border-b-0"
+                        style={{
+                          borderColor: 'var(--cw-border)',
+                          color: 'var(--cw-text-secondary)',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Emoji Picker */}
+              {showEmojiPicker && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowEmojiPicker(false)} />
+                  <div className="absolute bottom-full left-4 mb-2 z-50">
+                    <EmojiPicker onEmojiClick={handleEmojiClick} theme="auto" />
+                  </div>
+                </>
+              )}
+
               {/* Dropdown de menções */}
               {mentionSearch !== null && mentionResults.length > 0 && (
                 <div
@@ -622,11 +898,13 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={isPrivateMode ? 'Nota privada — visível apenas para agentes. Use @nome para mencionar.' : 'Shift + enter para nova linha. Use @ para mencionar agentes.'}
-                className="w-full bg-transparent border-none outline-none resize-none text-[13px] leading-relaxed py-2 min-h-[60px] max-h-[120px]"
+                className="w-full bg-transparent border-none outline-none resize-none text-[13px] leading-relaxed py-2 transition-all"
                 style={{
                   color: 'var(--cw-text-primary)',
+                  minHeight: isTextareaExpanded ? '200px' : '60px',
+                  maxHeight: isTextareaExpanded ? '400px' : '120px',
                 }}
-                rows={2}
+                rows={isTextareaExpanded ? 8 : 2}
               />
 
               {/* Bottom toolbar */}
@@ -634,42 +912,56 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                     className="p-2 rounded-lg transition-colors"
-                    style={{ color: 'var(--cw-text-tertiary)' }}
+                    style={{ color: showEmojiPicker ? 'var(--cw-accent)' : 'var(--cw-text-tertiary)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = showEmojiPicker ? 'var(--cw-accent)' : 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
                     title="Emoji"
                   >
                     <Smile size={18} />
                   </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar"
+                  />
                   <button
                     type="button"
-                    onClick={() => toast.info('Anexo de arquivos em breve')}
-                    className="p-2 rounded-lg transition-colors"
-                    style={{ color: 'var(--cw-text-tertiary)' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
-                    title="Anexar"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingFile}
+                    className="p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ color: isUploadingFile ? 'var(--cw-accent)' : 'var(--cw-text-tertiary)' }}
+                    onMouseEnter={(e) => { if (!isUploadingFile) { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = isUploadingFile ? 'var(--cw-accent)' : 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                    title={isUploadingFile ? "Enviando arquivo..." : "Anexar arquivo"}
                   >
-                    <Paperclip size={18} />
+                    <Paperclip size={18} className={isUploadingFile ? 'animate-pulse' : ''} />
                   </button>
                   <button
                     type="button"
-                    className="p-2 rounded-lg transition-colors"
-                    style={{ color: 'var(--cw-text-tertiary)' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
-                    title="Áudio"
+                    onClick={handleAudioRecording}
+                    className="p-2 rounded-lg transition-colors relative"
+                    style={{ color: isRecording ? '#EF4444' : 'var(--cw-text-tertiary)' }}
+                    onMouseEnter={(e) => { if (!isRecording) { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = isRecording ? '#EF4444' : 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                    title={isRecording ? `Gravando (${Math.floor(recordingTime / 60)}:${String(recordingTime % 60).padStart(2, '0')}) - Clique para parar` : "Gravar áudio"}
                   >
-                    <Mic size={18} />
+                    <Mic size={18} className={isRecording ? 'animate-pulse' : ''} />
+                    {isRecording && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                    )}
                   </button>
                   <button
                     type="button"
+                    onClick={handleInsertCode}
                     className="p-2 rounded-lg transition-colors"
                     style={{ color: 'var(--cw-text-tertiary)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cw-text-primary)'; e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)' }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cw-text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent' }}
-                    title="Código"
+                    title="Inserir código"
                   >
                     <Code2 size={18} />
                   </button>

@@ -6,6 +6,8 @@ import { ptBR } from 'date-fns/locale';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useBadges } from '@/app/hooks/useBadges';
+import { useAgentStatus } from '@/app/hooks/useAgentStatus';
+import StatusBadge from '@/app/components/ui/StatusBadge';
 
 // --- MOCK DATA ---
 
@@ -77,6 +79,7 @@ export default function ManagerView() {
   const [printerIndex, setPrinterIndex] = useState(0);
   const [timelinePage, setTimelinePage] = useState(0);
   const badges = useBadges();
+  const { agents } = useAgentStatus();
 
   const tabs = ['overview', 'stock', 'team'];
   const TIMELINE_ITEMS_PER_PAGE = 4;
@@ -123,6 +126,46 @@ export default function ManagerView() {
   }, []);
 
   // -- RENDERERS --
+
+  const renderAgentStatus = () => (
+    <div className="bg-slate-900/80 backdrop-blur-sm rounded-xl border border-slate-800 shadow-lg p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wide flex items-center gap-2">
+          <Users2 size={14} className="text-blue-500" /> Status dos Agentes
+        </h3>
+        <span className="text-xs text-slate-500">
+          {agents.filter(a => a.status === 'ONLINE' || a.status === 'IN_SERVICE').length}/{agents.length} disponíveis
+        </span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {agents.length > 0 ? (
+          agents.map((agent) => (
+            <div
+              key={agent.id}
+              className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-3 hover:bg-slate-800/50 transition-colors"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0"
+                >
+                  {agent.name.substring(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs font-medium truncate">{agent.name}</p>
+                  <p className="text-slate-500 text-[10px] truncate">{agent.sector}</p>
+                </div>
+              </div>
+              <StatusBadge status={agent.status} size="sm" showLabel={true} />
+            </div>
+          ))
+        ) : (
+          <div className="col-span-full text-center text-slate-500 text-xs py-4">
+            Nenhum agente conectado
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   const renderMetrics = () => (
     <div className="grid grid-cols-4 gap-4 h-24">
@@ -429,8 +472,9 @@ export default function ManagerView() {
               transition={{ duration: 0.5 }}
               className="flex flex-col gap-4 h-full"
             >
+              {renderAgentStatus()}
               {renderMetrics()}
-              
+
               <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
                  {/* LEFT COL (7 cols) - Agenda Top + Charts Bottom */}
                  <div className="col-span-8 flex flex-col gap-4">

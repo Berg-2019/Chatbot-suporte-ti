@@ -1085,6 +1085,8 @@ export interface Contact {
     ramal: string | null;
     customAttributes: Record<string, any> | null;
     notes: string | null;
+    profilePicUrl: string | null;
+    profilePicUpdatedAt: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -1205,6 +1207,28 @@ export const contactsApi = {
     delete: (id: string): Promise<void> => {
         return apiFetch<void>(`/contacts/${id}`, {
             method: 'DELETE',
+        });
+    },
+
+    // Fetch profile picture from WhatsApp
+    fetchProfilePicture: (id: string): Promise<{ contact: Contact }> => {
+        return apiFetch<{ contact: Contact }>(`/contacts/${id}/fetch-profile-picture`, {
+            method: 'POST',
+        });
+    },
+
+    // Fetch profile picture by JID
+    fetchProfilePictureByJid: (jid: string): Promise<{ contact: Contact }> => {
+        return apiFetch<{ contact: Contact }>(`/contacts/jid/${encodeURIComponent(jid)}/fetch-profile-picture`, {
+            method: 'POST',
+        });
+    },
+
+    // Update profile picture URL manually
+    updateProfilePicture: (id: string, profilePicUrl: string): Promise<Contact> => {
+        return apiFetch<Contact>(`/contacts/${id}/profile-picture`, {
+            method: 'PATCH',
+            body: JSON.stringify({ profilePicUrl }),
         });
     },
 };

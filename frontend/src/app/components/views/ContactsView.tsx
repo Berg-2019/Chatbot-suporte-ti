@@ -17,9 +17,12 @@ import {
     X,
     Filter,
     MessageSquare,
+    Camera,
+    Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { contactsApi, type Contact, type ContactFilters } from '@/app/services/api';
+import { Avatar } from '@/app/components/ui/Avatar';
 
 // Componente de campo de informação
 function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
@@ -57,6 +60,9 @@ export default function ContactsView({ onInitiateChat }: ContactsViewProps) {
         department: '',
         ramal: '',
     });
+
+    // Profile picture loading state
+    const [fetchingProfilePic, setFetchingProfilePic] = useState<Record<string, boolean>>({});
 
     // Buscar contatos
     const fetchContacts = async () => {
@@ -120,6 +126,28 @@ export default function ContactsView({ onInitiateChat }: ContactsViewProps) {
             (c.department || '').toLowerCase().includes(term)
         );
     });
+
+    // Buscar foto de perfil do WhatsApp
+    const handleFetchProfilePicture = async (contact: Contact) => {
+        setFetchingProfilePic(prev => ({ ...prev, [contact.id]: true }));
+        try {
+            const result = await contactsApi.fetchProfilePicture(contact.id);
+            // Atualizar o contato na lista com a nova foto
+            setContacts(prev =>
+                prev.map(c => c.id === contact.id ? result.contact : c)
+            );
+            toast.success('Foto de perfil atualizada!');
+        } catch (err: any) {
+            console.error('Erro ao buscar foto de perfil:', err);
+            if (err.message.includes('404') || err.message.includes('not found')) {
+                toast.info('Este contato não possui foto de perfil no WhatsApp');
+            } else {
+                toast.error(err.message || 'Erro ao buscar foto de perfil');
+            }
+        } finally {
+            setFetchingProfilePic(prev => ({ ...prev, [contact.id]: false }));
+        }
+    };
 
     // Abrir modal para novo contato
     const handleNew = () => {
@@ -342,12 +370,26 @@ export default function ContactsView({ onInitiateChat }: ContactsViewProps) {
                                 }}
                             >
                                 <div className="flex items-center gap-3">
-                                    {/* Avatar */}
-                                    <div
-                                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                                        style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
-                                    >
-                                        {contact.name.substring(0, 2).toUpperCase()}
+                                    {/* Avatar with Profile Picture */}
+                                    <div className="relative group">
+                                        <Avatar
+                                            src={contact.profilePicUrl}
+                                            fallbackText={contact.name}
+                                            size="lg"
+                                        />
+                                        {/* Fetch Profile Picture Button - appears on hover */}
+                                        <button
+                                            onClick={() => handleFetchProfilePicture(contact)}
+                                            disabled={fetchingProfilePic[contact.id]}
+                                            className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-100"
+                                            title="Buscar foto do WhatsApp"
+                                        >
+                                            {fetchingProfilePic[contact.id] ? (
+                                                <Loader2 className="w-5 h-5 text-white animate-spin" />
+                                            ) : (
+                                                <Camera className="w-5 h-5 text-white" />
+                                            )}
+                                        </button>
                                     </div>
 
                                     {/* Info */}
@@ -364,6 +406,11 @@ export default function ContactsView({ onInitiateChat }: ContactsViewProps) {
                                                 <InfoRow icon={Phone} label="Ramal" value={contact.ramal} />
                                             )}
                                         </div>
+                                        {contact.profilePicUpdatedAt && (
+                                            <p className="text-[10px]" style={{ color: 'var(--cw-text-tertiary)' }}>
+                                                Foto atualizada: {new Date(contact.profilePicUpdatedAt).toLocaleDateString('pt-BR')}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 

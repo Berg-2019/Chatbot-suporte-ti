@@ -25,6 +25,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Status em tempo real
+  status           AgentStatus @default(OFFLINE)
+  lastStatusChange DateTime?
+  lastSeenAt       DateTime?
+
   // Integração GLPI
   glpiUserId  Int? // ID do usuário no GLPI
   glpiGroupId Int? // ID do grupo no GLPI (N1, N2, N3)
@@ -69,6 +74,14 @@ enum TechnicianLevel {
   N1 // Primeiro nível - atendimento básico
   N2 // Segundo nível - suporte intermediário
   N3 // Terceiro nível - especialista
+}
+
+enum AgentStatus {
+  ONLINE // Disponível para atendimento
+  BUSY // Ocupado (não aceita novos tickets)
+  IN_SERVICE // Em atendimento
+  IDLE // Ocioso/Ausente
+  OFFLINE // Desconectado
 }
 
 // ===========================================================================

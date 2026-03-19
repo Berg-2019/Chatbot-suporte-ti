@@ -1,6 +1,7 @@
-import { Settings, Save, Plus, Edit2, Trash2, Search, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Settings, Save, Plus, Edit2, Trash2, Search, Loader2, RefreshCw, AlertCircle, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { settingsApi, type Setting } from '@/app/services/api';
+import { toast } from 'sonner';
 
 export default function SettingsView() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,6 +21,14 @@ export default function SettingsView() {
     category: 'general',
     dataType: 'string' as 'string' | 'number' | 'boolean' | 'json',
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Delete confirmation modal state
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState(false);
+  const [settingToDelete, setSettingToDelete] = useState<string | null>(null);
+
+  // Initialize defaults confirmation modal
+  const [initializeConfirmModal, setInitializeConfirmModal] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -35,6 +44,7 @@ export default function SettingsView() {
     } catch (err) {
       console.error('Failed to fetch settings:', err);
       setError('Erro ao carregar configurações');
+      toast.error('Erro ao carregar configurações');
     } finally {
       setLoading(false);
     }
@@ -60,6 +70,7 @@ export default function SettingsView() {
         dataType: 'string',
       });
     }
+    setFormErrors({});
     setShowModal(true);
   };
 
@@ -73,10 +84,51 @@ export default function SettingsView() {
       category: 'general',
       dataType: 'string',
     });
+    setFormErrors({});
+  };
+
+  // Validate form data based on dataType
+  const validateFormData = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.key.trim()) {
+      errors.key = 'Chave é obrigatória';
+    }
+
+    if (!formData.value.trim()) {
+      errors.value = 'Valor é obrigatório';
+    }
+
+    // Validate based on data type
+    if (formData.value.trim()) {
+      switch (formData.dataType) {
+        case 'number':
+          if (isNaN(Number(formData.value))) {
+            errors.value = 'Valor deve ser um número válido';
+          }
+          break;
+        case 'boolean':
+          if (formData.value.toLowerCase() !== 'true' && formData.value.toLowerCase() !== 'false') {
+            errors.value = 'Valor deve ser "true" ou "false"';
+          }
+          break;
+        case 'json':
+          try {
+            JSON.parse(formData.value);
+          } catch (e) {
+            errors.value = 'JSON inválido. Verifique a sintaxe.';
+          }
+          break;
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSave = async () => {
-    if (!formData.key || !formData.value) {
+    if (!validateFormData()) {
+      toast.error('Corrija os erros no formulário');
       return;
     }
 
@@ -84,43 +136,58 @@ export default function SettingsView() {
       setSaving(true);
       if (editingSetting) {
         await settingsApi.update(editingSetting.key, formData);
+        toast.success('Configuração atualizada com sucesso');
       } else {
         await settingsApi.upsert(formData);
+        toast.success('Configuração criada com sucesso');
       }
       handleCloseModal();
       fetchSettings();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save setting:', err);
-      alert('Erro ao salvar configuração');
+      toast.error(err.message || 'Erro ao salvar configuração');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (key: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta configuração?')) return;
+  const handleDeleteClick = (key: string) => {
+    setSettingToDelete(key);
+    setDeleteConfirmModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!settingToDelete) return;
 
     try {
-      await settingsApi.delete(key);
+      await settingsApi.delete(settingToDelete);
+      toast.success('Configuração excluída com sucesso');
       fetchSettings();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete setting:', err);
-      alert('Erro ao excluir configuração');
+      toast.error(err.message || 'Erro ao excluir configuração');
+    } finally {
+      setDeleteConfirmModal(false);
+      setSettingToDelete(null);
     }
   };
 
-  const handleInitializeDefaults = async () => {
-    if (!confirm('Deseja inicializar as configurações padrão? Configurações existentes não serão alteradas.')) return;
+  const handleInitializeDefaultsClick = () => {
+    setInitializeConfirmModal(true);
+  };
 
+  const handleInitializeDefaultsConfirm = async () => {
     try {
       setSaving(true);
       await settingsApi.initializeDefaults();
+      toast.success('Configurações padrão inicializadas com sucesso');
       fetchSettings();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to initialize defaults:', err);
-      alert('Erro ao inicializar configurações padrão');
+      toast.error(err.message || 'Erro ao inicializar configurações padrão');
     } finally {
       setSaving(false);
+      setInitializeConfirmModal(false);
     }
   };
 
@@ -183,7 +250,7 @@ export default function SettingsView() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleInitializeDefaults}
+            onClick={handleInitializeDefaultsClick}
             disabled={saving}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
           >
@@ -307,7 +374,7 @@ export default function SettingsView() {
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(setting.key)}
+                        onClick={() => handleDeleteClick(setting.key)}
                         className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
                         title="Excluir"
                       >
@@ -322,14 +389,20 @@ export default function SettingsView() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Edit/Create Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-bold">
                 {editingSetting ? 'Editar Configuração' : 'Nova Configuração'}
               </h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <div className="p-6 space-y-4">
@@ -343,8 +416,13 @@ export default function SettingsView() {
                   onChange={(e) => setFormData({ ...formData, key: e.target.value })}
                   disabled={!!editingSetting}
                   placeholder="ex: bot.greeting.message"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                    formErrors.key ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {formErrors.key && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.key}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -395,11 +473,21 @@ export default function SettingsView() {
                       ? '{"exemplo": "valor"}'
                       : formData.dataType === 'boolean'
                         ? 'true ou false'
-                        : 'Digite o valor'
+                        : formData.dataType === 'number'
+                          ? '123'
+                          : 'Digite o valor'
                   }
                   rows={formData.dataType === 'json' ? 6 : 3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm ${
+                    formErrors.value ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {formErrors.value && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.value}</p>
+                )}
+                {formData.dataType === 'json' && !formErrors.value && formData.value && (
+                  <p className="text-green-600 text-xs mt-1">✓ JSON válido</p>
+                )}
               </div>
 
               <div>
@@ -440,6 +528,76 @@ export default function SettingsView() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <AlertCircle className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-bold">Confirmar Exclusão</h3>
+              </div>
+              <p className="text-gray-600 mb-6">
+                Tem certeza que deseja excluir a configuração <strong>{settingToDelete}</strong>?
+                Esta ação não pode ser desfeita.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setDeleteConfirmModal(false)}
+                  className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Initialize Defaults Confirmation Modal */}
+      {initializeConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <RefreshCw className="w-6 h-6 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-bold">Inicializar Configurações Padrão</h3>
+              </div>
+              <p className="text-gray-600 mb-6">
+                Deseja inicializar as configurações padrão do sistema?
+                Configurações existentes não serão alteradas.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setInitializeConfirmModal(false)}
+                  className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleInitializeDefaultsConfirm}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-500 text-white hover:bg-indigo-600 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Inicializar
+                </button>
+              </div>
             </div>
           </div>
         </div>

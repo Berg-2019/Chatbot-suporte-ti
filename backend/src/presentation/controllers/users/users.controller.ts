@@ -248,6 +248,31 @@ export class UsersController {
     return { success: true };
   }
 
+  // --- Agent Status Endpoints (MUST be before :id routes) ---
+
+  @Get('agents/status')
+  async getAgentsStatus() {
+    // Retorna status de todos os agentes
+    return this.usersService.getAgentsStatus();
+  }
+
+  @Put(':id/status')
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() data: { status: 'ONLINE' | 'BUSY' | 'IN_SERVICE' | 'IDLE' | 'OFFLINE' },
+  ) {
+    console.log(`📊 Atualizando status do usuário ${id} para ${data.status}`);
+    const result = await this.usersService.updateStatus(id, data.status);
+    console.log(`✅ Status atualizado com sucesso:`, result);
+    return result;
+  }
+
+  @Get('mentionable')
+  async getMentionableUsers(@Request() req: any) {
+    // Retorna usuários que podem ser mencionados em notas internas
+    return this.usersService.getMentionableUsers();
+  }
+
   @Get(':id')
   async findById(@Param('id') id: string) {
     return this.usersService.findById(id);
@@ -274,11 +299,5 @@ export class UsersController {
       throw new ForbiddenException('Não pode deletar a si mesmo');
     }
     return this.usersService.delete(id);
-  }
-
-  @Get('mentionable')
-  async getMentionableUsers(@Request() req: any) {
-    // Retorna usuários que podem ser mencionados em notas internas
-    return this.usersService.getMentionableUsers();
   }
 }

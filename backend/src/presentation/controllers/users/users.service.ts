@@ -254,5 +254,55 @@ export class UsersService {
       },
     });
   }
+
+  // --- Agent Status Methods ---
+
+  async updateStatus(userId: string, status: 'ONLINE' | 'BUSY' | 'IN_SERVICE' | 'IDLE' | 'OFFLINE') {
+    console.log(`🔄 UsersService.updateStatus - userId: ${userId}, status: ${status}`);
+
+    const result = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: status as any,
+        lastStatusChange: new Date(),
+        lastSeenAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        status: true,
+        lastStatusChange: true,
+        lastSeenAt: true,
+        sector: true,
+        role: true,
+      },
+    });
+
+    console.log(`✅ Status atualizado no banco:`, result);
+    return result;
+  }
+
+  async getAgentsStatus() {
+    return this.prisma.user.findMany({
+      where: {
+        active: true,
+        role: 'AGENT',
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        status: true,
+        lastStatusChange: true,
+        lastSeenAt: true,
+        sector: true,
+        role: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+  }
 }
 

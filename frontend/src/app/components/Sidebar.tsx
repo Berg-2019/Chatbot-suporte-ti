@@ -34,6 +34,8 @@ import { useState } from 'react';
 import { useAuth, UserProfile } from '@/app/context/AuthContext';
 import { useBadges } from '@/app/hooks/useBadges';
 import { useTheme } from '@/app/context/ThemeContext';
+import { useAgentStatus } from '@/app/hooks/useAgentStatus';
+import StatusSelector from '@/app/components/ui/StatusSelector';
 
 interface SidebarProps {
   activeItem: string;
@@ -113,6 +115,7 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
   const { profile, user, logout } = useAuth();
   const badges = useBadges();
   const { theme, toggleTheme } = useTheme();
+  const { currentStatus, updateStatus } = useAgentStatus();
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     const initial = new Set<string>();
@@ -317,6 +320,11 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
 
         {/* Bottom — compact, clean */}
         <div className="shrink-0 border-t" style={{ borderColor: 'var(--cw-border)' }}>
+          {/* Status Selector */}
+          <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--cw-border)' }}>
+            <StatusSelector currentStatus={currentStatus} onStatusChange={updateStatus} />
+          </div>
+
           {/* User row with theme toggle & logout */}
           <div className="flex items-center gap-2 px-3 py-2.5">
             {/* Avatar */}

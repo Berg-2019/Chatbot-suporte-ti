@@ -109,7 +109,7 @@ function MainContent() {
       case 'estoque':
         return <StockView />;
       case 'contatos':
-        return <ContactsView />;
+        return <ContactsView onInitiateChat={handleTicketClick} />;
       case 'usuarios':
         return <UsersView />;
       case 'chat':
