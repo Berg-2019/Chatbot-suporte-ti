@@ -4,7 +4,6 @@ import Slider from "react-slick";
 import MetricCard from '../MetricCard';
 import TicketItem from '../TicketItem';
 import ReservationChat from '../ReservationChat';
-import MobileFloatingMenu from '../MobileFloatingMenu';
 import {
   FolderOpen,
   Calendar,
@@ -502,12 +501,6 @@ export default function DashboardView({ onTicketClick, refreshTrigger }: Dashboa
           </motion.div>
         )}
       </div>
-
-      <MobileFloatingMenu
-        activeId={mobileTab}
-        onSelect={setMobileTab}
-        items={isTechnician ? technicianMenuItems : adminMenuItems}
-      />
 
       {activeReservationChat && (
         <ReservationChat

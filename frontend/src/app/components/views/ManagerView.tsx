@@ -1,6 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Users, FileText, CheckCircle, Clock, Package, ArrowUpRight, ArrowDownLeft, TrendingUp, Zap, Monitor, Calendar, LayoutDashboard, BarChart3, Boxes, Users2, RefreshCw, Printer, AlertTriangle, Droplet } from 'lucide-react';
-import MobileFloatingMenu from '@/app/components/MobileFloatingMenu';
 import { format, isSameDay, addHours, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState, useEffect } from 'react';

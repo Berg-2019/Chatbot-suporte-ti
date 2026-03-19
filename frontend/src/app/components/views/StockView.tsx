@@ -24,7 +24,6 @@ import { useAuth } from '@/app/context/AuthContext';
 import { toast } from 'sonner';
 import { addDays, format, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import MobileFloatingMenu from '@/app/components/MobileFloatingMenu';
 import MobileTimeline from '@/app/components/MobileTimeline';
 import { useBadges } from '@/app/hooks/useBadges';
 import { stockApi, reservationApi, type StockItem, type Reservation, type StockStats } from '@/app/services/api';
@@ -632,12 +631,6 @@ export default function StockView() {
           </div>
         </>
       )}
-
-      <MobileFloatingMenu
-        activeId={activeTab}
-        onSelect={(id) => setActiveTab(id as any)}
-        items={mobileMenuItems}
-      />
 
       <StockFormModal
         isOpen={isModalOpen}

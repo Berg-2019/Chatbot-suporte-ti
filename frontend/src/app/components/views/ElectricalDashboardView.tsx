@@ -2,7 +2,6 @@ import { Zap, AlertTriangle, CheckCircle, Clock, Plus, X, MapPin, User, FileText
 import MetricCard from '../MetricCard';
 import ReservationChat from '../ReservationChat';
 import ServiceReportModal from '../common/ServiceReportModal';
-import MobileFloatingMenu from '../MobileFloatingMenu';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
@@ -378,18 +377,6 @@ export default function ElectricalDashboardView({ onTicketClick, refreshTrigger 
           </motion.div>
         )}
       </div>
-
-      {/* MOBILE FLOATING MENU */}
-      <MobileFloatingMenu
-        activeId={mobileTab}
-        onSelect={setMobileTab}
-        items={[
-          { id: 'home', icon: LayoutDashboard, label: 'Visão Geral', badge: badges.home },
-          { id: 'tickets', icon: ListTodo, label: 'Tickets', badge: badges.tickets },
-          { id: 'reservations', icon: CalendarClock, label: 'Reservas', badge: badges.reservations },
-          { id: 'schedule', icon: Clock, label: 'Agenda' },
-        ]}
-      />
 
       {/* Modal Nova Ordem de Serviço */}
       <AnimatePresence>
