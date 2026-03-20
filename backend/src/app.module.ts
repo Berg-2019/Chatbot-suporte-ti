@@ -49,6 +49,7 @@ import { MacrosModule } from './presentation/controllers/macros/macros.module';
 import { LiveViewModule } from './presentation/controllers/live-view/live-view.module';
 import { NotificationPreferencesModule } from './presentation/controllers/notification-preferences/notification-preferences.module';
 import { SettingsModule } from './presentation/controllers/settings/settings.module';
+import { AdaptiveAIModule } from './presentation/controllers/adaptive-ai/adaptive-ai.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -85,6 +86,7 @@ import { LogsController } from './presentation/controllers/admin/logs.controller
     MessagesModule,
     BotModule,
     UsersModule,
+    AdaptiveAIModule, // 🧠 Sistema de IA Adaptativo
     PartsModule,
     FaqModule,
     MetricsModule,

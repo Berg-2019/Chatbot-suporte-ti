@@ -368,7 +368,7 @@ model Contact {
   ramal       String? // Ramal telefônico
 
   // WhatsApp Profile
-  profilePicUrl String? // URL da foto de perfil do WhatsApp
+  profilePicUrl       String? // URL da foto de perfil do WhatsApp
   profilePicUpdatedAt DateTime? // Última atualização da foto de perfil
 
   // Custom attributes (inspirado no Chatwoot)
@@ -380,11 +380,11 @@ model Contact {
   totalTickets   Int      @default(0)
 
   // Spam & Blocking
-  isBlocked     Boolean  @default(false)
-  blockedAt     DateTime?
-  blockedBy     String? // UserID que bloqueou
-  blockReason   String? // Motivo do bloqueio
-  spamScore     Int      @default(0) // Score de spam (0-100)
+  isBlocked   Boolean   @default(false)
+  blockedAt   DateTime?
+  blockedBy   String? // UserID que bloqueou
+  blockReason String? // Motivo do bloqueio
+  spamScore   Int       @default(0) // Score de spam (0-100)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -941,12 +941,28 @@ model IntentClassification {
   // Performance
   processingTime Int? // Milissegundos
 
+  // Feedback e Aprendizado Contínuo
+  feedbackCorrectIntent String? // Intent correto fornecido por agente (se IA errou)
+  feedbackProvidedBy    String? // ID do agente que deu feedback
+  feedbackProvidedAt    DateTime? // Quando o feedback foi dado
+  wasCorrect            Boolean? // Se a classificação estava correta (null = não avaliado)
+
+  // RAG - Contexto usado
+  contextUsed      Json? // IDs de conversas/tickets similares usados como contexto
+  similarityScore  Float? // Score de similaridade com contexto (0-1)
+
+  // Aprendizado
+  usedForTraining  Boolean @default(false) // Se foi usado para retreinar modelo
+  trainingBatchId  String? // ID do batch de treinamento
+
   createdAt DateTime @default(now())
 
   @@index([intent])
   @@index([phoneNumber])
   @@index([confidence])
   @@index([createdAt(sort: Desc)])
+  @@index([wasCorrect])
+  @@index([feedbackProvidedBy])
   @@map("intent_classifications")
 }
 
@@ -1006,6 +1022,225 @@ model BotVariable {
   @@index([category])
   @@index([isSystem])
   @@map("bot_variables")
+}
+
+// ===========================================================================
+// 🧠 ADAPTIVE AI SYSTEM - Learning & Evolution
+// ===========================================================================
+
+// Armazena conversas completas para RAG e análise
+model ConversationHistory {
+  id String @id @default(uuid())
+
+  // Identificação
+  ticketId    String? // Ticket relacionado (se houver)
+  phoneNumber String  // Telefone do usuário
+  agentId     String? // Agente que atendeu
+
+  // Conteúdo da conversa
+  messages Json // Array de mensagens: [{ role: "user"|"agent"|"bot", content: "...", timestamp: "..." }]
+
+  // Classificação e contexto
+  primaryIntent    String? // Intent principal da conversa
+  resolvedIntent   String? // Intent final resolvido
+  wasSuccessful    Boolean @default(false) // Se foi resolvido com sucesso
+  resolutionType   String? // "automated", "agent_transfer", "escalated"
+
+  // Embeddings para busca semântica (armazenados como array de floats em JSON)
+  embedding        Json? // Vector embedding da conversa inteira
+  summaryEmbedding Json? // Vector embedding do resumo
+
+  // Metadados
+  summary          String? // Resumo gerado por IA da conversa
+  keywords         String[] @default([]) // Palavras-chave extraídas
+  sentiment        String? // "positive", "neutral", "negative"
+  topics           String[] @default([]) // Tópicos identificados
+
+  // Qualidade
+  userSatisfaction Int? // 1-5 se usuário avaliou
+  agentRating      Int? // 1-5 se agente avaliou utilidade
+
+  // Aprendizado
+  usedAsContext       Int      @default(0) // Quantas vezes foi usado como contexto RAG
+  similarityThreshold Float    @default(0.7) // Threshold mínimo para considerar similar
+  lastUsedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phoneNumber])
+  @@index([ticketId])
+  @@index([agentId])
+  @@index([primaryIntent])
+  @@index([wasSuccessful])
+  @@index([createdAt(sort: Desc)])
+  @@index([usedAsContext(sort: Desc)])
+  @@map("conversation_histories")
+}
+
+// Padrões detectados automaticamente pelo sistema
+model ConversationPattern {
+  id String @id @default(uuid())
+
+  // Padrão identificado
+  name        String @unique // "printer_jam_pattern", "network_timeout_pattern"
+  description String // Descrição do padrão
+
+  // Detecção
+  triggerKeywords String[] // Palavras-chave que ativam o padrão
+  intentSequence  String[] // Sequência de intents típica
+  commonEntities  Json? // Entidades comuns: { "equipamento": ["impressora"], "erro": ["papel preso"] }
+
+  // Solução sugerida
+  suggestedIntent    String // Intent que deveria ser usado
+  suggestedResponse  String? // Resposta sugerida
+  suggestedArticles  String[] @default([]) // IDs de artigos FAQ relacionados
+
+  // Estatísticas
+  occurrences      Int      @default(1) // Quantas vezes foi detectado
+  successRate      Float    @default(0.0) // Taxa de resolução (0-1)
+  avgResolutionTime Int? // Tempo médio de resolução (segundos)
+
+  // Aprendizado
+  confidence       Float    @default(0.5) // Confiança no padrão (0-1)
+  lastDetectedAt   DateTime?
+  autoCreated      Boolean  @default(true) // Se foi criado automaticamente
+  approvedBy       String? // ID do admin que aprovou (null = não aprovado)
+  active           Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+  @@index([confidence(sort: Desc)])
+  @@index([occurrences(sort: Desc)])
+  @@index([lastDetectedAt(sort: Desc)])
+  @@map("conversation_patterns")
+}
+
+// Batch de treinamento para re-treinar modelos
+model TrainingBatch {
+  id String @id @default(uuid())
+
+  // Informações do batch
+  name        String
+  description String?
+  status      String @default("pending") // "pending", "processing", "completed", "failed"
+
+  // Dados de treinamento
+  dataSource       String // "intent_classifications", "conversations", "manual_upload"
+  startDate        DateTime? // Pegar dados a partir desta data
+  endDate          DateTime? // Até esta data
+  minConfidence    Float     @default(0.7) // Confidence mínimo para incluir
+  includeCorrections Boolean @default(true) // Incluir correções de agentes
+
+  // Resultados
+  samplesCount     Int? // Quantidade de amostras usadas
+  trainingMetrics  Json? // Métricas do treinamento: { "accuracy": 0.95, "loss": 0.05 }
+  modelVersion     String? // Versão do modelo gerado
+  improvements     Json? // Melhorias detectadas: { "intent_x": { "before": 0.85, "after": 0.92 } }
+
+  // Deployment
+  deployedAt       DateTime?
+  deployedBy       String? // ID do admin que fez deploy
+  previousBatchId  String? // ID do batch anterior (para rollback)
+
+  // Agendamento
+  scheduledFor     DateTime? // Se foi agendado
+  autoRetrain      Boolean   @default(false) // Re-treina automaticamente a cada N dias
+  retrainFrequency Int? // Dias entre retreinamentos automáticos
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@index([autoRetrain])
+  @@map("training_batches")
+}
+
+// Performance e analytics do sistema de IA
+model AIPerformanceLog {
+  id String @id @default(uuid())
+
+  // Período
+  date     DateTime @db.Date
+  hour     Int? // Hora do dia (0-23) para analytics horárias
+
+  // Métricas de classificação
+  totalClassifications Int   @default(0)
+  correctClassifications Int @default(0)
+  incorrectClassifications Int @default(0)
+  accuracy Float? // Calculado: correct / total
+
+  // Distribuição por provider
+  ollamaCount   Int @default(0)
+  minimaxCount  Int @default(0)
+  glmCount      Int @default(0)
+
+  // Performance
+  avgProcessingTime Float? // Milissegundos
+  avgConfidence     Float? // 0-1
+
+  // Intents mais comuns
+  topIntents Json? // { "abrir_ticket_ti": 45, "consultar_faq": 23, ... }
+
+  // Feedback
+  totalFeedbacks      Int @default(0)
+  positiveFeedbacks   Int @default(0)
+  negativeFeedbacks   Int @default(0)
+
+  // RAG Usage
+  ragQueriesCount     Int @default(0)
+  avgSimilarityScore  Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, hour])
+  @@index([date(sort: Desc)])
+  @@map("ai_performance_logs")
+}
+
+// Knowledge Graph - Relações entre problemas e soluções
+model KnowledgeNode {
+  id String @id @default(uuid())
+
+  // Tipo do nó
+  nodeType String // "problem", "solution", "equipment", "error", "procedure"
+
+  // Conteúdo
+  title       String
+  description String?
+  content     Json? // Conteúdo estruturado
+
+  // Embeddings
+  embedding   Json? // Vector para busca semântica
+
+  // Relações (armazenadas como JSON para flexibilidade)
+  relatedNodes Json? // { "causes": ["node_id1"], "solutions": ["node_id2"], "similar": ["node_id3"] }
+
+  // Estatísticas de uso
+  viewCount       Int      @default(0)
+  usefulCount     Int      @default(0)
+  notUsefulCount  Int      @default(0)
+  lastAccessedAt  DateTime?
+
+  // Qualidade
+  confidence      Float    @default(0.5) // Confiança na informação (0-1)
+  source          String? // Origem: "agent_created", "auto_generated", "imported"
+  verifiedBy      String? // ID do admin que verificou
+  verified        Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([nodeType])
+  @@index([verified])
+  @@index([confidence(sort: Desc)])
+  @@index([usefulCount(sort: Desc)])
+  @@map("knowledge_nodes")
 }
 
 // ===========================================================================
