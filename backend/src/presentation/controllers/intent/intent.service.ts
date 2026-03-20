@@ -32,14 +32,20 @@ export class IntentService {
   private readonly logger = new Logger(IntentService.name);
   private ollamaUrl: string;
   private ollamaModel: string;
-  private minimaxApiKey: string;
+  private minimaxApiKey: string; // Provider cloud principal
+  private glmApiKey: string; // Provider cloud alternativo (quando disponível)
   private enabled: boolean = false;
 
   constructor(private prisma: PrismaService) {
     // Configuração Ollama (local ou remoto)
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
     this.ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5:3b'; // ou 'chatglm3:6b', 'llama3.2:3b'
+
+    // MiniMax como fallback cloud principal
     this.minimaxApiKey = process.env.MINIMAX_API_KEY || '';
+
+    // GLM-4 como alternativa cloud (opcional)
+    this.glmApiKey = process.env.GLM_API_KEY || '';
 
     // Verificar se Ollama está disponível
     this.checkOllamaAvailability();
@@ -88,22 +94,45 @@ export class IntentService {
         try {
           result = await this.classifyWithOllama(userMessage);
         } catch (error) {
-          this.logger.warn(`Ollama falhou, tentando fallback para MiniMax...`);
+          this.logger.warn(`Ollama falhou, tentando fallback...`);
+
+          // Tentar MiniMax primeiro (já configurado)
           if (this.minimaxApiKey) {
-            result = await this.classifyWithMiniMax(userMessage);
-            usedProvider = 'minimax';
-            usedModel = 'abab6-chat';
+            try {
+              result = await this.classifyWithMiniMax(userMessage);
+              usedProvider = 'minimax';
+              usedModel = 'abab6.5-chat';
+            } catch (minimaxError) {
+              this.logger.warn(`MiniMax falhou, tentando GLM-4...`);
+              if (this.glmApiKey) {
+                result = await this.classifyWithGLM(userMessage);
+                usedProvider = 'glm';
+                usedModel = 'glm-4-flash';
+              } else {
+                throw minimaxError;
+              }
+            }
+          } else if (this.glmApiKey) {
+            result = await this.classifyWithGLM(userMessage);
+            usedProvider = 'glm';
+            usedModel = 'glm-4-flash';
           } else {
             throw error;
           }
         }
       } else if (this.minimaxApiKey) {
+        // MiniMax como fallback principal quando Ollama offline
         this.logger.log(`Ollama desabilitado, usando MiniMax como fallback...`);
         result = await this.classifyWithMiniMax(userMessage);
         usedProvider = 'minimax';
-        usedModel = 'abab6-chat';
+        usedModel = 'abab6.5-chat';
+      } else if (this.glmApiKey) {
+        this.logger.log(`Ollama desabilitado, usando GLM-4 como fallback...`);
+        result = await this.classifyWithGLM(userMessage);
+        usedProvider = 'glm';
+        usedModel = 'glm-4-flash';
       } else {
-        this.logger.warn('Intent Detection não disponível (Ollama offline e sem API Key do MiniMax)');
+        this.logger.warn('Intent Detection não disponível (Ollama offline e sem API Key)');
         return {
           intent: Intent.OTHER,
           confidence: 0,
@@ -178,31 +207,100 @@ Se não houver entidades relevantes, use entities vazio: "entities": {}`;
   }
 
   /**
+   * Classifica usando GLM-4 (Zhipu AI) via API
+   * Modelo recomendado: glm-4-flash (rápido e barato) ou glm-4 (mais preciso)
+   */
+  private async classifyWithGLM(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
+    const prompt = this.getPrompt(userMessage);
+
+    try {
+      const response = await axios.post(
+        'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        {
+          model: 'glm-4-flash', // Ou 'glm-4' para mais precisão
+          messages: [
+            {
+              role: 'system',
+              content: 'Você é um classificador de intenções para helpdesk. Responda APENAS com JSON válido, sem explicações adicionais.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.1,
+          top_p: 0.9,
+          max_tokens: 200,
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.glmApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        }
+      );
+
+      // GLM-4 usa formato OpenAI-compatible
+      const responseText = response.data.choices[0].message.content.trim();
+
+      if (!responseText) {
+        this.logger.error('GLM-4 retornou resposta vazia');
+        throw new Error('Resposta vazia do GLM-4');
+      }
+
+      // Extrair JSON
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+
+      if (!jsonMatch) {
+        this.logger.error(`GLM-4 não retornou JSON válido: ${responseText}`);
+        throw new Error('Resposta inválida do GLM-4');
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      // Validar intenção
+      const validIntents = Object.values(Intent);
+      if (!validIntents.includes(parsed.intent)) {
+        this.logger.warn(`Intenção inválida do GLM-4: ${parsed.intent}`);
+        parsed.intent = Intent.OTHER;
+      }
+
+      return {
+        intent: parsed.intent || Intent.OTHER,
+        confidence: parsed.confidence || 0.5,
+        entities: parsed.entities || {},
+      };
+    } catch (error: any) {
+      this.logger.error(`GLM-4 fallback failed: ${error.message}`);
+      if (error.response?.data) {
+        this.logger.error(`GLM-4 error details: ${JSON.stringify(error.response.data)}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Classifica usando MiniMax AI via API
+   * Provider cloud principal (fallback quando Ollama offline)
    */
   private async classifyWithMiniMax(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
     const prompt = this.getPrompt(userMessage);
 
     try {
+      // MiniMax agora usa formato OpenAI-compatible
       const response = await axios.post(
-        'https://api.minimaxi.chat/v1/text/chatcompletion',
+        'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
         {
-          model: 'abab6-chat',
+          model: 'abab6.5-chat',
           messages: [
             {
-              sender_type: 'USER',
-              sender_name: 'User',
-              text: prompt
-            }
-          ],
-          reply_constraints: {
-            sender_type: 'BOT',
-            sender_name: 'Assistant'
-          },
-          bot_setting: [
-            {
-              bot_name: 'Assistant',
+              role: 'system',
               content: 'Você é um classificador de intenções para helpdesk. Responda APENAS com JSON válido, sem explicações adicionais.'
+            },
+            {
+              role: 'user',
+              content: prompt
             }
           ],
           temperature: 0.1,
@@ -224,8 +322,8 @@ Se não houver entidades relevantes, use entities vazio: "entities": {}`;
         throw new Error(`MiniMax API error: ${response.data.base_resp.status_msg}`);
       }
 
-      // MiniMax retorna no formato: response.data.reply
-      const responseText = response.data.reply?.trim();
+      // MiniMax retorna no formato OpenAI-compatible agora
+      const responseText = response.data.choices?.[0]?.message?.content?.trim() || response.data.reply?.trim();
 
       if (!responseText) {
         this.logger.error('MiniMax retornou resposta vazia');

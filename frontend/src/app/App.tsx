@@ -180,6 +180,7 @@ function MainContent() {
                 setActiveMenuItem(item);
                 setIsMobileSidebarOpen(false);
               }}
+              isMobileControlled={true}
             />
           </div>
         </>

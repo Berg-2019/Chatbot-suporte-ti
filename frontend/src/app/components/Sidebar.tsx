@@ -110,7 +110,7 @@ const menuStructure: MenuItem[] = [
   },
 ];
 
-export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
+export default function Sidebar({ activeItem, onItemClick, isMobileControlled }: SidebarProps & { isMobileControlled?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const { profile, user, logout } = useAuth();
   const badges = useBadges();
@@ -236,17 +236,19 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile menu button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg shadow-lg"
-        style={{ backgroundColor: 'var(--cw-bg-tertiary)', color: 'var(--cw-text-primary)' }}
-      >
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+      {/* Mobile menu button (only if not externally controlled) */}
+      {!isMobileControlled && (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg shadow-lg"
+          style={{ backgroundColor: 'var(--cw-bg-tertiary)', color: 'var(--cw-text-primary)' }}
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      )}
 
-      {/* Mobile overlay */}
-      {isOpen && (
+      {/* Mobile overlay (only if not externally controlled) */}
+      {!isMobileControlled && isOpen && (
         <div
           className="lg:hidden fixed inset-0 bg-black/40 z-30"
           onClick={() => setIsOpen(false)}
@@ -256,9 +258,9 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
       {/* Sidebar — adaptive single column */}
       <aside
         className={`
-          fixed lg:sticky top-0 left-0 h-screen flex flex-col z-40 border-r
+          fixed lg:sticky top-0 left-0 h-screen flex flex-col border-r
           transition-all duration-200 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${isMobileControlled ? 'translate-x-0' : isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
         style={{
           width: 'fit-content',
@@ -267,6 +269,7 @@ export default function Sidebar({ activeItem, onItemClick }: SidebarProps) {
           backgroundColor: 'var(--cw-bg-sidebar)',
           borderColor: 'var(--cw-border)',
           overflow: 'hidden',
+          zIndex: isMobileControlled ? 'auto' : '40',
         }}
       >
         {/* Header */}
