@@ -160,13 +160,15 @@ services:
       GLPI_USER_TOKEN: ${GLPI_USER_TOKEN}
       GLPI_ADMIN_USER: ${GLPI_ADMIN_USER}
       GLPI_ADMIN_PASSWORD: ${GLPI_ADMIN_PASSWORD}
-      # Ollama Configuration
-      OLLAMA_URL: http://ollama:11434
+      # Ollama Configuration (usando host ao invés de container)
+      OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
     volumes:
       - backend_logs:/app/logs
     networks:
       - helpdesk_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -174,8 +176,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      ollama:
-        condition: service_started
 
   # ============================================================================
   # Frontend Next.js

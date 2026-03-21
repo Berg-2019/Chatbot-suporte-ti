@@ -167,6 +167,15 @@ class FlowHandler {
     // Obter sessão atual (agora só chega aqui se não tem ticket ativo ou quer ação diferente)
     let session = await redisService.getSession(phone);
 
+    // === Comando CANCELAR ===
+    // Permite sair do fluxo atual e resetar interação
+    if (['cancelar', 'cancel', 'sair', 'exit', 'parar', 'stop'].includes(normalizedText)) {
+      await redisService.deleteSession(phone);
+      console.log(`❌ Usuário ${phone} cancelou o fluxo`);
+      await this.sendMessage(sock, from, '❌ *Operação cancelada*\n\nSua solicitação foi cancelada e a conversa foi resetada.\n\nDigite *oi* ou *menu* para começar novamente. 😊');
+      return;
+    }
+
     // === Comando STATUS ===
     // Formato: "status 12345" ou "status"
     const statusMatch = normalizedText.match(/^status\s*(\d+)?$/);
@@ -265,6 +274,103 @@ class FlowHandler {
       await redisService.setSession(phone, session);
       await this.sendMessage(sock, from, config.messages.welcome);
       return;
+    }
+
+    // 🧠 CLASSIFICAÇÃO DE INTENÇÃO INTELIGENTE - Sem ticket ativo
+    // Se não tem sessão E não é comando de menu, classificar intenção primeiro
+    if (!session && !isMenuCommand) {
+      try {
+        const intent = await intentService.classify(text, false);
+        console.log(`🧠 Intenção classificada (sem ticket): ${intent.intent} (${(intent.confidence * 100).toFixed(0)}%)`);
+
+        // Se alta confiança de abertura de ticket, ir direto para coleta de dados
+        if ((intent.intent === 'abrir_ticket_ti' || intent.intent === 'abrir_ticket_eletrica') && intent.confidence >= 0.70) {
+          console.log(`✨ SKIP MENU - Criando ticket direto para: "${text}"`);
+
+          // Verificar se contato já está cadastrado
+          const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+          let contactData = null;
+
+          try {
+            const contactRes = await axios.get(`${backendUrl}/api/contacts/by-jid/${encodeURIComponent(from)}`, {
+              timeout: 3000,
+            });
+            contactData = contactRes.data;
+          } catch (e) {
+            // Contato não encontrado, precisará coletar dados
+          }
+
+          const ticketType = intent.intent === 'abrir_ticket_eletrica' ? 'electric' : 'ti';
+
+          if (contactData) {
+            // Contato existe - já tem nome e departamento, só precisa categoria e local
+            session = {
+              state: ticketType === 'electric' ? STATES.SELECT_SECTOR_ELECTRIC : STATES.SELECT_SECTOR_TI,
+              data: {
+                contactName: contactData.name,
+                userDepartment: contactData.sector,
+                ticketType: ticketType,
+                aiDetected: true,
+                originalMessage: text,
+                problem: text, // Usar mensagem original como descrição
+              }
+            };
+            await redisService.setSession(phone, session);
+
+            const message = `👋 Olá *${contactData.name}*!\n\nIdentifiquei que você tem um problema: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"\n\n${ticketType === 'electric' ? config.messages.askSectorElectric : config.messages.askSectorTI}`;
+            await this.sendMessage(sock, from, message);
+            return;
+          } else {
+            // Contato novo - tentar extrair nome do WhatsApp
+            let whatsappName = null;
+            try {
+              // Buscar nome do perfil do WhatsApp
+              const contact = await sock.onWhatsApp(from);
+              if (contact && contact[0]?.notify) {
+                whatsappName = contact[0].notify;
+                console.log(`📱 Nome do WhatsApp extraído: ${whatsappName}`);
+              }
+            } catch (e) {
+              console.log('⚠️ Não foi possível extrair nome do WhatsApp:', e.message);
+            }
+
+            if (whatsappName) {
+              // Nome extraído - pular pergunta de nome, ir direto para departamento
+              session = {
+                state: STATES.ASK_DEPARTMENT,
+                data: {
+                  contactName: whatsappName,
+                  ticketType: ticketType,
+                  aiDetected: true,
+                  originalMessage: text,
+                  problem: text,
+                  autoExtractedName: true, // Flag para saber que foi auto-extraído
+                }
+              };
+              await redisService.setSession(phone, session);
+              await this.sendMessage(sock, from, `👋 Olá *${whatsappName}*!\n\nIdentifiquei que você tem um problema.\n\n${config.messages.askDepartment}`);
+              return;
+            } else {
+              // Não conseguiu extrair nome - perguntar
+              session = {
+                state: STATES.ASK_NAME,
+                data: {
+                  ticketType: ticketType,
+                  aiDetected: true,
+                  originalMessage: text,
+                  problem: text,
+                }
+              };
+              await redisService.setSession(phone, session);
+              await this.sendMessage(sock, from, '👋 Olá! Percebi que você precisa de ajuda.\n\nPrimeiro, qual é o seu *nome completo*?');
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Erro na classificação inteligente, continuando com menu:', error.message);
+        // Em caso de erro, continua para o menu normal
+      }
     }
 
     // Se não tem sessão, iniciar com menu (verificação de ticket ativo já foi feita acima)
@@ -488,6 +594,11 @@ class FlowHandler {
 
     session.data.userDepartment = department;
 
+    // 🧠 Se IA detectou e já tem descrição (originalMessage), usar como problem
+    if (session.data.aiDetected && session.data.originalMessage && !session.data.problem) {
+      session.data.problem = session.data.originalMessage;
+    }
+
     // Agora perguntar a categoria do problema (TI ou Elétrica)
     if (session.data.ticketType === 'electric') {
       session.state = STATES.SELECT_SECTOR_ELECTRIC;
@@ -511,9 +622,17 @@ class FlowHandler {
 
     session.data.category = config.sectorsTI[sectorIndex].name;
     session.data.categoryId = config.sectorsTI[sectorIndex].id;
-    session.state = STATES.DESCRIBE_PROBLEM;
-    await redisService.setSession(phone, session);
-    await this.sendMessage(sock, from, config.messages.askProblem);
+
+    // 🧠 Se IA detectou e já tem descrição, pular para local
+    if (session.data.aiDetected && session.data.problem) {
+      session.state = STATES.ASK_LOCATION;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, config.messages.askLocation);
+    } else {
+      session.state = STATES.DESCRIBE_PROBLEM;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, config.messages.askProblem);
+    }
   }
 
   async handleSelectSectorElectric(sock, from, text, session) {
@@ -527,9 +646,17 @@ class FlowHandler {
 
     session.data.category = config.sectorsElectric[sectorIndex].name;
     session.data.categoryId = config.sectorsElectric[sectorIndex].id;
-    session.state = STATES.DESCRIBE_PROBLEM;
-    await redisService.setSession(phone, session);
-    await this.sendMessage(sock, from, config.messages.askProblem);
+
+    // 🧠 Se IA detectou e já tem descrição, pular para local
+    if (session.data.aiDetected && session.data.problem) {
+      session.state = STATES.ASK_LOCATION;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, config.messages.askLocation);
+    } else {
+      session.state = STATES.DESCRIBE_PROBLEM;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, config.messages.askProblem);
+    }
   }
 
   async handleSelectSectorGeneric(sock, from, text, session) {

@@ -84,7 +84,7 @@ Digite o número da opção desejada:`,
 3️⃣ Hardware (computador, impressora)
 4️⃣ Administrativo (acesso, email, usuário)
 
-Digite o número:`,
+Digite o número ou *cancelar* para sair:`,
 
     askSectorElectric: `⚡ Qual tipo de serviço elétrico você precisa?
 
@@ -94,13 +94,13 @@ Digite o número:`,
 4️⃣ Ar Condicionado (manutenção, instalação)
 5️⃣ Manutenção Geral (fiação, instalação)
 
-Digite o número:`,
+Digite o número ou *cancelar* para sair:`,
 
-    askDepartment: '🏢 Em qual *setor/departamento* você trabalha?\n\nExemplo: Financeiro, RH, Produção, Administrativo, etc.',
+    askDepartment: '🏢 Em qual *setor/departamento* você trabalha?\n\nExemplo: Financeiro, RH, Produção, Administrativo, etc.\n\n_Digite *cancelar* para sair_',
 
-    askProblem: '📝 Descreva brevemente o seu problema:',
+    askProblem: '📝 Descreva brevemente o seu problema:\n\n_Digite *cancelar* para sair_',
 
-    askLocation: '📍 Qual é o local exato do problema? (Ex: Sala de Reuniões, Predio Administrativo, Mesa 04, etc.)',
+    askLocation: '📍 Qual é o local exato do problema?\n\n(Ex: Sala de Reuniões, Predio Administrativo, Mesa 04, etc.)\n\n_Digite *cancelar* para sair_',
 
     confirmTicket: (data) => `✅ Vou criar seu chamado com os dados:
 

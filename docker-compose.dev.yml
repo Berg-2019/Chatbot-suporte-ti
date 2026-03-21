@@ -137,12 +137,17 @@ services:
       GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-dev-app-token}
       GLPI_USER_TOKEN: ${GLPI_USER_TOKEN:-dev-user-token}
       FRONTEND_URL: http://localhost:5173,http://192.168.7.118,http://192.168.7.118:5173,http://helpdeskmsm.com.br,https://helpdeskmsm.com.br,https://www.helpdeskmsm.com.br
+      # Ollama Configuration
+      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
     volumes:
       - ./backend:/app:delegated
       - /app/node_modules
       - backend_logs:/app/logs
     networks:
       - helpdesk_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

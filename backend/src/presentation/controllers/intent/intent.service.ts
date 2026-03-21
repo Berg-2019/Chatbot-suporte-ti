@@ -3,7 +3,7 @@
  * Classifica intenções de mensagens usando LLM local via Ollama (GLM, Qwen, Llama, etc.)
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { AdaptiveLearningService } from '../../../infrastructure/ai/adaptive-learning.service';
 import { RAGService } from '../../../infrastructure/ai/rag.service';
@@ -30,7 +30,7 @@ export interface ClassificationResult {
 }
 
 @Injectable()
-export class IntentService {
+export class IntentService implements OnModuleInit {
   private readonly logger = new Logger(IntentService.name);
   private ollamaUrl: string;
   private ollamaModel: string;
@@ -56,9 +56,13 @@ export class IntentService {
 
     // GLM-4 como alternativa cloud (opcional)
     this.glmApiKey = process.env.GLM_API_KEY || '';
+  }
 
-    // Verificar se Ollama está disponível
-    this.checkOllamaAvailability();
+  /**
+   * Executado após módulo inicializar - verifica Ollama
+   */
+  async onModuleInit() {
+    await this.checkOllamaAvailability();
   }
 
   /**
