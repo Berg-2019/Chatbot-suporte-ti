@@ -145,7 +145,7 @@ cmd_dev() {
     echo -e "${GREEN}✅ Ambiente de desenvolvimento iniciado!${NC}"
     echo ""
     echo -e "   Backend:  ${BLUE}http://localhost:3000${NC} (debug: 9229)"
-    echo -e "   Frontend: ${BLUE}http://localhost:3001${NC}"
+    echo -e "   Frontend: ${BLUE}http://localhost:5173${NC}"
     echo -e "   Bot:      porta ${BLUE}3002${NC}"
     echo -e "   RabbitMQ: ${BLUE}http://localhost:15672${NC}"
     echo -e "   GLPI:     ${BLUE}http://localhost:8080${NC}"

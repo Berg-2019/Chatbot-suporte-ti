@@ -7,6 +7,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { AdaptiveLearningService } from '../../../infrastructure/ai/adaptive-learning.service';
 import { RAGService } from '../../../infrastructure/ai/rag.service';
+import { KnowledgeBaseService } from '../../../infrastructure/ai/knowledge-base.service';
 import axios from 'axios';
 
 // Intenções suportadas
@@ -39,14 +40,17 @@ export class IntentService implements OnModuleInit {
   private enabled: boolean = false;
   private adaptiveLearning?: AdaptiveLearningService;
   private ragService?: RAGService;
+  private knowledgeBase?: KnowledgeBaseService;
 
   constructor(
     private prisma: PrismaService,
     adaptiveLearning?: AdaptiveLearningService,
     ragService?: RAGService,
+    knowledgeBase?: KnowledgeBaseService,
   ) {
     this.adaptiveLearning = adaptiveLearning;
     this.ragService = ragService;
+    this.knowledgeBase = knowledgeBase;
     // Configuração Ollama (local ou remoto)
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
     this.ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5:3b'; // ou 'chatglm3:6b', 'llama3.2:3b'
@@ -119,53 +123,79 @@ export class IntentService implements OnModuleInit {
         }
       }
 
-      let result;
-      let usedProvider = 'ollama';
-      let usedModel = this.ollamaModel;
-
-      if (this.enabled) {
+      // 📚 Knowledge Base: Buscar conhecimento técnico relevante
+      let knowledgeContext = '';
+      if (this.knowledgeBase) {
         try {
-          result = await this.classifyWithOllama(userMessage, ragContext, suggestedIntent);
-        } catch (error) {
-          this.logger.warn(`Ollama falhou, tentando fallback...`);
+          knowledgeContext = await this.knowledgeBase.generateEnrichedContext(userMessage);
+          if (knowledgeContext) {
+            this.logger.log(`📚 Contexto enriquecido com base de conhecimento`);
+          }
+        } catch (error: any) {
+          this.logger.warn(`⚠️ Erro ao buscar base de conhecimento: ${error.message}`);
+        }
+      }
 
-          // Tentar MiniMax primeiro (já configurado)
-          if (this.minimaxApiKey) {
+      // Combinar RAG + Knowledge Base
+      const fullContext = [ragContext, knowledgeContext].filter(c => c.length > 0).join('\n\n');
+
+      let result;
+      let usedProvider = 'minimax';
+      let usedModel = 'abab6-chat';
+
+      // 🚀 MiniMax como provider PRIMÁRIO (mais humanizado e fluido)
+      if (this.minimaxApiKey) {
+        try {
+          this.logger.log(`🤖 Usando MiniMax (abab6-chat) como provider primário...`);
+          result = await this.classifyWithMiniMax(userMessage, fullContext, suggestedIntent);
+        } catch (error) {
+          this.logger.warn(`MiniMax falhou, tentando Ollama como fallback...`);
+
+          // Fallback para Ollama se disponível
+          if (this.enabled) {
             try {
-              result = await this.classifyWithMiniMax(userMessage, ragContext, suggestedIntent);
-              usedProvider = 'minimax';
-              usedModel = 'abab6.5-chat';
-            } catch (minimaxError) {
-              this.logger.warn(`MiniMax falhou, tentando GLM-4...`);
+              result = await this.classifyWithOllama(userMessage, fullContext, suggestedIntent);
+              usedProvider = 'ollama';
+              usedModel = this.ollamaModel;
+            } catch (ollamaError) {
+              this.logger.warn(`Ollama falhou, tentando GLM-4...`);
               if (this.glmApiKey) {
-                result = await this.classifyWithGLM(userMessage, ragContext, suggestedIntent);
+                result = await this.classifyWithGLM(userMessage, fullContext, suggestedIntent);
                 usedProvider = 'glm';
                 usedModel = 'glm-4-flash';
               } else {
-                throw minimaxError;
+                throw error;
               }
             }
           } else if (this.glmApiKey) {
-            result = await this.classifyWithGLM(userMessage, ragContext, suggestedIntent);
+            result = await this.classifyWithGLM(userMessage, fullContext, suggestedIntent);
             usedProvider = 'glm';
             usedModel = 'glm-4-flash';
           } else {
             throw error;
           }
         }
-      } else if (this.minimaxApiKey) {
-        // MiniMax como fallback principal quando Ollama offline
-        this.logger.log(`Ollama desabilitado, usando MiniMax como fallback...`);
-        result = await this.classifyWithMiniMax(userMessage, ragContext, suggestedIntent);
-        usedProvider = 'minimax';
-        usedModel = 'abab6.5-chat';
+      } else if (this.enabled) {
+        // Ollama como segunda opção se MiniMax não configurado
+        try {
+          result = await this.classifyWithOllama(userMessage, fullContext, suggestedIntent);
+          usedProvider = 'ollama';
+          usedModel = this.ollamaModel;
+        } catch (error) {
+          if (this.glmApiKey) {
+            result = await this.classifyWithGLM(userMessage, fullContext, suggestedIntent);
+            usedProvider = 'glm';
+            usedModel = 'glm-4-flash';
+          } else {
+            throw error;
+          }
+        }
       } else if (this.glmApiKey) {
-        this.logger.log(`Ollama desabilitado, usando GLM-4 como fallback...`);
-        result = await this.classifyWithGLM(userMessage, ragContext, suggestedIntent);
+        result = await this.classifyWithGLM(userMessage, fullContext, suggestedIntent);
         usedProvider = 'glm';
         usedModel = 'glm-4-flash';
       } else {
-        this.logger.warn('Intent Detection não disponível (Ollama offline e sem API Key)');
+        this.logger.warn('❌ Intent Detection não disponível (nenhum provider configurado)');
         return {
           intent: Intent.OTHER,
           confidence: 0,
@@ -202,55 +232,41 @@ export class IntentService implements OnModuleInit {
   }
 
   private getPrompt(userMessage: string, ragContext?: string, suggestedIntent?: string): string {
-    let prompt = `Você é um classificador de intenções para um sistema de helpdesk de TI.`;
+    // Prompt otimizado: menos tokens, mais eficiente
 
-    // Adicionar contexto RAG se disponível
-    if (ragContext && ragContext.length > 0) {
-      prompt += `\n\n${ragContext}`;
-    }
-
-    // Adicionar sugestão de padrão se disponível
+    // Se temos sugestão de padrão com alta confiança, usar prompt curto
     if (suggestedIntent) {
-      prompt += `\n\n**Sugestão baseada em padrões aprendidos:** O sistema detectou que mensagens similares geralmente são classificadas como "${suggestedIntent}". Considere esta sugestão, mas analise criticamente.`;
+      return `Mensagem: "${userMessage}"
+Padrão aprendido sugere: ${suggestedIntent}
+Confirme ou corrija. JSON: {"intent":"...","confidence":0.95,"entities":{}}`;
     }
 
-    prompt += `
+    // Se temos RAG context, usar versão compacta com exemplo
+    if (ragContext && ragContext.length > 0) {
+      return `${ragContext}
 
-Analise a mensagem do usuário e classifique em UMA das intenções abaixo:`;
+Msg: "${userMessage}"
+Classifique usando padrões acima.
+JSON: {"intent":"...","confidence":0.95,"entities":{}}`;
+    }
 
-    return prompt + `
+    // Prompt otimizado com exemplos claros
+    return `Classifique a mensagem:
 
-**Intenções disponíveis:**
-- abrir_ticket_ti: Problemas com computador, rede, sistema, software, impressora, internet
-- abrir_ticket_eletrica: Problemas elétricos, ar-condicionado, iluminação, tomadas
-- reservar_equipamento: Quer reservar notebook, projetor, cabo, adaptador
-- consultar_faq: Pergunta genérica que pode estar na FAQ (como fazer X, o que é Y)
-- consultar_ticket: Quer saber status de um ticket/chamado existente
-- falar_tecnico: Quer falar com uma pessoa, atendimento humano
-- avaliar_atendimento: Quer avaliar o atendimento, dar nota, feedback
-- saudacao: Apenas cumprimentando (oi, olá, bom dia)
-- outro: Não se encaixa em nenhuma categoria acima
-
-**Mensagem do usuário:**
 "${userMessage}"
 
-**IMPORTANTE:**
-1. Responda APENAS com JSON válido
-2. Não adicione explicações ou texto extra antes ou depois do JSON
-3. Use o formato exato abaixo
+Intenções:
+1. abrir_ticket_ti - Relata PROBLEMA técnico (PC/internet/sistema/impressora quebrou, não funciona, parou)
+2. abrir_ticket_eletrica - Relata PROBLEMA elétrico (luz/tomada/AC parou, não funciona)
+3. reservar_equipamento - QUER reservar equipamento
+4. consultar_ticket - QUER saber status
+5. falar_tecnico - PEDE falar com pessoa/técnico (sem mencionar problema técnico específico)
+6. saudacao - Só cumprimento
+7. outro - Nada acima
 
-**Formato de resposta (JSON):**
-{
-  "intent": "nome_da_intencao",
-  "confidence": 0.95,
-  "entities": {
-    "equipamento": "impressora",
-    "problema": "não imprime",
-    "setor": "RH"
-  }
-}
+Regra: Problema técnico = abrir_ticket, não = falar_tecnico
 
-Se não houver entidades relevantes, use entities vazio: "entities": {}`;
+JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
   }
 
   /**
@@ -339,20 +355,20 @@ Se não houver entidades relevantes, use entities vazio: "entities": {}`;
       const response = await axios.post(
         'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
         {
-          model: 'abab6.5-chat',
+          model: 'abab6-chat', // Modelo base e estável
           messages: [
             {
               role: 'system',
-              content: 'Você é um classificador de intenções para helpdesk. Responda APENAS com JSON válido, sem explicações adicionais.'
+              content: 'Assistente helpdesk. Retorne apenas JSON compacto.'
             },
             {
               role: 'user',
               content: prompt
             }
           ],
-          temperature: 0.1,
-          top_p: 0.9,
-          max_tokens: 200
+          temperature: 0.2, // Um pouco mais criativo para humanização
+          top_p: 0.95,
+          max_tokens: 80 // Reduzido de 200 para 80 (economiza tokens)
         },
         {
           headers: {
