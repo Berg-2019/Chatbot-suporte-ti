@@ -1,139 +1,121 @@
-# 🎫 Helpdesk WhatsApp + GLPI
+# 🎫 Helpdesk WhatsApp — MSM Sistema
 
-Sistema de atendimento técnico integrado ao WhatsApp com painel administrativo e GLPI.
+Sistema de helpdesk corporativo com **3 frontends separados** por área e **Hermes Agent** como brain conversacional humanizado.
 
 ## ✨ Funcionalidades
 
-### Bot WhatsApp
-- 🤖 **Chatbot** - Primeiro atendimento automatizado
-- 💬 **Chat unificado** - Bot e técnicos na mesma conversa
-- 📱 **Multi-sessão** - Suporte a múltiplos atendimentos simultâneos
+### 🤖 Hermes Agent (WhatsApp Bot)
+- **Conversa natural** — Sem menus numerados, diálogo fluido em português
+- **Coleta inteligente** — Problema, área, setor, localização, nome
+- **Integração MiniMax** — IA generativa para respostas humanizadas
+- **Escalação automática** — Transfere para humano quando necessário
 
-### Painel Administrativo
-- 📊 **Dashboard** - Métricas em tempo real com gráficos
-- 👥 **Gestão de Usuários** - Criar usuários integrados ao GLPI
-- 📈 **Relatórios** - Exportação CSV, filtros por data
-- 🤖 **Configurar Bot** - Mensagens e horários de atendimento
-- 📦 **Estoque** - Controle de peças e equipamentos
-- ❓ **FAQ** - Base de conhecimento
+### 🏢 Multi-Frontend (3 áreas)
 
-### Integrações
-- 🎫 **GLPI** - Sincronização de tickets e usuários
-- 🔄 **Filas RabbitMQ** - Processamento assíncrono
-- ⚡ **Cache Redis** - Sessões e estado
+| Frontend | Propósito | Tema |
+|----------|-----------|------|
+| **TI** | Técnicos de suporte | Chatwoot-style (dark blue) |
+| **Elétrica** | Técnicos de campo (NR-10/NR-35) | Gold (#FFC700) |
+| **Compras** | Aprovações e requisições | Green (#22C55E) |
 
-### Níveis Técnicos
-- 🏷️ **N1, N2, N3** - Classificação automática por grupos GLPI
-- ⏱️ **SLA Monitoring** - Escalonamento automático
+### 📊 Backend (NestJS + Prisma)
+- Tickets filtrados por setor
+- Stock unificado (TI + Elétrica)
+- PurchaseRequests (workflow de compras)
+- Auth SSO com JWT
 
 ---
 
 ## 🚀 Início Rápido
 
-### Usando o Script (Recomendado)
+### 1. Configurar Ambiente
 
 ```bash
-# Clonar projeto
-git clone <repo> && cd Chatbot-suporte-ti
+# Clonar e entrar no projeto
+git clone https://github.com/Berg-2019/Chatbot-suporte-ti.git
+cd Chatbot-suporte-ti
 
-# Copiar configuração
+# Copiar variáveis
 cp .env.example .env
-# Edite o .env com suas configurações
+# Editar .env com suas chaves (MINIMAX_API_KEY, etc)
 
-# Instalar dependências
-./helpdesk.sh install
-
-# Modo Desenvolvimento (Docker com hot-reload)
-./helpdesk.sh dev
-
-# Modo Produção (Docker)
-./helpdesk.sh prod
+# Subir serviços principais
+docker compose -f docker-compose.dev.yml up -d postgres redis rabbitmq backend hermes hermes-tools
 ```
 
-### Comandos Disponíveis
+### 2. Escanear QR Code (primeira vez)
 
-| Comando | Descrição |
-|---------|-----------|
-| `./helpdesk.sh install` | Instala dependências npm em todos os serviços |
-| `./helpdesk.sh build` | Constrói imagens Docker para produção |
-| `./helpdesk.sh dev` | Inicia ambiente de desenvolvimento (hot-reload) |
-| `./helpdesk.sh prod` | Inicia em modo produção |
-| `./helpdesk.sh stop` | Para todos os containers |
-| `./helpdesk.sh logs [serviço]` | Mostra logs (todos ou de um serviço específico) |
-| `./helpdesk.sh status` | Mostra status dos containers |
-| `./helpdesk.sh migrate` | Executa migrações do Prisma |
-| `./helpdesk.sh shell <serviço>` | Acessa shell de um container |
+```bash
+docker logs -f helpdesk_hermes
+# Escaneie o QR code quando aparecer
 
-### Portas em Desenvolvimento
-
-| Serviço | Porta |
-|---------|-------|
-| Backend | 3000 (debug: 9229) |
-| Frontend | 3001 |
-| Bot | 3002 |
-| GLPI | 8080 |
-| RabbitMQ | 15672 |
-
----
-
-## ⚙️ Configuração
-
-### Variáveis de Ambiente (.env)
-
-```env
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/helpdesk
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# RabbitMQ
-RABBITMQ_URL=amqp://user:pass@localhost:5672
-
-# JWT
-JWT_SECRET=sua-chave-secreta
-
-# GLPI
-GLPI_URL=http://localhost:8080/apirest.php
-GLPI_APP_TOKEN=seu_app_token
-GLPI_USER_TOKEN=seu_user_token
-
-# Frontend (produção)
-NEXT_PUBLIC_API_URL=https://bk.seudominio.com.br
+# Ou via exec
+docker exec -it helpdesk_hermes hermes whatsapp
 ```
 
-### Configuração GLPI
+### 3. Acessar Frontends
 
-1. Acesse GLPI → Configuração → Geral → API
-2. Habilite API REST
-3. Gere App Token e User Token
-4. Configure no `.env`
+```bash
+# Frontend TI (em desenvolvimento)
+# Acesse http://localhost:5173
 
-### Grupos GLPI para Níveis
+# Frontend Elétrica (suport-eletric repo)
+# Acesse http://localhost:8080
 
-Crie os seguintes grupos no GLPI:
-- `Tecnicos > Tecnico L1` → Nível N1
-- `Tecnicos > Tecnico L2` → Nível N2  
-- `Tecnicos > Tecnico L3` → Nível N3
-- `Admin` → Role ADMIN
-- `Estoque` → Role ADMIN
+# Frontend Compras (a criar)
+```
 
 ---
 
 ## 🏗️ Arquitetura
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  WhatsApp   │───▶│    Bot      │───▶│   Backend   │
-│  (Baileys)  │    │  (Node.js)  │    │  (NestJS)   │
-└─────────────┘    └─────────────┘    └──────┬──────┘
-                                              │
-                   ┌──────────────────────────┼──────────────────────────┐
-                   │                          │                          │
-              ┌────▼────┐              ┌──────▼──────┐            ┌──────▼──────┐
-              │  Redis  │              │ PostgreSQL  │            │    GLPI     │
-              │ (Cache) │              │   (Dados)   │            │  (Tickets)  │
-              └─────────┘              └─────────────┘            └─────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        BACKEND (NestJS + Prisma)                        │
+│   Auth (SSO/JWT) │ Tickets │ Stock │ Purchases │ PurchaseRequests      │
+└─────────────────────────────────────────────────────────────────────────┘
+          │                    │                    │
+          ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   FRONTEND TI   │  │ FRONTEND ELÉTR  │  │ FRONTEND COMPRAS│
+│  support-mobile │  │  suport-eletric │  │ support-compras │
+│   (Chatwoot)    │  │    (Gold)       │  │    (Green)      │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+         │                    │                    │
+         └────────────────────┴────────────────────┘
+                     Hermes Agent (WhatsApp Bot)
+                              │
+                    ┌─────────┴─────────┐
+                    │   MiniMax/M2     │
+                    │   (IA Provider)  │
+                    └──────────────────┘
+```
+
+### Fluxo de Atendimento
+
+```
+Cliente (WhatsApp)
+       │
+       ▼
+Hermes Agent (IA conversacional)
+       │
+       ├─► Skill: helpdesk-conversation
+       │         │
+       │         ├─► Coleta dados (natural)
+       │         ├─► Cria ticket no backend
+       │         └─► Escala se necessário
+       │
+       ▼
+Backend (NestJS)
+       │
+       ├─► Ticket criado
+       ├─► WebSocket notification
+       │
+       ▼
+Técnico (Frontend TI ou Elétrica)
+       │
+       ▼
+Se necesita compra ──► PurchaseRequest ──► Compras (Frontend)
 ```
 
 ---
@@ -142,56 +124,127 @@ Crie os seguintes grupos no GLPI:
 
 ```
 Chatbot-suporte-ti/
-├── backend/           # API NestJS (Clean Architecture)
+├── backend/                 # API NestJS (Clean Architecture)
 │   ├── src/
-│   │   ├── domain/           # Entities, DTOs
-│   │   ├── infrastructure/   # Database, External APIs
-│   │   └── presentation/     # Controllers, Gateways
-│   └── prisma/               # Schema e migrations
+│   │   ├── domain/        # Entities, DTOs, interfaces
+│   │   ├── infrastructure/ # Database, External APIs
+│   │   └── presentation/ # Controllers, Gateways
+│   └── prisma/schema.prisma
 │
-├── frontend/          # Interface Next.js
-│   ├── app/
-│   │   ├── admin/           # Painel administrativo
-│   │   ├── dashboard/       # Dashboard técnicos
-│   │   └── login/           # Autenticação
-│   └── components/          # Componentes reutilizáveis
+├── frontend/               # Legacy (referência)
 │
-├── bot/               # Bot WhatsApp
-│   └── src/
-│       ├── handlers/        # Processamento mensagens
-│       └── services/        # GLPI, RabbitMQ
+├── bot/                    # Legacy (flow-handler.js)
 │
-├── nginx/             # Configurações Nginx
-├── docker-compose.yml         # Produção
-├── docker-compose.dev.yml     # Desenvolvimento (hot-reload)
-├── helpdesk.sh                # Script unificado de gerenciamento
-└── .env.example               # Template de configuração
+├── hermes-agent/           # Hermes Agent (submodule)
+│   └── skills/
+│
+├── hermes-integration/     # Integração Hermes
+│   ├── backend-tools/      # Bridge server (Node.js)
+│   ├── config/            # Configurações
+│   └── skills/            # Skills helpdesk
+│
+├── docker-compose.yml      # Produção
+├── docker-compose.dev.yml  # Desenvolvimento
+└── CLAUDE.md               # Este arquivo
 ```
 
 ---
 
-## 🌐 Portas e Acesso
+## 🔧 Configuração
 
-| Serviço | Desenvolvimento | Docker (Interno) | Produção (Externo via Proxy) |
-|---------|-----------------|------------------|------------------------------|
-| **Frontend** | 3001 | 3000 | https://helpdeskmsm.com.br |
-| **Backend** | 3000 | 3000 | https://helpdeskmsm.com.br/api |
-| **GLPI** | 8080 | 80 | https://glpi.helpdeskmsm.com.br |
-| **PostgreSQL** | 5432 | 5432 | 5432 (se exposto) |
-| **Redis** | 6379 | 6379 | 6379 (se exposto) |
-| **RabbitMQ** | 5672 / 15672 | 5672 / 15672 | 15672 |
+### Variáveis de Ambiente
 
-### 🔒 Nginx Proxy
-Em produção, o acesso é gerenciado pelo container `helpdesk_proxy` que redireciona o tráfego:
-- Porta 80 -> Redireciona para 443 (HTTPS)
-- Porta 443 -> Redireciona para os serviços corretos baseados na rota ou subdomínio.
+```bash
+# MiniMax (Provider IA)
+MINIMAX_API_KEY=sua_chave_minimax
 
-### ⚠️ Notas Importantes de Configuração
-- **BACKEND_URL**: No `docker-compose.yml`, o frontend deve ter `BACKEND_URL: http://backend:3000` para comunicação interna via Docker Network.
-- **Rate Limit**: O Nginx possui proteção contra DDoS. Se o dashboard der erro 503, verifique os logs do proxy e ajuste `rate` e `burst` em `proxy/nginx/conf.d/helpdesk.conf`.
+# Hermes
+HERMES_API_KEY=sua_chave_hermes
+HERMES_BACKEND_URL=http://hermes-tools:3003
+
+# Backend
+DATABASE_URL=postgresql://helpdesk:helpdesk123@postgres:5432/helpdesk
+JWT_SECRET=sua_chave_jwt
+
+# GLPI
+GLPI_URL=http://glpi/apirest.php
+GLPI_APP_TOKEN=seu_token
+GLPI_USER_TOKEN=seu_token
+```
+
+### Portas
+
+| Serviço | Dev | Produção |
+|---------|-----|----------|
+| Backend | 3000 | https://helpdeskmsm.com.br/api |
+| Hermes Agent | 3004 | Interno |
+| Hermes Tools | 3003 | Interno |
+| Frontend TI | 5173 | https://helpdeskmsm.com.br |
+| GLPI | 8080 | https://glpi.helpdeskmsm.com.br |
+| PostgreSQL | 5432 | Interno |
+| Redis | 6379 | Interno |
+| RabbitMQ | 5672/15672 | Interno |
+
+---
+
+## 📋 Repositórios dos Frontends
+
+| Repo | Descrição | Status |
+|------|-----------|--------|
+| `support-mobile` (branch: `feature/frontend-ti`) | Frontend TI | Em desenvolvimento |
+| `suport-eletric` | Frontend Elétrica | Existente |
+| `support-compras` | Frontend Compras | **A criar** |
+
+---
+
+## 🔄 Fluxo de Requisição de Compra
+
+```
+1. Técnico fecha ticket que necessita compra
+2. Técnico cria PurchaseRequest via frontend
+3. Compras recebe notificação (WebSocket)
+4. Compras aprova ou rejeita
+5. Se aprovado → registra Purchase
+6. Técnico é notificado
+```
+
+---
+
+## 📚 Documentação
+
+| Documento | Descrição |
+|-----------|-----------|
+| `CLAUDE.md` | Instruções para Claude Code |
+| `IMPLEMENTATION_PLAN_V2.md` | Plano de implementação multi-frontend |
+| `hermes-integration/README.md` | Guia de integração Hermes |
+| `hermes-integration/skills/helpdesk-conversation/SKILL.md` | Skill de conversa natural |
+
+---
+
+## 🛠️ Comandos Úteis
+
+```bash
+# Subir todos os serviços
+docker compose -f docker-compose.dev.yml up -d
+
+# Ver logs do Hermes
+docker logs -f helpdesk_hermes
+
+# Ver logs do Hermes Tools
+docker logs -f helpdesk_hermes_tools
+
+# Reiniciar Hermes
+docker restart helpdesk_hermes
+
+# Acessar shell do Hermes
+docker exec -it helpdesk_hermes /bin/bash
+
+# Health check
+curl http://localhost:3003/health
+```
 
 ---
 
 ## 📄 Licença
 
-Proprietária - Ver [LICENSE.md](LICENSE.md)
+Proprietária — Ver [LICENSE.md](LICENSE.md)

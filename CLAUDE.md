@@ -1,470 +1,405 @@
 # CLAUDE.md — Chatbot-suporte-ti
 
 > Instruções para o Claude Code trabalhar neste projeto.
-> Última atualização: 2026-02-19
+> **Plano vigente:** [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) — toda decisão de arquitetura, fase e prioridade vem de lá.
+> Plano anterior arquivado: [`IMPLEMENTATION_PLAN_V2.archived.md`](IMPLEMENTATION_PLAN_V2.archived.md) (não usar como referência atual).
+> Última atualização: 2026-04-29
 
 ---
 
 ## 🎯 Sobre o Projeto
 
-Sistema de helpdesk integrado ao WhatsApp para suporte técnico de TI, com painel administrativo e integração ao GLPI. O projeto é um **monorepo** com 3 serviços principais + infraestrutura.
+Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 subdomínios** por área:
 
-**Domínio:** Helpdesk de TI corporativo — abertura, acompanhamento e resolução de chamados técnicos via WhatsApp, com gestão de estoque de equipamentos, reservas e base de conhecimento (FAQ).
+- `ti.helpdeskmsm.com.br` — Técnicos de TI (tema azul)
+- `eletrica.helpdeskmsm.com.br` — Técnicos elétricos NR-10/NR-35 (tema dourado)
+- `compras.helpdeskmsm.com.br` — Setor de compras / requisições (tema verde)
+- `api.helpdeskmsm.com.br` — Backend NestJS (compartilhado)
 
-**Repositório:** https://github.com/Berg-2019/Chatbot-suporte-ti
-**Branch principal de desenvolvimento:** `develop`
-**Produção:** https://helpdeskmsm.com.br
+**Mesmo build do frontend, 3 vhosts no nginx.** Tema, manifest e ícone vêm do **host** (não do JWT) — cada subdomínio instala como **PWA distinta** no celular do técnico.
+
+**WhatsApp** como canal alternativo de atendimento, com **Hermes Agent** como brain conversacional. **Bot legado (`bot/`) será removido** na Fase 1 — não usar.
+
+**Repositórios:**
+- Backend (este repo): https://github.com/Berg-2019/Chatbot-suporte-ti — branch atual `feature/chatbot-upgrade`
+- Frontend único: https://github.com/Berg-2019/profile-driven-app (TanStack Start + React 19 + Tailwind 4 + Bun)
+- Produção: https://*.helpdeskmsm.com.br (wildcard cert Let's Encrypt DNS-01)
 
 ---
 
-## 🏗️ Arquitetura
+## 🏗️ Arquitetura V3
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  WhatsApp   │───▶│    Bot      │───▶│   Backend   │
-│  (Baileys)  │    │  (Node.js)  │    │  (NestJS)   │
-└─────────────┘    └──────┬──────┘    └──────┬──────┘
-                          │                   │
-                   ┌──────▼──────┐    ┌──────▼──────┐
-                   │   Redis     │    │ PostgreSQL  │
-                   │  (Sessões)  │    │  (Prisma)   │
-                   └─────────────┘    └─────────────┘
-                                             │
-                   ┌─────────────┐    ┌──────▼──────┐
-                   │  RabbitMQ   │    │    GLPI     │
-                   │  (Filas)    │    │  (Tickets)  │
-                   └─────────────┘    └─────────────┘
-                                             │
-                   ┌─────────────┐           │
-                   │  Frontend   │───────────┘
-                   │  (Next.js)  │
-                   └─────────────┘
+                  ┌─────────────────────────────────────┐
+                  │         NGINX REVERSE PROXY          │
+                  │  (Docker, expõe 80/443, wildcard)    │
+                  └──┬──────────┬──────────┬──────────┬──┘
+                     │ ti.*     │ eletrica.* │ compras.* │ api.*
+                     ▼          ▼            ▼            ▼
+                  ┌─────────────────────────────┐   ┌──────────┐
+                  │  FRONTEND (1 build, mesmo    │   │ BACKEND  │
+                  │  container, 3 vhosts no nginx)│   │ NestJS   │
+                  │                              │   │  Clean   │
+                  │  Tema/manifest/ícone por     │   │  Arch v2 │
+                  │  HOST (não por JWT)          │   │          │
+                  │  PWA mobile-first            │   │          │
+                  └──────────────────────────────┘   └────┬─────┘
+                              ▲                            │
+                              │ Cookie httpOnly em         │
+                              │ .helpdeskmsm.com.br        │
+                              │ (SSO entre subdomínios)    │
+                                                           ▼
+                                              ┌─────────┬─────────┬──────────┐
+                                              │Postgres │ Redis   │ RabbitMQ │
+                                              │(Prisma, │(cache,  │(events,  │
+                                              │sem GLPI)│SLA timer│push)     │
+                                              └─────────┴─────────┴────┬─────┘
+                                                                       │
+                                                                       ▼
+                                                            ┌────────────────────┐
+                                                            │   HERMES AGENT      │
+                                                            │ (única integração   │
+                                                            │  WhatsApp/Baileys)  │
+                                                            └────────────────────┘
 ```
 
-### Portas
+### Decisões irrevogáveis do V3 (não revisitar sem novo plano)
 
-| Serviço | Dev | Produção (via Nginx) |
-|---------|-----|----------------------|
-| Backend | 3000 (debug: 9229) | https://helpdeskmsm.com.br/api |
-| Frontend | 3001 | https://helpdeskmsm.com.br |
-| Bot | 3002 | Interno |
-| GLPI | 8080 | https://glpi.helpdeskmsm.com.br |
-| RabbitMQ | 15672 | 15672 |
+| Decisão | Status |
+|---------|--------|
+| Estratégia: evoluir o backend atual (não recriar do zero) | ✅ |
+| **Remover GLPI** — substituir por CMDB nativo + SLA + License | ✅ |
+| **Remover bot legado** (`bot/`) — Hermes 100% no WhatsApp | ✅ |
+| Frontend único (`profile-driven-app`) servido em 3 subdomínios | ✅ |
+| SSO via cookie httpOnly em `.helpdeskmsm.com.br` | ✅ |
+| Sem Cloudflare — tudo local com Docker | ✅ |
+| **PWA mobile-first** (câmera, QR scanner, push, offline real) | ✅ |
+| Sector como `enum`, não `String` livre | ✅ |
+| `application/` (use cases) entre `presentation/` e `domain/` | ✅ |
+
+---
+
+## 🛣️ Portas
+
+| Serviço | Dev | Produção |
+|---------|-----|----------|
+| Backend NestJS | 3000 | `api.helpdeskmsm.com.br` |
+| Frontend TI (Bun dev) | 5173 | `ti.helpdeskmsm.com.br` |
+| Frontend Elétrica (Bun dev) | 5174 | `eletrica.helpdeskmsm.com.br` |
+| Frontend Compras (Bun dev) | 5175 | `compras.helpdeskmsm.com.br` |
+| Hermes Agent | 3004 | Interno |
+| Hermes Tools (bridge) | 3003 | Interno |
+| nginx | — | 80/443 (wildcard `*.helpdeskmsm.com.br`) |
 | PostgreSQL | 5432 | Interno |
 | Redis | 6379 | Interno |
+| RabbitMQ | 5672 / 15672 | Interno |
+
+> **GLPI já não consta** — será removido na Fase 1. Não usar `GLPI_URL`/`GLPI_APP_TOKEN`/`GLPI_USER_TOKEN` em código novo.
 
 ---
 
 ## 📁 Estrutura do Projeto
 
 ```
-Chatbot-suporte-ti/
-├── backend/                 # API NestJS (Clean Architecture)
+Chatbot-suporte-ti/                 ← este repo
+├── backend/                         # NestJS (Clean Architecture v2)
 │   ├── src/
-│   │   ├── domain/          # Entities, DTOs, interfaces
-│   │   ├── infrastructure/  # Database, External APIs (GLPI, Redis)
-│   │   └── presentation/    # Controllers, Gateways (WebSocket)
-│   ├── prisma/
-│   │   └── schema.prisma    # ⚠️ Fonte da verdade para o banco
-│   └── package.json
+│   │   ├── presentation/            # controllers, gateways
+│   │   ├── application/             # use cases (a CRIAR — Fase 0/2/3/4)
+│   │   ├── domain/                  # entities, DTOs, interfaces
+│   │   └── infrastructure/          # Prisma, Redis, RabbitMQ, SLA, etc.
+│   └── prisma/schema.prisma         # ⚠️ fonte da verdade
 │
-├── frontend/                # Interface Next.js + React
-│   ├── app/
-│   │   ├── admin/           # Painel administrativo
-│   │   ├── dashboard/       # Dashboard técnicos
-│   │   └── login/           # Autenticação
-│   └── components/          # Componentes reutilizáveis
+├── hermes-agent/                    # Hermes (submodule)
+│   └── skills/
+├── hermes-integration/              # Bridge + skills custom
+│   ├── backend-tools/server.js      # Bridge HTTP
+│   ├── config/
+│   └── skills/
+│       ├── helpdesk-create-ticket/
+│       ├── helpdesk-check-status/
+│       ├── helpdesk-escalate/
+│       ├── helpdesk-faq/
+│       ├── helpdesk-reserve-equipment/
+│       └── helpdesk-conversation/   # ← a CRIAR (Fase 5)
 │
-├── bot/                     # Bot WhatsApp (Baileys)
-│   └── src/
-│       ├── handlers/
-│       │   └── flow-handler.js  # ⚠️ Fluxos de conversação (máquina de estados)
-│       └── services/        # GLPI service, RabbitMQ service, Redis service
+├── nginx/                           # vhosts ti.* / eletrica.* / compras.* / api.*
+├── docker-compose.yml               # produção
+├── docker-compose.dev.yml           # dev (sem bot/, sem glpi/)
+├── docker-compose.staging.yml       # smoke test multi-subdomínio (Fase 6)
+├── helpdesk.sh                      # script de gerenciamento
+├── .env.example
 │
-├── intent-service/          # (Futuro) Serviço de NLU
-├── nginx/                   # Configs do proxy reverso
-├── docs/                    # Documentação do projeto
-│
-├── docker-compose.yml       # Produção
-├── docker-compose.dev.yml   # Dev com hot-reload
-├── helpdesk.sh              # Script de gerenciamento
-├── .env.example             # Template de variáveis
-│
-├── CLAUDE.md                # ← ESTE ARQUIVO
-├── FEATURE_ABSORPTION_PLAN.md  # Plano de absorção de features
-├── IMPLEMENTATION_PLAN_V2.md   # Plano V2 de implementação
-└── GUIA_DE_TESTES.md        # Guia de testes
+├── IMPLEMENTATION_PLAN_V3.md        # ← plano vigente
+├── IMPLEMENTATION_PLAN_V2.archived.md  # plano antigo (referência)
+└── CLAUDE.md                        # ← este arquivo
+
+~/Projetos/profile-driven-app/        ← frontend (repo sibling, NÃO neste repo)
 ```
+
+> **`bot/` será deletado** na Fase 1. **`frontend/` legado** já foi removido. **`glpi.service.ts` e `glpi-sync.service.ts`** serão deletados na Fase 1.
 
 ---
 
 ## 🛠️ Stack Técnica
 
 ### Backend
-- **Framework:** NestJS (TypeScript)
-- **ORM:** Prisma
-- **Banco:** PostgreSQL
-- **Cache/Sessões:** Redis
-- **Fila:** RabbitMQ (AMQP)
-- **Autenticação:** JWT
-- **Arquitetura:** Clean Architecture (domain → infrastructure → presentation)
+- NestJS (TypeScript) + Prisma + PostgreSQL
+- Redis (cache + SLA timers + idempotência WhatsApp)
+- RabbitMQ (events + push notifications + WhatsApp queue)
+- JWT com `{sub, email, sector, role}` no payload
+- Cookie httpOnly em `.helpdeskmsm.com.br`, SameSite=Lax, Secure
+- CORS aceita as 3 origens dos subdomínios + `credentials: true`
+- WebSocket Socket.IO para tempo real
+- **Clean Architecture v2** com 4 camadas: `presentation/` → `application/` → `domain/` → `infrastructure/`
 
-### Frontend
-- **Framework:** Next.js (React)
-- **Linguagem:** TypeScript
-- **Estilo:** Tailwind CSS (preferido) ou CSS Modules
-- **Gráficos:** Recharts (para dashboards)
-- **HTTP Client:** Axios ou fetch nativo
-- **Estado:** React Context + hooks (sem Redux)
+### Frontend (`profile-driven-app`)
+- **TanStack Start** (React 19 + TanStack Router file-based + Vite)
+- **Tailwind 4** + shadcn/ui (Radix UI)
+- React Hook Form + Zod
+- TanStack Query 5 + axios (`withCredentials: true`)
+- **Bun** como package manager (não npm/yarn)
+- Build SPA estático servido por nginx (não SSR Node)
+- **PWA mobile-first** com Workbox (`vite-plugin-pwa`)
 
-### Bot
-- **Runtime:** Node.js
-- **WhatsApp:** @whiskeysockets/baileys
-- **Sessões:** Redis (estado da conversa por telefone)
-- **Filas:** RabbitMQ (mensagens assíncronas)
-- **Fluxos:** Máquina de estados em flow-handler.js
-
-### Infra
-- **Containers:** Docker + Docker Compose
-- **Proxy:** Nginx (SSL, rate limiting)
-- **Host:** Proxmox (VMs)
-- **ITSM:** GLPI (API REST)
+### Bot / IA
+- **Hermes Agent** = único brain conversacional do WhatsApp
+- WhatsApp via Baileys (dentro do Hermes)
+- Skills: `helpdesk-conversation` (orquestrador) + 5 skills atômicas
+- Bridge HTTP em `hermes-integration/backend-tools/server.js`
+- Provider: MiniMax (primário) → OpenRouter (fallback) → Ollama (failover)
+- Idempotência WhatsApp via Redis (TTL 24h por `wa_message_id`)
 
 ---
 
 ## 📐 Convenções de Código
 
 ### Geral
-- **Idioma do código:** Inglês (variáveis, funções, classes, commits)
-- **Idioma do conteúdo/UI:** Português brasileiro (mensagens, labels, textos)
-- **Indentação:** 2 espaços
-- **Ponto e vírgula:** Sim (TypeScript)
-- **Aspas:** Aspas simples no TS/JS, aspas duplas no JSON
-- **Linha em branco:** Uma linha entre blocos lógicos
-- **Imports:** Agrupados (libs externas primeiro, depois internos)
+- **Idioma do código:** Inglês
+- **Idioma do conteúdo/UI:** Português brasileiro
+- Indentação: 2 espaços · `;` no fim · aspas simples no TS/JS
 
-### Backend (NestJS)
+### Backend (NestJS) — padrão Clean v2
 
 ```typescript
-// Padrão de nomes
-// Controllers: kebab-case no arquivo, PascalCase na classe
-// tickets.controller.ts → TicketsController
-// Services: tickets.service.ts → TicketsService
-// DTOs: create-ticket.dto.ts → CreateTicketDto
-// Entities: ticket.entity.ts → Ticket
-
-// Padrão de Controller
+// Controller: fino, só HTTP. NUNCA importa PrismaService direto.
 @Controller('tickets')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SectorGuard, RolesGuard)
 export class TicketsController {
-  constructor(private readonly ticketsService: TicketsService) {}
+  constructor(private readonly findTickets: FindTicketsUseCase) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.AGENT)
-  async findAll(@Query() query: FindTicketsQueryDto) {
-    return this.ticketsService.findAll(query);
-  }
-
-  @Post()
-  async create(@Body() dto: CreateTicketDto, @Req() req) {
-    return this.ticketsService.create(dto, req.user);
+  @RequireSector()                  // Fase 0: aplicar este guard
+  async findAll(@Query() query: FindTicketsQueryDto, @CurrentUser() user: User) {
+    return this.findTickets.execute({ ...query, sector: user.sector }); // server-side
   }
 }
 
-// Padrão de Service
+// Use Case: orquestra regra de negócio, sem HTTP, sem Prisma direto.
 @Injectable()
-export class TicketsService {
-  private readonly logger = new Logger(TicketsService.name);
+export class FindTicketsUseCase {
+  constructor(private readonly tickets: TicketsRepository) {}
+  async execute(input: FindTicketsInput) { /* ... */ }
+}
 
-  constructor(
-    private prisma: PrismaService,
-    private glpiService: GlpiService,
-  ) {}
-
-  async findAll(query: FindTicketsQueryDto) {
-    // Usar Prisma para queries
-    return this.prisma.ticket.findMany({
-      where: { /* ... */ },
-      include: { /* ... */ },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
+// Repository: única camada que toca Prisma.
+@Injectable()
+export class TicketsRepository {
+  constructor(private readonly prisma: PrismaService) {}
+  /* ... */
 }
 ```
 
-**Regras do backend:**
-- Toda query ao banco via Prisma (nunca SQL raw, exceto em casos de performance extrema)
-- DTOs com class-validator para validação de entrada
-- Errors lançar HttpException ou classes custom que estendam HttpException
-- Logs com this.logger (não console.log)
-- Endpoints seguem REST: GET (listar/buscar), POST (criar), PATCH (atualizar parcial), DELETE (remover)
-- Paginação: `?page=1&limit=20` com resposta `{ data: [], meta: { total, page, limit, totalPages } }`
-- Datas sempre em UTC no banco, conversão para timezone no frontend
-
-### Frontend (Next.js / React)
+### Frontend (TanStack Router file-based)
 
 ```typescript
-// Padrão de componente
-// Nomes: PascalCase
-// Arquivo: PascalCase.tsx (ou kebab-case.tsx para pages)
-// Hooks custom: use-*.ts
-
-// Componente funcional com TypeScript
-interface TicketCardProps {
-  ticket: Ticket;
-  onSelect?: (id: string) => void;
-}
-
-export function TicketCard({ ticket, onSelect }: TicketCardProps) {
-  // hooks primeiro
-  const [isLoading, setIsLoading] = useState(false);
-
-  // handlers
-  const handleClick = () => {
-    onSelect?.(ticket.id);
-  };
-
-  // render
-  return (
-    <div className="rounded-lg border p-4 hover:shadow-md transition-shadow">
-      {/* conteúdo */}
-    </div>
-  );
-}
+// src/routes/_authed/tickets/index.tsx
+export const Route = createFileRoute('/_authed/tickets/')({
+  beforeLoad: ({ context }) => {
+    if (!['TI', 'ELECTRIC'].includes(context.user.sector)) throw redirect({ to: '/' });
+  },
+  component: TicketsList,
+});
 ```
 
-**Regras do frontend:**
-- Componentes funcionais (nunca classes)
-- TypeScript interfaces para props (não types, exceto unions)
-- Tailwind CSS para estilização (não styled-components, não CSS-in-JS)
-- Fetch de dados com hooks customizados ou diretamente em Server Components
-- Estado global via React Context (AuthContext, ThemeContext, etc.)
-- Formulários com react-hook-form + zod para validação
-- Toasts com sonner ou react-hot-toast para feedback
-- Loading states: skeleton ou spinner, nunca tela em branco
-- Responsivo: mobile-first com breakpoints Tailwind (sm, md, lg, xl)
+Tema vem do host, não do JWT:
 
-### Bot (Node.js)
-
-```javascript
-// Padrão do bot
-// Handlers: flow-handler.js contém a máquina de estados
-// Services: glpi-service.js, redis-service.js, rabbitmq-service.js
-// Estados: STATES enum/object com todos os estados possíveis
-
-// Padrão de handler
-async handleMessage(sock, from, text, msg) {
-  const phone = from.split('@')[0];
-  const session = await redisService.getSession(phone);
-
-  switch (session.state) {
-    case STATES.MAIN_MENU:
-      return this.handleMainMenu(sock, from, text, session);
-    case STATES.TICKET_DESCRIPTION:
-      return this.handleTicketDescription(sock, from, text, session);
-    // ...
-  }
-}
-
-// Padrão de envio de mensagem
-async sendMessage(sock, to, text) {
-  await sock.sendMessage(to, { text });
-}
-```
-
-**Regras do bot:**
-- Toda sessão de conversa salva no Redis com TTL
-- Estado da conversa = chave no Redis com phone como identificador
-- Mensagens do bot sempre em português, tom profissional mas amigável
-- Emojis: usar com moderação, apenas em pontos-chave (✅ ❌ 📋 🔧)
-- Sempre oferecer opção de voltar/cancelar nos fluxos
-- Timeout de sessão: 30 minutos de inatividade
-
-### Prisma Schema
-
-```prisma
-// Convenções do schema
-// - Model: PascalCase singular (Ticket, User, Contact)
-// - Campo: camelCase (createdAt, assignedTo)
-// - Enum: UPPER_SNAKE_CASE (TICKET_STATUS, USER_ROLE)
-// - Relação: nome descritivo (assignedTo, createdBy)
-// - Índices: nos campos mais consultados
-// - Soft delete: usar deletedAt DateTime? (quando necessário)
-
-model Ticket {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  status      TicketStatus @default(OPEN)
-  priority    Priority     @default(MEDIUM)
-
-  // Relações
-  assignedToId String?
-  assignedTo   User?    @relation("AssignedTickets", fields: [assignedToId], references: [id])
-  createdById  String
-  createdBy    User     @relation("CreatedTickets", fields: [createdById], references: [id])
-
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Índices
-  @@index([status])
-  @@index([assignedToId])
-  @@index([createdAt])
+```typescript
+// src/lib/sector.ts
+export function detectSectorFromHost(): Sector {
+  const host = window.location.hostname;
+  if (host.startsWith('ti.')) return 'TI';
+  if (host.startsWith('eletrica.')) return 'ELECTRIC';
+  if (host.startsWith('compras.')) return 'COMPRAS';
+  return (import.meta.env.VITE_DEV_SECTOR as Sector) || 'TI';
 }
 ```
 
 ---
 
-## 🔄 Workflow de Desenvolvimento
+## 🔐 Autenticação SSO
 
-### Branches
-- `main` — Produção estável
-- `develop` — Branch de desenvolvimento (base para features)
-- `feature/*` — Novas funcionalidades
-- `fix/*` — Correções de bugs
-- `hotfix/*` — Correções urgentes em produção
+JWT no payload:
 
-### Comandos úteis
+```typescript
+{
+  sub: userId,
+  email: string,
+  role: "ADMIN_TI" | "ADMIN_ELECTRIC" | "ADMIN_COMPRAS" | "AGENT" | "ADMIN",
+  sector: "TI" | "ELECTRIC" | "COMPRAS",     // ENUM (não String livre)
+  iat, exp
+}
+```
+
+Cookie:
+```
+Set-Cookie: helpdesk_session=<jwt>;
+            Domain=.helpdeskmsm.com.br;       ← domínio pai = SSO
+            Path=/; HttpOnly; Secure;
+            SameSite=Lax
+```
+
+**Validação cruzada (defesa em profundidade):** todo middleware autenticado compara `Host` da request com `user.sector`. Se técnico TI tenta acessar `compras.helpdeskmsm.com.br`, backend retorna 403 e frontend redireciona para `ti.helpdeskmsm.com.br`.
+
+### Acesso por subdomínio
+
+| Subdomínio | Sector | Acessa |
+|-----------|--------|--------|
+| `ti.helpdeskmsm.com.br` | TI | tickets TI, assets TI, KB, requisições próprias |
+| `eletrica.helpdeskmsm.com.br` | ELECTRIC | tickets ELECTRIC, assets ELECTRIC, safety NR, tool loans |
+| `compras.helpdeskmsm.com.br` | COMPRAS | todas as PurchaseRequests, fornecedores, relatórios |
+
+---
+
+## 🚀 Como Iniciar Desenvolvimento
+
+### 1. Backend + Hermes + infra
 
 ```bash
-# Gerenciamento via script
-./helpdesk.sh dev          # Iniciar dev com hot-reload
-./helpdesk.sh prod         # Iniciar produção
-./helpdesk.sh stop         # Parar tudo
-./helpdesk.sh logs [serv]  # Ver logs
-./helpdesk.sh migrate      # Rodar migrations Prisma
-./helpdesk.sh shell <serv> # Acessar shell do container
+# Subir serviços principais (sem bot, sem glpi)
+docker compose -f docker-compose.dev.yml up -d postgres redis rabbitmq backend hermes hermes-tools
 
-# Prisma
-cd backend
-npx prisma migrate dev --name nome_da_migration
-npx prisma generate
-npx prisma studio  # GUI para o banco
+# Logs
+docker logs -f helpdesk_hermes
 
-# NestJS
-cd backend
-npm run start:dev   # Dev com watch
-npm run build       # Build produção
-npm run test        # Testes
-
-# Frontend
-cd frontend
-npm run dev         # Dev server
-npm run build       # Build produção
-
-# Bot
-cd bot
-npm run dev         # Dev com nodemon
+# QR code WhatsApp (primeira vez)
+docker exec -it helpdesk_hermes hermes whatsapp
 ```
 
-### Ao criar uma nova feature, SEMPRE:
-1. Criar model no Prisma se envolver dados novos
-2. Rodar migration: `npx prisma migrate dev --name add_feature_name`
-3. Criar DTO com validação (class-validator)
-4. Criar Service com lógica de negócio
-5. Criar Controller com endpoints REST
-6. Criar componentes React no frontend
-7. Testar manualmente os fluxos completos
-8. Atualizar este CLAUDE.md se mudar convenções
+### 2. Frontend (`profile-driven-app`, repo sibling)
+
+```bash
+cd ~/Projetos/profile-driven-app
+bun install                  # ⚠️ Bun, não npm
+
+# Subir os 3 frontends em portas diferentes (simulando subdomínios)
+bun run dev:all              # ti=5173, eletrica=5174, compras=5175
+
+# OU individualmente:
+bun run dev:ti
+bun run dev:electric
+bun run dev:compras
+```
+
+### 3. Smoke test multi-subdomínio (antes de releases)
+
+```bash
+# Adicionar ao /etc/hosts:
+# 127.0.0.1 ti.helpdeskmsm.local eletrica.helpdeskmsm.local compras.helpdeskmsm.local api.helpdeskmsm.local
+
+docker compose -f docker-compose.staging.yml up
+# Acessar https://ti.helpdeskmsm.local etc — testa cookie SSO entre subdomínios
+```
 
 ---
 
-## 📋 Plano de Evolução Ativo
+## 📝 Fluxo de Atendimento
 
-### Documentos de referência
-- **IMPLEMENTATION_PLAN_V2.md** — Sprints do V2 (segurança, performance, UX)
-- **FEATURE_ABSORPTION_PLAN.md** — Features absorvidas de Chatwoot, Peppermint, Typebot
+### Via WhatsApp (Hermes Agent)
 
-### Prioridades atuais (em ordem)
+```
+Cliente envia msg → Hermes (Baileys) → skill helpdesk-conversation
+    → Hermes consulta KB via captain-assistant (auto-resolve tier-1)
+    → Se não resolve: conversa para coletar dados
+    → Cria ticket via bridge (POST /api/tickets)
+    → Liga ticket ao Asset se reconhecer (escaneou QR ou citou patrimônio)
+    → SLA timer dispara → técnico recebe push + WhatsApp
+```
 
-#### 🔴 Crítico — Fase 1: Fundação
-1. **RBAC com roles customizáveis** — Model Role com permissões granulares JSON, RolesGuard atualizado, UI de gerenciamento
-2. **Model Contact unificado** — Perfil do cliente com histórico, custom attributes, sidebar no chat
-3. **Sistema de Webhooks de saída** — Models Webhook + WebhookLog, trigger em eventos, HMAC signature
-4. **Respostas Prontas (Canned Responses)** — Model, CRUD, dropdown no chat com trigger `/`
+### Hermes Skills
 
-#### 🟡 Importante — Fase 2: Automação
-5. **Engine de Automação** — AutomationRule (event→conditions→actions), integrado em tickets/messages
-6. **Auto-atribuição de agentes** — Round-robin ou por disponibilidade, integrado à automação
-7. **CSAT (Pesquisa de Satisfação)** — Model CsatResponse, fluxo no bot, relatório no dashboard
-8. **Notas internas + @mentions** — Campo isInternal em Message, visual diferenciado, notificação
+- `helpdesk-conversation` — orquestrador (Fase 5, a criar)
+- `helpdesk-create-ticket` — atômica, cria ticket
+- `helpdesk-check-status` — atômica, status de ticket
+- `helpdesk-escalate` — atômica, escala
+- `helpdesk-faq` — atômica, busca KB
+- `helpdesk-reserve-equipment` — atômica, reserva equipamento
 
-#### 🟢 Evolução — Fase 3: Intelligence
-9. **Métricas por agente** — First Response Time, Resolution Time, CSAT médio, ranking
-10. **Labels/Tags em tickets** — Model TicketLabel, filtros, relatórios por label
-11. **Tempo médio de resposta/resolução** — Cálculos automáticos, widget no dashboard
-12. **Intent Detection via LLM** — Classificação simples como fallback do menu numerado
-
-### Melhorias de UI pendentes (do roteiro de melhorias)
-- Ícone do WhatsApp nos cards de chamados (indicar canal de origem)
-- Corrigir quebras de texto/truncamento em nomes e descrições
-- Cores por área/setor (badges, ícones, paleta definida)
-- Alinhar inputs e componentes de formulário
-- Filtros avançados: status, área, técnico, origem, busca full-text
-
-### Melhorias do bot pendentes
-- Mensagens padronizadas (confirmação, erro, encerramento, handoff)
-- Handoff para humano com contexto completo (histórico anexado)
-- Coleta estruturada de dados (categoria, impacto, sistema afetado, anexos)
-- Consulta de status pelo WhatsApp ("status 1234")
-- Mini-FAQ automatizado (5-10 perguntas mais frequentes)
+**NÃO USA MENUS NUMERADOS** — conversa natural em português brasileiro.
 
 ---
 
-## 🎨 Design Reference: Chatwoot (Caminho A)
+## 📦 Backend — Endpoints Principais
 
-Estamos absorvendo o design e UX do Chatwoot, **não** integrando o sistema. A abordagem é:
+| Método | Endpoint | Descrição | Acesso |
+|--------|----------|-----------|--------|
+| POST | `/auth/login` | SSO | Público |
+| POST | `/auth/logout` | Limpa cookie | JWT |
+| GET | `/tickets` | Lista (filtro server-side por sector) | TI/ELECTRIC |
+| POST | `/tickets` | Criar (com `affectedAssetId` opcional) | TI/ELECTRIC/AGENT |
+| GET | `/assets` | Lista CMDB | TI/ELECTRIC/ADMIN |
+| POST | `/assets/:id/assign` | Atribuir asset a usuário | ADMIN_* |
+| GET | `/assets/scan/:tag` | Resolver tag (QR scanner mobile) | TI/ELECTRIC |
+| POST | `/purchase-requests` | Criar requisição | TI/ELECTRIC/AGENT |
+| GET | `/purchase-requests` | Lista (todas para COMPRAS, próprias para outros) | TI/ELECTRIC/COMPRAS |
+| PATCH | `/purchase-requests/:id/approve` | Aprovar | ADMIN_COMPRAS |
+| PATCH | `/purchase-requests/:id/reject` | Rejeitar (com motivo) | ADMIN_COMPRAS |
+| GET | `/sla/policies` | Políticas SLA | ADMIN_* |
+| GET | `/sla/dashboard` | Métricas | ADMIN_* |
+| POST | `/push/subscribe` | Inscrever PWA para push | JWT |
 
-1. **Estudar componentes Vue do Chatwoot** (repo: github.com/chatwoot/chatwoot)
-2. **Recriar em React/Next.js** adaptando ao nosso backend NestJS
-3. **Manter 100% controle** sobre código e UX
+---
 
-### Componentes prioritários para recriar
+## 📋 Fases (do `IMPLEMENTATION_PLAN_V3.md`)
 
-| Componente Chatwoot | Localização no repo Chatwoot | Nosso equivalente |
-|---|---|---|
-| ConversationList | `app/javascript/dashboard/components/ChatList/` | `frontend/components/ConversationList.tsx` |
-| ChatView (bolhas) | `app/javascript/dashboard/components/widgets/conversation/` | `frontend/components/ChatView.tsx` |
-| ContactPanel (sidebar) | `app/javascript/dashboard/routes/dashboard/contacts/` | `frontend/components/ContactSidebar.tsx` |
-| CSAT Reports | `app/javascript/dashboard/routes/dashboard/settings/reports/` | `frontend/app/admin/reports/csat/` |
-| Automation Rules | `app/javascript/dashboard/routes/dashboard/settings/automation/` | `frontend/app/admin/automation/` |
-| Canned Responses | `app/javascript/dashboard/routes/dashboard/settings/canned/` | `frontend/app/admin/canned-responses/` |
-| Agent Reports | `app/javascript/dashboard/routes/dashboard/settings/reports/` | `frontend/app/admin/reports/agents/` |
+| Fase | Conteúdo | Estimativa |
+|------|---------|------------|
+| **0** | Estabilização: rebase, fix IDOR, JWT com sector, sector→enum | 1 sem |
+| **1** | Remover bot legado + remover GLPI dos 14 arquivos | 1 sem |
+| **2** | CMDB nativo: Asset, AssetAssignment, License, LicenseAssignment | 1 sem |
+| **3** | SLA Engine: SlaPolicy, BusinessHours, SlaTimer, EscalationRule | 1 sem |
+| **4** | PurchaseRequest CRUD + workflow approve/reject | 1 sem |
+| **5** | Hermes orchestration: skill helpdesk-conversation + idempotência WA | 1 sem |
+| **6** | Frontend `profile-driven-app` + 3 subdomínios + PWA mobile | 2-3 sem |
+| | **Total** | **8-9 sem** |
 
-### Padrão visual a seguir
-- **Layout:** Sidebar esquerda (conversas) + área central (chat) + sidebar direita (detalhes do contato)
-- **Cores:** Clean, minimalista. Azul primário, cinza para backgrounds, badges coloridos por status/área
-- **Tipografia:** Inter ou system fonts. 14px base, 12px para metadata
-- **Ícones:** Lucide React (já disponível) ou Heroicons
-- **Feedback:** Toast para ações, skeleton para loading, empty states com ilustração
-- **Responsivo:** Sidebar esquerda colapsa em mobile, chat ocupa tela toda
+Sequência **importa** — Fase 0 destrava todas as outras (rebase + segurança). Fases 2-4 podem rodar levemente em paralelo se houver mais de 1 dev. Fase 6 só começa após 4.
 
 ---
 
 ## ⚠️ Regras Importantes
 
 ### NUNCA fazer:
-- Hardcode de credenciais ou tokens (sempre .env)
-- Console.log em produção (usar Logger do NestJS)
-- Any no TypeScript (tipar tudo, interfaces para tudo)
-- SQL raw sem necessidade extrema (usar Prisma)
-- Instalar dependências sem verificar se já existe similar no projeto
-- Modificar schema.prisma sem criar migration
-- Commitar node_modules, .env, ou arquivos de build
-- Usar var (sempre const/let)
-- Criar componentes classe no React
+- Hardcode de credenciais (sempre `.env`)
+- Modificar `schema.prisma` sem criar migration
+- Commitar `node_modules/`, `.env`, `dist/`
+- **Reintroduzir GLPI** ou referenciar `glpi.service.ts` em código novo
+- **Reintroduzir bot legado** ou rodar `bot/` junto com Hermes
+- Voltar a 3 frontends separados — é 1 código, 3 subdomínios
+- Aceitar `sector` como string livre — é enum em todos os lugares
+- Token em `localStorage` — é cookie httpOnly
+- Importar `PrismaService` em controller — passar por `application/` (use case)
 
 ### SEMPRE fazer:
-- Validar input com DTOs (backend) e zod/react-hook-form (frontend)
-- Tratar erros com try/catch e retornar mensagens amigáveis
-- Adicionar @@index no Prisma para campos usados em WHERE/ORDER BY
-- Manter logs estruturados com contexto (ticketId, userId, action)
-- Verificar permissões antes de executar ações (RolesGuard)
-- Retornar paginação em listagens
-- Usar transações Prisma quando múltiplas operações dependem uma da outra
-- Manter o .env.example atualizado quando adicionar nova variável
+- Aplicar `SectorGuard` nos endpoints filtrados por sector
+- Validar `sector` server-side a partir do JWT, **ignorar** query param do cliente
+- Validar `Host` da request vs `user.sector` em endpoints sensíveis
+- DTOs com `class-validator` decorators
+- `@@index` em campos de `WHERE`/`ORDER BY` no Prisma
+- Logger do NestJS, não `console.log`
+- `withCredentials: true` no axios (SSO via cookie)
+- Compressão client-side de fotos antes do upload (foto de celular satura rede)
+- Service Worker registrado só em `import.meta.env.PROD`
 
 ---
 
@@ -472,47 +407,55 @@ Estamos absorvendo o design e UX do Chatwoot, **não** integrando o sistema. A a
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/helpdesk
+DATABASE_URL=postgresql://user:pass@postgres:5432/helpdesk
 
 # Redis
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://redis:6379
 
 # RabbitMQ
-RABBITMQ_URL=amqp://user:pass@localhost:5672
+RABBITMQ_URL=amqp://user:pass@rabbitmq:5672
 
-# JWT
-JWT_SECRET=...
+# JWT + Cookie SSO
+JWT_SECRET=<gerar com `openssl rand -hex 64`>
+JWT_EXPIRES_IN=8h
+COOKIE_DOMAIN=.helpdeskmsm.com.br      # PARENT domain — não esquecer o ponto
+COOKIE_SECURE=true                     # false só em dev local
+CORS_ORIGINS=https://ti.helpdeskmsm.com.br,https://eletrica.helpdeskmsm.com.br,https://compras.helpdeskmsm.com.br
 
-# GLPI
-GLPI_URL=http://localhost:8080/apirest.php
-GLPI_APP_TOKEN=...
-GLPI_USER_TOKEN=...
+# Hermes / IA
+HERMES_API_KEY=...
+MINIMAX_API_KEY=...
+OPENROUTER_API_KEY=...
 
-# Frontend
-NEXT_PUBLIC_API_URL=https://bk.helpdeskmsm.com.br
-
-# (Futuro) LLM para Intent Detection
-# OPENAI_API_KEY=...
-# ANTHROPIC_API_KEY=...
-
-# (Futuro) Email Ingestion
-# SUPPORT_EMAIL_USER=...
-# SUPPORT_EMAIL_PASS=...
-# SUPPORT_EMAIL_HOST=...
+# Push (PWA)
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:dev@helpdeskmsm.com.br
 ```
+
+> **GLPI vars (`GLPI_URL`, `GLPI_APP_TOKEN`, `GLPI_USER_TOKEN`) serão removidas na Fase 1.** Não introduzir em features novas.
 
 ---
 
-## 📌 Quick Reference para o Claude Code
+## 📚 Documentos de Referência
 
-Quando receber um pedido, siga esta ordem:
+| Documento | Descrição |
+|-----------|-----------|
+| [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) | **Plano vigente** — ler antes de começar qualquer fase |
+| [`IMPLEMENTATION_PLAN_V2.archived.md`](IMPLEMENTATION_PLAN_V2.archived.md) | Plano antigo (referência histórica) |
+| `hermes-integration/README.md` | Guia da integração Hermes |
+| `hermes-integration/skills/helpdesk-conversation/SKILL.md` | Skill de conversa natural (a criar — Fase 5) |
+| `nginx/sites-enabled/helpdeskmsm.conf` | Config dos 4 vhosts (a criar — Fase 6) |
 
-1. **Ler contexto:** Entender o que já existe antes de criar algo novo
-2. **Prisma primeiro:** Se envolve dados novos, começar pelo schema
-3. **Backend depois:** Service → Controller → DTO
-4. **Frontend por último:** Componentes que consomem os endpoints criados
-5. **Bot quando aplicável:** Atualizar flow-handler.js se a feature impacta o WhatsApp
+---
 
-Para cada feature do FEATURE_ABSORPTION_PLAN.md, seguir o checklist documentado lá.
+## 📌 Quick Reference
 
-Quando em dúvida sobre padrões, olhar os arquivos existentes no projeto e seguir o mesmo padrão.
+1. **Sempre consultar [IMPLEMENTATION_PLAN_V3.md](IMPLEMENTATION_PLAN_V3.md)** antes de implementar nova feature.
+2. **Filtro por sector é server-side** sempre — nunca confiar em query param do cliente.
+3. **Hermes Agent** é o único brain do WhatsApp — bot legado será deletado.
+4. **GLPI é legado** — não criar dependência nova; remover na Fase 1.
+5. **Frontend é 1 código, 3 subdomínios** — tema vem do host.
+6. **PWA mobile-first** — câmera, QR, push, offline real são requisitos da Fase 6, não nice-to-have.
+7. **SSO** via cookie em `.helpdeskmsm.com.br` — backend e os 3 frontends compartilham auth.
+8. **Sector é enum**, não String. **Roles** são `ADMIN_TI`/`ADMIN_ELECTRIC`/`ADMIN_COMPRAS`/`AGENT`/`ADMIN`.

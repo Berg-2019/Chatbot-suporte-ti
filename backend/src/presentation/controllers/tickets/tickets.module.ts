@@ -11,6 +11,7 @@ import { TicketsController } from './tickets.controller';
 import { BotTicketsController } from './bot-tickets.controller';
 import { TicketsService } from './tickets.service';
 import { AutomationModule } from '../automation/automation.module';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
 @Module({
   imports: [
@@ -31,7 +32,7 @@ import { AutomationModule } from '../automation/automation.module';
     }),
   ],
   controllers: [TicketsController, BotTicketsController],
-  providers: [TicketsService],
+  providers: [TicketsService, PrismaService],
   exports: [TicketsService],
 })
 export class TicketsModule { }

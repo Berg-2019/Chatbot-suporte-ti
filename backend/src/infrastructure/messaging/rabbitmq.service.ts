@@ -145,9 +145,14 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
   async publishOutgoingMessage(data: {
     to: string;
-    text: string;
+    text?: string;
     ticketId?: string;
     isAlert?: boolean;
+    // Mídia (anexos enviados pelo técnico)
+    mediaUrl?: string;
+    mediaType?: 'image' | 'audio' | 'video' | 'document';
+    mimeType?: string;
+    filename?: string;
   }): Promise<boolean> {
     return this.publish(RabbitMQService.QUEUES.OUTGOING_MESSAGES, data);
   }

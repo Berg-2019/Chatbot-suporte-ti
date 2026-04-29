@@ -526,6 +526,13 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
           >
             <ChevronLeft size={20} />
           </button>
+          <button
+            onClick={() => setShowContactPanel(!showContactPanel)}
+            className="flex items-center gap-3 rounded-lg p-1 -m-1 transition-colors text-left"
+            title="Ver detalhes do chamado"
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
           <div
             className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold"
             style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
@@ -533,7 +540,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
             {(ticket.customerName || ticket.client || 'CL').substring(0, 2).toUpperCase()}
           </div>
           <div>
-            <h3 className="text-[14px] font-semibold leading-tight" style={{ color: 'var(--cw-text-primary)' }}>
+            <h3 className="text-[14px] font-semibold leading-tight hover:underline" style={{ color: 'var(--cw-text-primary)' }}>
               {ticket.customerName || ticket.client || 'Cliente'}
             </h3>
             <div className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--cw-text-tertiary)' }}>
@@ -552,6 +559,7 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
               )}
             </div>
           </div>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -633,17 +641,6 @@ export default function ChatView({ ticket, onClose, onCloseTicket }: ChatViewPro
             )}
           </div>
 
-          {/* Contact info toggle */}
-          <button
-            onClick={() => setShowContactPanel(!showContactPanel)}
-            className="p-1.5 rounded-lg transition-colors"
-            style={{ color: 'var(--cw-text-secondary)' }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--cw-bg-hover)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            title="Info do contato"
-          >
-            <User size={18} />
-          </button>
         </div>
         </div>
       )}

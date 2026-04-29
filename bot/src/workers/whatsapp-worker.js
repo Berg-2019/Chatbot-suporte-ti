@@ -21,21 +21,26 @@ class WhatsAppWorker {
   }
 
   async processOutgoingMessage(data) {
-    const { to, text, ticketId } = data;
-
-    console.log(`📤 Enviando mensagem para ${to}: ${text.substring(0, 50)}...`);
+    const { to, text, ticketId, mediaUrl, mediaType, mimeType, filename } = data;
 
     // Formatar JID se necessário
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
     const phone = jid.split('@')[0];
 
-    const success = await whatsappHandler.sendMessage(jid, text);
+    let success;
+    if (mediaUrl) {
+      console.log(`📤 Enviando ${mediaType} para ${to}: ${filename || mediaUrl}`);
+      success = await whatsappHandler.sendMedia(jid, { mediaUrl, mediaType, mimeType, filename, caption: text });
+    } else {
+      console.log(`📤 Enviando mensagem para ${to}: ${(text || '').substring(0, 50)}...`);
+      success = await whatsappHandler.sendMessage(jid, text);
+    }
 
     if (success) {
       console.log(`✅ Mensagem enviada para ${to}`);
 
       // Se a mensagem pede avaliação, atualizar sessão para RATING_TICKET
-      if (text.includes('avalie nosso atendimento') && ticketId) {
+      if (text && text.includes('avalie nosso atendimento') && ticketId) {
         try {
           const session = await redisService.getSession(phone) || { state: 'idle', data: {} };
           session.state = 'rating_ticket';

@@ -40,7 +40,7 @@ Responda APENAS com JSON válido:
     console.log('Tentando modelo: abab6-chat');
 
     const response = await axios.post(
-      'https://api.minimaxi.chat/v1/text/chatcompletion',
+      'https://api.minimax.io/v1/text/chatcompletion',
       {
         model: 'abab6-chat',
         messages: [

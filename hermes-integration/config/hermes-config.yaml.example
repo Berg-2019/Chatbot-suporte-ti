@@ -1,0 +1,98 @@
+# =============================================================================
+# Hermes Agent - Configuração para Helpdesk
+# =============================================================================
+# Copie este arquivo para ~/.hermes/config.yaml após instalar o Hermes
+# =============================================================================
+
+# ============================================
+# Model - LLM Provider
+# ============================================
+
+# OpenRouter (recomendado - múltiplos modelos)
+model: openrouter/anthropic/claude-3-5-sonnet-latest
+
+# Alternativas:
+# model: openai/gpt-4o-mini            # OpenAI direto
+# model: google/gemini-2-5-flash-lite   # Google Gemini
+# model: custom                          # MiniMax ou outro customizado
+
+# ============================================
+# Toolsets Habilitados
+# ============================================
+
+toolsets:
+  - helpdesk          # Tools do helpdesk (tickets, FAQ, estoque, escalação)
+  - filesystem        # Acesso a arquivos (para KB local)
+
+# ============================================
+# Configuração do Helpdesk
+# ============================================
+
+helpdesk:
+  # URL do Backend NestJS
+  # Em dev local: http://localhost:3000
+  # Em Docker: http://backend:3000
+  backend_url: http://localhost:3000
+
+  # API Key para autenticar nos endpoints /api/hermes/*
+  api_key: hermes_dev_key_change_me
+
+  # Endpoints do backend (prefixo: /api/hermes)
+  endpoints:
+    tickets: /api/hermes/tickets
+    tickets_by_phone: /api/hermes/tickets/by-phone
+    faq_search: /api/hermes/faq/search
+    stock: /api/hermes/stock
+    reservations: /api/hermes/reservations
+    agents_status: /api/hermes/agents/status
+    escalate: /api/hermes/escalate
+    webhook: /api/hermes/webhook
+    health: /api/hermes/health
+
+# ============================================
+# Memória / RAG
+# ============================================
+
+memory:
+  provider: sqlite    # sqlite para dev, postgres para produção
+  embedding_model: all-MiniLM-L6-v2
+
+# ============================================
+# WhatsApp Gateway
+# ============================================
+
+whatsapp:
+  enabled: true
+  mode: bot                          # bot = responde automaticamente
+  unauthorized_dm_behavior: ignore   # ignore DMs de números não autorizados
+  reply_prefix: ""                   # sem prefixo nas respostas
+
+# ============================================
+# Skills do Helpdesk
+# ============================================
+
+skills:
+  install_paths:
+    - ~/.hermes/skills/helpdesk-create-ticket
+    - ~/.hermes/skills/helpdesk-check-status
+    - ~/.hermes/skills/helpdesk-faq
+    - ~/.hermes/skills/helpdesk-reserve-equipment
+    - ~/.hermes/skills/helpdesk-escalate
+
+# ============================================
+# Display / Interface
+# ============================================
+
+display:
+  tool_progress: new
+  tool_progress_command: false
+  streaming: true
+
+# ============================================
+# Segurança
+# ============================================
+
+# Whitelist de números de WhatsApp (sem +, com código do país)
+# Use * para permitir todos (dev only)
+# Exemplo: 5511999999999,5511888888888
+whatsapp_allowed_users: "*"

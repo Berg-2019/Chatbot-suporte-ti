@@ -5,10 +5,11 @@
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 // Helper to get auth token
-const getAuthHeaders = (): HeadersInit => {
+const getAuthHeaders = (isFormData = false): HeadersInit => {
     const token = localStorage.getItem('authToken');
     return {
-        'Content-Type': 'application/json',
+        // Para FormData, NÃO setar Content-Type — o browser adiciona o boundary
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 };
@@ -16,14 +17,17 @@ const getAuthHeaders = (): HeadersInit => {
 // Generic fetch wrapper with error handling and timeout
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const isFormData = options?.body instanceof FormData;
+    // Uploads precisam de mais tempo
+    const timeoutMs = isFormData ? 60000 : 10000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
         const response = await fetch(`${API_URL}/api${endpoint}`, {
             ...options,
             signal: controller.signal,
             headers: {
-                ...getAuthHeaders(),
+                ...getAuthHeaders(isFormData),
                 ...options?.headers,
             },
         });
@@ -442,6 +446,7 @@ export interface TicketFilters {
     search?: string;
     page?: number;
     limit?: number;
+    sector?: string;
 }
 
 export interface CreateTicketDto {
@@ -468,6 +473,7 @@ export const ticketsApi = {
         if (filters?.search) params.set('search', filters.search);
         if (filters?.page) params.set('page', filters.page.toString());
         if (filters?.limit) params.set('limit', filters.limit.toString());
+        if (filters?.sector) params.set('sector', filters.sector);
 
         const query = params.toString();
         return apiFetch<TicketsResponse>(`/tickets${query ? `?${query}` : ''}`);

@@ -166,9 +166,9 @@ Analise o problema e forneça uma resposta em JSON no seguinte formato:
    */
   private async generateWithMinimax(prompt: string): Promise<CaptainResponse> {
     const response = await axios.post(
-      'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
+      'https://api.minimax.io/v1/text/chatcompletion_v2',
       {
-        model: 'abab6-chat',
+        model: 'MiniMax-M2',
         messages: [
           {
             role: 'system',

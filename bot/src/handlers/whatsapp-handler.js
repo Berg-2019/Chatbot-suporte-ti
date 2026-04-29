@@ -221,6 +221,46 @@ class WhatsAppHandler {
     }
   }
 
+  /**
+   * Envia mídia (áudio, imagem, vídeo, documento) baixada de uma URL
+   */
+  async sendMedia(to, { mediaUrl, mediaType, mimeType, filename, caption }) {
+    if (!this.sock || !this.isConnected) {
+      console.error('❌ WhatsApp não conectado');
+      return false;
+    }
+
+    try {
+      console.log(`📨 Baixando mídia de: ${mediaUrl}`);
+      const response = await axios.get(mediaUrl, { responseType: 'arraybuffer', timeout: 60000 });
+      const buffer = Buffer.from(response.data);
+
+      let payload;
+      switch (mediaType) {
+        case 'image':
+          payload = { image: buffer, mimetype: mimeType, caption };
+          break;
+        case 'audio':
+          payload = { audio: buffer, mimetype: mimeType || 'audio/mp4', ptt: true };
+          break;
+        case 'video':
+          payload = { video: buffer, mimetype: mimeType, caption };
+          break;
+        case 'document':
+        default:
+          payload = { document: buffer, mimetype: mimeType, fileName: filename || 'arquivo' };
+      }
+
+      const result = await this.sock.sendMessage(to, payload);
+      console.log(`📨 Baileys mídia (${mediaType}) enviada: ${result?.key?.id || 'sem ID'}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Erro ao enviar mídia:', error.message);
+      console.error('❌ Stack:', error.stack);
+      return false;
+    }
+  }
+
   async updateStatus() {
     await redisService.updateBotStatus({
       connected: this.isConnected,

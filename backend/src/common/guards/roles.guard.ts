@@ -40,13 +40,11 @@ export class RolesGuard implements CanActivate {
     }
 
     const hasRole = requiredRoles.some((role) => {
-      // Direct role match (ADMIN, AGENT, etc.)
       if (user.role === role) return true;
 
-      // Map legacy STOCK_MANAGER role to 'estoque' permission (backward compatibility)
-      if (role === 'STOCK_MANAGER') {
-        return true;
-      }
+      if (role === 'ADMIN_TI' && user.role === 'ADMIN' && user.sector === 'TI') return true;
+      if (role === 'ADMIN_ELECTRIC' && user.role === 'ADMIN' && user.sector === 'ELECTRIC') return true;
+      if (role === 'ADMIN_COMPRAS' && user.role === 'ADMIN' && user.sector === 'COMPRAS') return true;
 
       return false;
     });

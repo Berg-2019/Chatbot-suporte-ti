@@ -206,9 +206,9 @@ Resumo:`;
       // Usar MiniMax para gerar resumo
       if (this.minimaxApiKey) {
         const response = await axios.post(
-          'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
+          'https://api.minimax.io/v1/text/chatcompletion_v2',
           {
-            model: 'abab6.5-chat',
+            model: 'MiniMax-M2',
             messages: [
               { role: 'user', content: prompt },
             ],
@@ -247,9 +247,8 @@ Resumo:`;
         return this.simpleEmbedding(text);
       }
 
-      // TODO: MiniMax ainda não tem API de embeddings pública
-      // Por enquanto, usar embedding simples
-      // Quando disponível, usar: https://api.minimaxi.chat/v1/embeddings
+      // TODO: Integrar com MinimaxEmbeddingsService
+      // Endpoint: https://api.minimax.io/v1/embeddings
 
       return this.simpleEmbedding(text);
     } catch (error: any) {

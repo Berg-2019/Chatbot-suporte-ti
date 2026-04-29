@@ -19,7 +19,7 @@ export class MinimaxEmbeddingsService {
   private readonly logger = new Logger(MinimaxEmbeddingsService.name);
   private apiKey: string;
   private groupId: string;
-  private apiUrl = 'https://api.minimax.chat/v1/embeddings';
+  private apiUrl = 'https://api.minimax.io/v1/embeddings';
   private model = 'embo-01';
 
   constructor() {
@@ -39,6 +39,8 @@ export class MinimaxEmbeddingsService {
    * Verifica se serviço está disponível
    */
   isAvailable(): boolean {
+    // Token Plan Key (sk-cp-) não cobre embeddings — força fallback p/ TF-IDF
+    if (this.apiKey.startsWith('sk-cp-')) return false;
     return !!(this.apiKey && this.groupId);
   }
 

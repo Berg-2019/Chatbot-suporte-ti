@@ -11,6 +11,7 @@
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { MinimaxEmbeddingsService } from './minimax-embeddings.service';
 
 export interface KnowledgeDocument {
   id?: string;
@@ -26,10 +27,25 @@ export interface KnowledgeDocument {
 @Injectable()
 export class KnowledgeBaseService implements OnModuleInit {
   private readonly logger = new Logger(KnowledgeBaseService.name);
+  private useMinimaxEmbeddings = false;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private minimaxEmbeddings: MinimaxEmbeddingsService,
+  ) {}
 
   async onModuleInit() {
+    // Verificar se MiniMax Embeddings está disponível
+    const testResult = await this.minimaxEmbeddings.testConnection();
+    this.useMinimaxEmbeddings = testResult.available;
+
+    if (this.useMinimaxEmbeddings) {
+      this.logger.log(`✅ MiniMax Embeddings ativo: ${testResult.model} (${testResult.dimensions} dims)`);
+    } else {
+      this.logger.warn(`⚠️  MiniMax Embeddings indisponível: ${testResult.error}`);
+      this.logger.warn(`⚠️  Usando embeddings simples (TF-IDF) como fallback`);
+    }
+
     await this.seedInitialKnowledge();
   }
 
@@ -316,9 +332,9 @@ export class KnowledgeBaseService implements OnModuleInit {
     let created = 0;
     for (const doc of initialKnowledge) {
       try {
-        // Gerar embedding simples baseado em título + descrição + tags
+        // Gerar embedding baseado em título + descrição + tags
         const textForEmbedding = `${doc.title} ${doc.description || ''} ${doc.tags.join(' ')}`;
-        const embedding = this.generateSimpleEmbedding(textForEmbedding);
+        const embedding = await this.generateEmbedding(textForEmbedding);
 
         await this.prisma.knowledgeNode.create({
           data: {
@@ -343,7 +359,7 @@ export class KnowledgeBaseService implements OnModuleInit {
    * Busca documentos similares baseado em query
    */
   async searchSimilar(query: string, limit: number = 5, nodeType?: string): Promise<any[]> {
-    const queryEmbedding = this.generateSimpleEmbedding(query);
+    const queryEmbedding = await this.generateEmbedding(query);
 
     const whereClause = nodeType ? { nodeType } : {};
 
@@ -398,7 +414,7 @@ export class KnowledgeBaseService implements OnModuleInit {
    */
   async addKnowledge(doc: KnowledgeDocument): Promise<void> {
     const textForEmbedding = `${doc.title} ${doc.description || ''} ${doc.tags.join(' ')}`;
-    const embedding = this.generateSimpleEmbedding(textForEmbedding);
+    const embedding = await this.generateEmbedding(textForEmbedding);
 
     await this.prisma.knowledgeNode.create({
       data: {
@@ -415,7 +431,24 @@ export class KnowledgeBaseService implements OnModuleInit {
   }
 
   /**
-   * Embedding simples usando TF-IDF
+   * Gera embedding (MiniMax ou fallback simples)
+   */
+  private async generateEmbedding(text: string): Promise<number[]> {
+    if (this.useMinimaxEmbeddings) {
+      try {
+        const result = await this.minimaxEmbeddings.generateEmbedding(text);
+        return result.embedding;
+      } catch (error: any) {
+        this.logger.warn(`⚠️  Falha ao gerar embedding MiniMax, usando fallback: ${error.message}`);
+        return this.generateSimpleEmbedding(text);
+      }
+    }
+
+    return this.generateSimpleEmbedding(text);
+  }
+
+  /**
+   * Embedding simples usando TF-IDF (fallback)
    */
   private generateSimpleEmbedding(text: string): number[] {
     const words = text.toLowerCase()

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TeamChatService } from './team-chat.service';
 import { TeamChatGateway } from '../websockets/team-chat.gateway';
@@ -11,23 +11,42 @@ export class TeamChatController {
         private gateway: TeamChatGateway
     ) { }
 
+    @Get('channels')
+    async getChannels() {
+        return this.service.getChannels();
+    }
+
+    @Get('messages/:channelId')
+    async getMessages(@Param('channelId') channelId: string) {
+        return this.service.getChannelMessages(channelId);
+    }
+
+    @Post('messages/:channelId')
+    async sendMessage(
+        @Param('channelId') channelId: string,
+        @Body() dto: { content: string },
+        @Req() req: any
+    ) {
+        const userId = req.user.id;
+        const message = await this.service.saveChannelMessage(userId, channelId, dto.content);
+
+        this.gateway.server.to(`team-chat:${channelId}`).emit('newMessage', message);
+        return message;
+    }
+
     @Get()
-    async getMessages(@Req() req: any) {
-        // Filter messages by user's sector
+    async getMessagesBySector(@Req() req: any) {
         const sector = req.user.sector || 'TI';
         return this.service.getMessages(sector);
     }
 
     @Post()
-    async sendMessage(@Body() dto: { content: string }, @Req() req: any) {
-        // userId and sector come from JWT guard (req.user)
+    async sendMessageBySector(@Body() dto: { content: string }, @Req() req: any) {
         const userId = req.user.id;
         const sector = req.user.sector || 'TI';
         const message = await this.service.saveMessage(userId, dto.content, sector);
 
-        // Notify via WebSocket - emit to sector-specific room
         this.gateway.server.to(`team-chat:${sector}`).emit('newMessage', message);
-
         return message;
     }
 }

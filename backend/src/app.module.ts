@@ -27,6 +27,7 @@ import { FaqModule } from './presentation/controllers/faq/faq.module';
 import { MetricsModule } from './presentation/controllers/metrics/metrics.module';
 import { ContactsModule } from './presentation/controllers/contacts/contacts.module';
 import { TeamChatModule } from './presentation/controllers/team-chat.module';
+import { ChatModule } from './presentation/controllers/chat/chat.module';
 import { PurchasesModule } from './presentation/controllers/purchases/purchases.module';
 import { ReportsModule } from './presentation/controllers/reports/reports.module';
 import { StockModule } from './presentation/controllers/stock/stock.module';
@@ -50,10 +51,15 @@ import { LiveViewModule } from './presentation/controllers/live-view/live-view.m
 import { NotificationPreferencesModule } from './presentation/controllers/notification-preferences/notification-preferences.module';
 import { SettingsModule } from './presentation/controllers/settings/settings.module';
 import { AdaptiveAIModule } from './presentation/controllers/adaptive-ai/adaptive-ai.module';
+import { CaptainModule } from './presentation/controllers/captain/captain.module';
+import { HermesModule } from './presentation/controllers/hermes/hermes.module';
+import { ToolsModule } from './presentation/controllers/tools/tools.module';
+
+// Admin
+import { AdminModule } from './presentation/controllers/admin/admin.module';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
-import { LogsController } from './presentation/controllers/admin/logs.controller';
 
 @Module({
   imports: [
@@ -87,11 +93,13 @@ import { LogsController } from './presentation/controllers/admin/logs.controller
     BotModule,
     UsersModule,
     AdaptiveAIModule, // 🧠 Sistema de IA Adaptativo
+    CaptainModule, // 🤖 Captain AI Assistant
     PartsModule,
     FaqModule,
     MetricsModule,
     ContactsModule,
     TeamChatModule,
+    ChatModule,
     PurchasesModule,
     ReportsModule,
     StockModule,
@@ -114,8 +122,11 @@ import { LogsController } from './presentation/controllers/admin/logs.controller
     LiveViewModule,
     NotificationPreferencesModule,
     SettingsModule,
+    HermesModule,
+    ToolsModule,
+    AdminModule,
   ],
-  controllers: [HealthController, LogsController],
+  controllers: [HealthController],
   providers: [
     // Apply rate limiting globally
     {

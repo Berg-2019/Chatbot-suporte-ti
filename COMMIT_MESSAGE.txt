@@ -1,0 +1,86 @@
+feat: Implementar Captain AI Assistant (inspirado no Chatwoot)
+
+Sistema de auto-resposta inteligente para resolver tickets tier-1 automaticamente.
+
+## 🚀 Novas Funcionalidades
+
+### Captain Assistant Service
+- Auto-resposta para problemas tier-1
+- Integração RAG (conversas anteriores) + Knowledge Base (15+ docs)
+- Multi-provider: MiniMax → Claude → OpenAI → Ollama
+- Sistema de confiança com escalação automática
+- Feedback loop para melhoria contínua
+
+### Integração Bot WhatsApp
+- Detecção inteligente de intent
+- Tentativa de auto-resolução antes de criar ticket
+- Captura de feedback do usuário
+- Fallback para ticket normal se não resolver
+
+### Endpoints REST
+- POST /api/captain/assist - Auto-resolução
+- POST /api/captain/feedback - Registro de feedback
+- GET /api/captain/performance - Estatísticas
+
+### Scripts & Ferramentas
+- Script de teste MiniMax (test-minimax.ts)
+- Configuração multi-provider no .env.example
+
+## 📦 Arquivos Criados
+
+Backend:
+- src/infrastructure/ai/captain-assistant.service.ts
+- src/presentation/controllers/captain/captain.controller.ts
+- src/presentation/controllers/captain/captain.module.ts
+- scripts/test-minimax.ts
+
+Bot:
+- Modificações em handlers/flow-handler.js (integração Captain)
+
+Documentação:
+- CAPTAIN_AI.md (documentação técnica completa)
+- IMPLEMENTACAO_RESUMO.md (resumo da implementação)
+- QUICK_START_CAPTAIN.md (guia de início rápido)
+
+## 📊 Impacto Esperado
+
+Baseado nas métricas do Chatwoot Captain AI:
+- 40-60% dos tickets tier-1 resolvidos automaticamente
+- Tempo de resposta reduzido em 90% (5-10min → <30s)
+- Redução de 40% na carga de trabalho dos técnicos
+- Aumento esperado de 15% na satisfação do cliente
+
+## 🔧 Configuração Necessária
+
+Adicionar ao .env:
+```
+MINIMAX_API_KEY=...
+ANTHROPIC_API_KEY=... (recomendado)
+OPENAI_API_KEY=... (opcional)
+```
+
+Testar integração:
+```bash
+cd backend && npx tsx scripts/test-minimax.ts
+```
+
+## 🎯 Próximos Passos (Roadmap)
+
+FASE 3: Captain Co-Pilot (sugestões para agentes)
+FASE 4: Embeddings reais (substituir TF-IDF)
+FASE 5: Analytics & Dashboard
+FASE 6: Captain FAQs (detectar gaps de conhecimento)
+FASE 7: Captain Memories (CRM inteligente)
+
+## 📚 Referências
+
+Inspirado em:
+- Chatwoot Captain AI: https://www.chatwoot.com/blog/ai-assistant-captain/
+- RAG Pattern: Retrieval-Augmented Generation
+- Multi-agent LLM Architecture
+
+---
+
+🤖 Generated with Claude Code
+Branch: feature/chatbot-upgrade
+Status: ✅ FASE 1 e 2 Completas - Pronto para testes

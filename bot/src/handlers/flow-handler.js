@@ -283,6 +283,57 @@ class FlowHandler {
         const intent = await intentService.classify(text, false);
         console.log(`🧠 Intenção classificada (sem ticket): ${intent.intent} (${(intent.confidence * 100).toFixed(0)}%)`);
 
+        // 🤖 CAPTAIN ASSISTANT - Tentar resolver automaticamente
+        if ((intent.intent === 'abrir_ticket_ti' || intent.intent === 'abrir_ticket_eletrica') && intent.confidence >= 0.70) {
+          console.log(`🤖 Captain Assistant tentando resolver: "${text.substring(0, 50)}..."`);
+
+          try {
+            const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+            const captainRes = await axios.post(
+              `${backendUrl}/api/captain/assist`,
+              {
+                message: text,
+                phoneNumber: phone,
+                intent: intent.intent
+              },
+              { timeout: 15000 }
+            );
+
+            const captainResponse = captainRes.data.data;
+
+            if (captainResponse.canAutoResolve && captainResponse.confidence >= 0.7) {
+              // ✅ Captain resolveu automaticamente!
+              console.log(`✅ Captain AUTO-RESOLVEU (${(captainResponse.confidence * 100).toFixed(0)}%)`);
+              await this.sendMessage(sock, from, captainResponse.suggestedResponse);
+
+              // Perguntar se resolveu
+              await this.sendMessage(
+                sock,
+                from,
+                '\n\n❓ Isso resolveu seu problema?\n\nDigite *sim* se resolveu ou *não* se ainda precisa de um técnico.'
+              );
+
+              // Salvar estado para capturar feedback
+              session = {
+                state: 'captain_feedback',
+                data: {
+                  captainAttemptId: Date.now().toString(), // TODO: usar ID real do banco
+                  originalMessage: text,
+                  captainResponse: captainResponse,
+                }
+              };
+              await redisService.setSession(phone, session);
+              return;
+            } else {
+              // Captain não pode resolver, continua para ticket normal
+              console.log(`⚠️ Captain escalou para humano (confidence: ${captainResponse.confidence})`);
+            }
+          } catch (captainError) {
+            console.warn(`⚠️ Captain falhou: ${captainError.message}, continuando para ticket normal`);
+            // Continua para fluxo de ticket normal
+          }
+        }
+
         // Se alta confiança de abertura de ticket, ir direto para coleta de dados
         if ((intent.intent === 'abrir_ticket_ti' || intent.intent === 'abrir_ticket_eletrica') && intent.confidence >= 0.70) {
           console.log(`✨ SKIP MENU - Criando ticket direto para: "${text}"`);
@@ -437,6 +488,11 @@ class FlowHandler {
 
       case STATES.CSAT_FEEDBACK:
         await this.handleCsatFeedback(sock, from, text, session);
+        break;
+
+      // Captain Assistant feedback
+      case 'captain_feedback':
+        await this.handleCaptainFeedback(sock, from, normalizedText, session);
         break;
 
       // Reservation flow states
@@ -1481,6 +1537,101 @@ class FlowHandler {
     } catch (error) {
       console.error('❌ Erro ao salvar CSAT:', error.message);
     }
+  }
+
+  /**
+   * Handler para feedback do Captain Assistant
+   */
+  async handleCaptainFeedback(sock, from, text, session) {
+    const phone = from.split('@')[0];
+
+    if (['sim', 's', 'yes'].includes(text)) {
+      // ✅ Captain resolveu o problema!
+      console.log(`✅ Captain feedback positivo - ${phone}`);
+
+      await this.sendMessage(sock, from,
+        `🎉 *Que ótimo!*\n\n` +
+        `Fico feliz que consegui ajudar!\n\n` +
+        `Se precisar de mais alguma coisa, é só enviar *oi* a qualquer momento. 😊`
+      );
+
+      // TODO: Registrar feedback no backend
+      // await axios.post(`${backendUrl}/api/captain/feedback`, {
+      //   attemptId: session.data.captainAttemptId,
+      //   wasHelpful: true
+      // });
+
+      await redisService.deleteSession(phone);
+    } else if (['nao', 'não', 'n', 'no'].includes(text)) {
+      // ❌ Captain não resolveu, criar ticket normalmente
+      console.log(`❌ Captain feedback negativo - criando ticket para ${phone}`);
+
+      await this.sendMessage(sock, from,
+        `Entendo! Vou criar um chamado para que um técnico possa te ajudar. 👨‍💻\n\n` +
+        `Por favor, me informe o *local* onde está o problema:`
+      );
+
+      // Continuar fluxo de ticket
+      const originalMessage = session.data.originalMessage;
+      session.state = STATES.ASK_LOCATION;
+      session.data = {
+        ...session.data,
+        problem: originalMessage,
+        ticketType: 'ti', // Detectar do intent original
+      };
+
+      // Coletar dados do usuário se necessário
+      const hasContact = await this.ensureUserDataForCaptain(sock, from, session);
+
+      if (!hasContact) {
+        // Ainda coletando dados
+        return;
+      }
+
+      await redisService.setSession(phone, session);
+
+      // TODO: Registrar feedback no backend
+      // await axios.post(`${backendUrl}/api/captain/feedback`, {
+      //   attemptId: session.data.captainAttemptId,
+      //   wasHelpful: false
+      // });
+    } else {
+      await this.sendMessage(sock, from, '❓ Por favor, responda *sim* ou *não*:');
+    }
+  }
+
+  /**
+   * Garante que dados do usuário estão disponíveis após Captain falhar
+   */
+  async ensureUserDataForCaptain(sock, from, session) {
+    const phone = from.split('@')[0];
+
+    // Verificar se contato existe no backend
+    try {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+      const contactRes = await axios.get(
+        `${backendUrl}/api/contacts/by-jid/${encodeURIComponent(from)}`,
+        { timeout: 3000 }
+      );
+
+      if (contactRes?.data) {
+        const contact = contactRes.data;
+        session.data.contactName = contact.name;
+        session.data.sector = contact.sector;
+        session.data.userDepartment = contact.department || contact.sector;
+        await redisService.setSession(phone, session);
+        return true;
+      }
+    } catch (e) {
+      // Contato não encontrado, precisa coletar
+      session.state = STATES.ASK_NAME;
+      session.data.afterUserData = STATES.ASK_LOCATION;
+      await redisService.setSession(phone, session);
+      await this.sendMessage(sock, from, 'Antes de continuar, qual é o seu *nome completo*?');
+      return false;
+    }
+
+    return false;
   }
 }
 

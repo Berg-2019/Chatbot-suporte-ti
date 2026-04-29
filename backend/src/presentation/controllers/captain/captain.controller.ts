@@ -10,7 +10,7 @@
 
 import { Controller, Post, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { CaptainAssistantService } from '../../../infrastructure/ai/captain-assistant.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 
 @Controller('captain')
 export class CaptainController {

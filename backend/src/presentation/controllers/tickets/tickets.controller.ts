@@ -12,19 +12,27 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
+  NotFoundException,
   SetMetadata,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
+import { Response } from 'express';
+import { createReadStream, existsSync } from 'fs';
 import { TicketsService } from './tickets.service';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { TicketStatus, Priority, TicketType } from '@prisma/client';
 
 @Controller('tickets')
 @UseGuards(AuthGuard('jwt'))
 export class TicketsController {
-  constructor(private ticketsService: TicketsService) { }
+  constructor(
+    private ticketsService: TicketsService,
+    private prisma: PrismaService,
+  ) { }
 
   @Get()
   async findAll(
@@ -34,6 +42,7 @@ export class TicketsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('type') type?: TicketType,
+    @Query('sector') sector?: string,
   ) {
     return this.ticketsService.findAll({
       status,
@@ -42,6 +51,7 @@ export class TicketsController {
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
       type,
+      sector,
     });
   }
 
@@ -145,10 +155,27 @@ export class TicketsController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadAttachment(
     @Param('id') id: string,
-    @UploadedFile() file: any, // Using explicit any to avoid lint issues with missing types
+    @UploadedFile() file: any,
+    @Request() req: any,
   ) {
     if (!file) throw new Error('Arquivo não enviado');
-    return this.ticketsService.addAttachment(id, file);
+    return this.ticketsService.addAttachment(id, file, req.user?.id);
+  }
+
+  // Endpoint público (sem JWT) para o bot baixar o anexo
+  @Get('attachments/:attachmentId/file')
+  @SetMetadata('isPublic', true)
+  async serveAttachment(
+    @Param('attachmentId') attachmentId: string,
+    @Res() res: Response,
+  ) {
+    const att = await this.prisma.attachment.findUnique({ where: { id: attachmentId } });
+    if (!att || !existsSync(att.path)) {
+      throw new NotFoundException('Anexo não encontrado');
+    }
+    res.setHeader('Content-Type', att.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${att.filename}"`);
+    createReadStream(att.path).pipe(res);
   }
 
   @Post(':id/auto-assign')

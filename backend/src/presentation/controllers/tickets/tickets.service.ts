@@ -42,6 +42,7 @@ export class TicketsService {
     page?: number;
     limit?: number;
     type?: TicketType;
+    sector?: string;
   }) {
     const page = filters?.page || 1;
     const limit = filters?.limit || 50;
@@ -56,6 +57,7 @@ export class TicketsService {
       };
     }
     if (filters?.type) where.type = filters.type;
+    if (filters?.sector) where.sector = filters.sector;
 
     const [tickets, total] = await Promise.all([
       this.prisma.ticket.findMany({
@@ -670,7 +672,7 @@ export class TicketsService {
     return ticket;
   }
 
-  async addAttachment(ticketId: string, file: any) {
+  async addAttachment(ticketId: string, file: any, senderId?: string) {
     const attachment = await this.prisma.attachment.create({
       data: {
         ticketId,
@@ -681,7 +683,55 @@ export class TicketsService {
       },
     });
 
-    console.log(`📎 Anexo adicionado ao ticket ${ticketId}: ${file.originalname}`);
+    console.log(`📎 Anexo adicionado ao ticket ${ticketId}: ${file.originalname} (${file.mimetype})`);
+
+    // Inferir tipo de mídia a partir do mimetype
+    const mt = (file.mimetype || '').toLowerCase();
+    let mediaType: 'image' | 'audio' | 'video' | 'document' = 'document';
+    let messageType: 'IMAGE' | 'AUDIO' | 'DOCUMENT' = 'DOCUMENT';
+    if (mt.startsWith('image/')) { mediaType = 'image'; messageType = 'IMAGE'; }
+    else if (mt.startsWith('audio/')) { mediaType = 'audio'; messageType = 'AUDIO'; }
+    else if (mt.startsWith('video/')) { mediaType = 'video'; messageType = 'DOCUMENT'; }
+
+    // URL pública/interna para o bot baixar o arquivo
+    const baseUrl = process.env.INTERNAL_BACKEND_URL || 'http://backend:3000';
+    const mediaUrl = `${baseUrl}/api/tickets/attachments/${attachment.id}/file`;
+
+    // Criar Message no banco para aparecer no chat (OUTGOING)
+    const message = await this.prisma.message.create({
+      data: {
+        ticketId,
+        content: mediaUrl,
+        type: messageType,
+        direction: 'OUTGOING',
+        senderId: senderId || null,
+        isInternal: false,
+      },
+    });
+
+    // Buscar ticket para obter o phoneNumber
+    const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
+
+    if (ticket?.phoneNumber) {
+      // Publicar na fila para o bot enviar via WhatsApp
+      await this.rabbitmq.publishOutgoingMessage({
+        to: ticket.phoneNumber,
+        ticketId,
+        mediaUrl,
+        mediaType,
+        mimeType: file.mimetype,
+        filename: file.originalname,
+      });
+      console.log(`📤 Mídia enfileirada para ${ticket.phoneNumber} (${mediaType})`);
+    }
+
+    // Notificar dashboard via socket
+    await this.rabbitmq.publishNotification({
+      type: 'new_message',
+      ticketId,
+      payload: message,
+    });
+
     return attachment;
   }
 

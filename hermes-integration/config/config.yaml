@@ -1,0 +1,31 @@
+# Hermes Helpdesk Configuration
+# This file is mounted into the hermes container at /opt/data/config.yaml
+
+model:
+  default: "openrouter/anthropic/claude-sonnet-4.7"
+  provider: "openrouter"
+
+display:
+  tool_progress: new
+  streaming: true
+  skin: default
+
+platform_toolsets:
+  whatsapp: [hermes-whatsapp]
+
+whatsapp:
+  enabled: true
+  mode: bot
+  bridge_port: 3001
+  dm_policy: open
+  allow_from: "*"
+  reply_prefix: ""
+
+messaging:
+  cwd: /opt/data
+  session_dir: /opt/data/sessions
+
+skills:
+  external_dirs:
+    - /opt/data/skills
+    - /opt/hermes/skills

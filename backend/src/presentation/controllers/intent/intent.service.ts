@@ -141,12 +141,12 @@ export class IntentService implements OnModuleInit {
 
       let result;
       let usedProvider = 'minimax';
-      let usedModel = 'abab6-chat';
+      let usedModel = 'MiniMax-M2.5';
 
       // 🚀 MiniMax como provider PRIMÁRIO (mais humanizado e fluido)
       if (this.minimaxApiKey) {
         try {
-          this.logger.log(`🤖 Usando MiniMax (abab6-chat) como provider primário...`);
+          this.logger.log(`🤖 Usando MiniMax (MiniMax-M2.5) como provider primário...`);
           result = await this.classifyWithMiniMax(userMessage, fullContext, suggestedIntent);
         } catch (error) {
           this.logger.warn(`MiniMax falhou, tentando Ollama como fallback...`);
@@ -250,21 +250,28 @@ Classifique usando padrões acima.
 JSON: {"intent":"...","confidence":0.95,"entities":{}}`;
     }
 
-    // Prompt otimizado com exemplos claros
+    // Prompt otimizado com exemplos ULTRA-ESPECÍFICOS
     return `Classifique a mensagem:
 
 "${userMessage}"
 
 Intenções:
-1. abrir_ticket_ti - Relata PROBLEMA técnico (PC/internet/sistema/impressora quebrou, não funciona, parou)
-2. abrir_ticket_eletrica - Relata PROBLEMA elétrico (luz/tomada/AC parou, não funciona)
-3. reservar_equipamento - QUER reservar equipamento
-4. consultar_ticket - QUER saber status
-5. falar_tecnico - PEDE falar com pessoa/técnico (sem mencionar problema técnico específico)
+1. abrir_ticket_ti - Usuário RELATA problema técnico concreto
+   ✅ Exemplos: "sem internet", "PC não liga", "impressora quebrou", "sistema lento", "erro"
+
+2. abrir_ticket_eletrica - Usuário RELATA problema elétrico concreto
+   ✅ Exemplos: "sem luz", "tomada quebrada", "AC parou"
+
+3. falar_tecnico - APENAS pede falar com alguém, SEM descrever problema
+   ✅ Exemplos: "quero falar com técnico" (sem mencionar problema)
+   ❌ NÃO use se descreve problema técnico!
+
+4. reservar_equipamento - Quer reservar equipamento
+5. consultar_ticket - Quer saber status
 6. saudacao - Só cumprimento
 7. outro - Nada acima
 
-Regra: Problema técnico = abrir_ticket, não = falar_tecnico
+REGRA CRÍTICA: Menciona problema concreto (internet, PC, erro, etc) = SEMPRE abrir_ticket!
 
 JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
   }
@@ -353,9 +360,9 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
     try {
       // MiniMax agora usa formato OpenAI-compatible
       const response = await axios.post(
-        'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
+        'https://api.minimax.io/v1/text/chatcompletion_v2',
         {
-          model: 'abab6-chat', // Modelo base e estável
+          model: 'MiniMax-M2', // non-reasoning model (M2.5 gasta tokens pensando)
           messages: [
             {
               role: 'system',
@@ -366,9 +373,9 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
               content: prompt
             }
           ],
-          temperature: 0.2, // Um pouco mais criativo para humanização
+          temperature: 0.2,
           top_p: 0.95,
-          max_tokens: 80 // Reduzido de 200 para 80 (economiza tokens)
+          max_tokens: 300
         },
         {
           headers: {
