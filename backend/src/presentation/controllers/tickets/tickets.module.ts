@@ -8,7 +8,6 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { TicketsController } from './tickets.controller';
-import { BotTicketsController } from './bot-tickets.controller';
 import { TicketsService } from './tickets.service';
 import { AutomationModule } from '../automation/automation.module';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
@@ -31,7 +30,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
       },
     }),
   ],
-  controllers: [TicketsController, BotTicketsController],
+  controllers: [TicketsController],
   providers: [TicketsService, PrismaService],
   exports: [TicketsService],
 })
