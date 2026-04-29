@@ -43,18 +43,22 @@ async function bootstrap() {
   // Global prefix
   app.setGlobalPrefix('api');
 
-  // CORS - More restrictive configuration
+  // CORS - Multi-tenant (3 subdomains + dev ports)
   const allowedOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',')
     : [
-      'http://localhost:5173',
-      'http://localhost:3001',
+      // Production subdomains
+      'https://ti.helpdeskmsm.com.br',
+      'https://eletrica.helpdeskmsm.com.br',
+      'https://compras.helpdeskmsm.com.br',
+      // Legacy
       'http://helpdeskmsm.com.br',
       'https://helpdeskmsm.com.br',
-      'http://www.helpdeskmsm.com.br',
-      'https://www.helpdeskmsm.com.br',
-      'http://192.168.7.118',
-      'http://192.168.7.118:5173',
+      // Dev (simulating subdomains via ports)
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5175',
+      'http://localhost:3001',
     ];
 
   app.enableCors({
@@ -79,7 +83,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Frontend-Sector'],
     exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
   });
 

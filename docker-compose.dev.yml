@@ -1,5 +1,5 @@
 # =============================================================================
-# Helpdesk WhatsApp + GLPI - Ambiente de DESENVOLVIMENTO
+# Helpdesk MSM - Ambiente de DESENVOLVIMENTO
 # Docker Compose com hot-reload para dev local
 # =============================================================================
 
@@ -108,76 +108,15 @@ services:
         condition: service_healthy
 
   # ============================================================================
-  # Frontend TI - Vite DEV (Hot Reload)
+  # Frontend - profile-driven-app (Único build, 3 subdomínios via nginx)
   # ============================================================================
-  frontend-ti:
-    build:
-      context: ./support-mobile
-      dockerfile: Dockerfile.dev
-    container_name: helpdesk_frontend_ti_dev
-    restart: unless-stopped
-    ports:
-      - "5173:8080"
-    environment:
-      NODE_ENV: development
-      VITE_API_URL: http://localhost:3000
-      VITE_WS_URL: ws://localhost:3000
-      VITE_SECTOR: TI
-    volumes:
-      - ./support-mobile:/app:delegated
-      - /app/node_modules
-    networks:
-      - helpdesk_network
-    depends_on:
-      - backend
-
-  # ============================================================================
-  # Frontend Elétrica - Vite DEV (Hot Reload)
-  # ============================================================================
-  frontend-electric:
-    build:
-      context: ./suport-eletric
-      dockerfile: Dockerfile.dev
-    container_name: helpdesk_frontend_electric_dev
-    restart: unless-stopped
-    ports:
-      - "5174:8080"
-    environment:
-      NODE_ENV: development
-      VITE_API_URL: http://localhost:3000
-      VITE_WS_URL: ws://localhost:3000
-      VITE_SECTOR: ELECTRIC
-    volumes:
-      - ./suport-eletric:/app:delegated
-      - /app/node_modules
-    networks:
-      - helpdesk_network
-    depends_on:
-      - backend
-
-  # ============================================================================
-  # Frontend Compras - Vite DEV (Hot Reload)
-  # ============================================================================
-  frontend-compras:
-    build:
-      context: ./support-compras
-      dockerfile: Dockerfile.dev
-    container_name: helpdesk_frontend_compras_dev
-    restart: unless-stopped
-    ports:
-      - "5175:8080"
-    environment:
-      NODE_ENV: development
-      VITE_API_URL: http://localhost:3000
-      VITE_WS_URL: ws://localhost:3000
-      VITE_SECTOR: COMPRAS
-    volumes:
-      - ./support-compras:/app:delegated
-      - /app/node_modules
-    networks:
-      - helpdesk_network
-    depends_on:
-      - backend
+  # NOTA: Em dev local, rode o frontend separadamente com bun:
+  #   cd ~/Projetos/profile-driven-app
+  #   bun run dev:ti       # → http://localhost:5173 (TI)
+  #   bun run dev:electric  # → http://localhost:5174 (Elétrica)
+  #   bun run dev:compras   # → http://localhost:5175 (Compras)
+  #
+  # Para smoke test completo com nginx, use docker-compose.staging.yml
 
   # ============================================================================
   # Intent Classification Service - Python com spaCy/sklearn

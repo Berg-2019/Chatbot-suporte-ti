@@ -158,4 +158,43 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.setCache(key, data, ttl);
     return data;
   }
+
+  // === WhatsApp Idempotency ===
+
+  private readonly WA_MESSAGE_TTL = 86400; // 24 hours
+
+  /**
+   * Check if a WhatsApp message was already processed (idempotency).
+   * @param waMessageId The unique message ID from WhatsApp
+   * @returns true if message was already processed, false otherwise
+   */
+  async isMessageProcessed(waMessageId: string): Promise<boolean> {
+    const key = `wa:processed:${waMessageId}`;
+    return this.exists(key);
+  }
+
+  /**
+   * Mark a WhatsApp message as processed with 24h TTL.
+   * @param waMessageId The unique message ID from WhatsApp
+   * @param ttl Optional TTL in seconds (default 24 hours)
+   */
+  async markMessageProcessed(waMessageId: string, ttl: number = this.WA_MESSAGE_TTL): Promise<void> {
+    const key = `wa:processed:${waMessageId}`;
+    await this.set(key, '1', ttl);
+  }
+
+  /**
+   * Atomic check-and-set: returns true if message was NOT yet processed
+   * (caller should process), false if it was already processed (skip).
+   * Uses Redis SETNX semantics for true atomicity.
+   */
+  async tryMarkMessageProcessed(waMessageId: string, ttl: number = this.WA_MESSAGE_TTL): Promise<boolean> {
+    const key = `wa:processed:${waMessageId}`;
+    const result = await this.client.setnx(key, '1');
+    if (result === 1) {
+      await this.client.expire(key, ttl);
+      return true; // Message was not processed, now marked
+    }
+    return false; // Already processed
+  }
 }

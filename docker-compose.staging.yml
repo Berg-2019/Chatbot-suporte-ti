@@ -1,0 +1,147 @@
+# =============================================================================
+# Helpdesk MSM — Staging Compose
+#
+# Smoke test completo com nginx + 3 subdomínios simulados via /etc/hosts:
+#   127.0.0.1 ti.helpdeskmsm.local eletrica.helpdeskmsm.local compras.helpdeskmsm.local api.helpdeskmsm.local
+#
+# Uso:
+#   docker compose -f docker-compose.staging.yml up
+#   # Acessar https://ti.helpdeskmsm.local etc
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: helpdesk_postgres_staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: helpdesk
+      POSTGRES_USER: helpdesk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-helpdesk123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_staging:/var/lib/postgresql/data
+    networks:
+      - helpdesk_staging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpdesk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: helpdesk_redis_staging
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_staging:/data
+    networks:
+      - helpdesk_staging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: helpdesk_rabbitmq_staging
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-helpdesk}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-helpdesk123}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_staging:/var/lib/rabbitmq
+    networks:
+      - helpdesk_staging
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: helpdesk_backend_staging
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://helpdesk:${POSTGRES_PASSWORD:-helpdesk123}@postgres:5432/helpdesk
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-staging-secret-jwt-change-me}
+      FRONTEND_URL: https://ti.helpdeskmsm.local,https://eletrica.helpdeskmsm.local,https://compras.helpdeskmsm.local
+    volumes:
+      - backend_logs_staging:/app/logs
+    networks:
+      - helpdesk_staging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  hermes-tools:
+    build:
+      context: ./hermes-integration/backend-tools
+      dockerfile: Dockerfile
+    container_name: helpdesk_hermes_tools_staging
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:3000
+      HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
+      TOOLS_PORT: 3003
+    networks:
+      - helpdesk_staging
+    depends_on:
+      - backend
+
+  # -----------------------------------------------------------------------
+  # Nginx — simula os 4 subdomínios em portas locais
+  # -----------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: helpdesk_nginx_staging
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/sites-enabled:/etc/nginx/conf.d:ro
+      - frontend_staging_dist:/usr/share/nginx/html:ro
+      - frontend_staging_manifests:/usr/share/nginx/html/manifests:ro
+      - ./scripts/self-signed-cert.sh:/docker-entrypoint.d/gen-cert.sh:ro
+    networks:
+      - helpdesk_staging
+    depends_on:
+      - backend
+
+volumes:
+  postgres_staging:
+  redis_staging:
+  rabbitmq_staging:
+  backend_logs_staging:
+  frontend_staging_dist:
+  frontend_staging_manifests:
+
+networks:
+  helpdesk_staging:
+    name: helpdesk_staging_network

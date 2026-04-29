@@ -213,7 +213,7 @@ export class TicketsService {
     // Check if ticket is already assigned
     const currentTicket = await this.prisma.ticket.findUnique({
       where: { id },
-      select: { assignedToId: true, status: true, title: true, glpiId: true, phoneNumber: true, customerName: true }
+      select: { assignedToId: true, status: true, title: true, phoneNumber: true, customerName: true }
     });
 
     if (!currentTicket) throw new NotFoundException('Ticket não encontrado');
@@ -246,7 +246,7 @@ export class TicketsService {
 
     // Notificar usuário que técnico assumiu
     if (ticket.phoneNumber) {
-      const message = `✅ *Ótima notícia!*\n\nSeu chamado *#${ticket.glpiId || ticket.id.slice(-6)}* foi atribuído ao técnico *${technician?.name || 'Suporte'}*.\n\nEle entrará em contato em breve para resolver seu problema.`;
+      const message = `✅ *Ótima notícia!*\n\nSeu chamado *#${ticket.id.slice(-6)}* foi atribuído ao técnico *${technician?.name || 'Suporte'}*.\n\nEle entrará em contato em breve para resolver seu problema.`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: ticket.phoneNumber,
@@ -257,7 +257,7 @@ export class TicketsService {
 
     // Notificar técnico via WhatsApp
     if (technician?.phoneNumber && technician?.receiveAlerts) {
-      const techMessage = `🎫 *Novo chamado atribuído!*\n\nID: *#${ticket.glpiId || ticket.id.slice(-6)}*\nTítulo: ${ticket.title}\nCliente: ${ticket.phoneNumber?.split('@')[0] || 'N/A'}\n\nAcesse o painel para mais detalhes.`;
+      const techMessage = `🎫 *Novo chamado atribuído!*\n\nID: *#${ticket.id.slice(-6)}*\nTítulo: ${ticket.title}\nCliente: ${ticket.phoneNumber?.split('@')[0] || 'N/A'}\n\nAcesse o painel para mais detalhes.`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: technician.phoneNumber.includes('@') ? technician.phoneNumber : `${technician.phoneNumber}@s.whatsapp.net`,
@@ -328,7 +328,7 @@ export class TicketsService {
     });
 
     if (newTechnician?.phoneNumber && newTechnician?.receiveAlerts) {
-      const techMessage = `🔄 *Chamado Transferido para Você!*\n\nID: *#${ticket.glpiId || ticket.id.slice(-6)}*\nTítulo: ${ticket.title}\nDe: ${currentUser?.name || 'Sistema'}\n\nAcesse o painel para assumir.`;
+      const techMessage = `🔄 *Chamado Transferido para Você!*\n\nID: *#${ticket.id.slice(-6)}*\nTítulo: ${ticket.title}\nDe: ${currentUser?.name || 'Sistema'}\n\nAcesse o painel para assumir.`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: newTechnician.phoneNumber.includes('@') ? newTechnician.phoneNumber : `${newTechnician.phoneNumber}@s.whatsapp.net`,
@@ -698,7 +698,6 @@ export class TicketsService {
         priority: true,
         phoneNumber: true,
         title: true,
-        glpiId: true,
       },
     });
 

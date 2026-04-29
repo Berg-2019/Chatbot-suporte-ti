@@ -1549,13 +1549,14 @@ enum LicenseType {
 }
 
 model LicenseAssignment {
-  id        String   @id @default(uuid())
-  licenseId String
-  license   License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  assetId   String?
-  asset     Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
-  userId    String?
-  assignedAt DateTime @default(now())
+  id         String    @id @default(uuid())
+  licenseId  String
+  license    License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  assetId    String?
+  asset      Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  userId     String?
+  assignedAt DateTime  @default(now())
+  returnedAt DateTime?
 
   @@map("license_assignments")
 }

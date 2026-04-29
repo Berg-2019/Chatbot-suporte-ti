@@ -20,19 +20,6 @@ export class LoginDto {
   password: string;
 }
 
-export class GlpiLoginDto {
-  @IsString()
-  @MinLength(3, { message: 'Login deve ter no mínimo 3 caracteres' })
-  @MaxLength(50, { message: 'Login muito longo' })
-  @Transform(({ value }) => value?.trim())
-  login: string;
-
-  @IsString()
-  @MinLength(6, { message: 'Senha deve ter no mínimo 6 caracteres' })
-  @MaxLength(100, { message: 'Senha muito longa' })
-  password: string;
-}
-
 enum UserRole {
   ADMIN = 'ADMIN',
   AGENT = 'AGENT',

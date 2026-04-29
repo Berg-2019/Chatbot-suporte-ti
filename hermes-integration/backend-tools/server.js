@@ -1,9 +1,9 @@
 /**
  * Hermes Helpdesk Tools Server
- * 
+ *
  * Servidor bridge que expõe tools do helpdesk para o Hermes Agent.
  * Traduz chamadas de tools do Hermes em requisições HTTP para o backend NestJS.
- * 
+ *
  * Este servidor pode ser usado como alternativa ao acesso direto do Hermes
  * aos endpoints /api/hermes/* do backend.
  */
@@ -12,6 +12,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import CircuitBreaker from 'opossum';
 
 dotenv.config();
 
@@ -31,6 +32,45 @@ const api = axios.create({
   },
   timeout: 15000,
 });
+
+// ============================================
+// CIRCUIT BREAKER
+// ============================================
+
+const circuitBreakerOptions = {
+  timeout: 10000, // Tempo máximo por requisição
+  errorThresholdPercentage: 50, // Abre circuito se 50% das requisições falharem
+  resetTimeout: 30000, // Tenta novamente após 30 segundos
+};
+
+const backendCircuit = new CircuitBreaker(async (req) => {
+  return await api(req).catch(err => {
+    throw err;
+  });
+}, circuitBreakerOptions);
+
+backendCircuit.on('open', () => {
+  console.warn('🔴 Circuit breaker ABERTO — backend indisponível');
+});
+
+backendCircuit.on('close', () => {
+  console.log('🟢 Circuit breaker FECHADO — backend disponível');
+});
+
+backendCircuit.on('halfOpen', () => {
+  console.log('🟡 Circuit breaker MEIO ABERTO — testando backend');
+});
+
+// ============================================
+// HELPER: Request com circuit breaker
+// ============================================
+
+async function safeBackendRequest(req) {
+  if (backendCircuit.status.name === 'open') {
+    throw new Error('CIRCUIT_OPEN');
+  }
+  return backendCircuit.fire(req);
+}
 
 // ============================================
 // TOOLS REGISTRY - Definição das ferramentas
@@ -244,12 +284,23 @@ app.get('/api/tools', (req, res) => {
   res.json({ tools });
 });
 
-// Executar uma tool
+// Executar uma tool (com circuit breaker)
 app.post('/api/tools/execute', async (req, res) => {
   const { tool_name, parameters } = req.body;
 
   if (!tool_name) {
     return res.status(400).json({ error: 'tool_name é obrigatório' });
+  }
+
+  // Fallback responses when circuit is open
+  if (backendCircuit.status.name === 'open') {
+    return res.status(503).json({
+      success: false,
+      tool: tool_name,
+      error: 'Serviço temporariamente indisponível. Tente novamente em alguns minutos ou abra um chamado pelo portal.',
+      circuit_breake: true,
+      fallback_message: 'Desculpe, estou com problemas técnicos no momento. Você pode abrir um ticket pelo portal web ou tentar novamente em breve.',
+    });
   }
 
   const tool = tools.find(t => t.name === tool_name);
@@ -271,6 +322,15 @@ app.post('/api/tools/execute', async (req, res) => {
     console.log(`✅ Tool ${tool_name} executada com sucesso`);
     res.json({ success: true, tool: tool_name, result });
   } catch (error) {
+    if (error.message === 'CIRCUIT_OPEN') {
+      return res.status(503).json({
+        success: false,
+        tool: tool_name,
+        error: 'Serviço temporariamente indisponível',
+        circuit_breake: true,
+        fallback_message: 'Desculpe, estou com problemas técnicos. Tente novamente em breve.',
+      });
+    }
     console.error(`❌ Erro na tool ${tool_name}:`, error.response?.data || error.message);
     res.status(error.response?.status || 500).json({
       success: false,
@@ -279,6 +339,91 @@ app.post('/api/tools/execute', async (req, res) => {
       details: error.response?.data || null,
     });
   }
+});
+
+// ============================================
+// AUTO-RESOLVE (Captain as tool)
+// ============================================
+
+// Tool: auto_resolve_attempt
+const autoResolveTool = {
+  name: 'auto_resolve_attempt',
+  description: 'Tenta resolver automaticamente um problema usando IA (Captain). Se confiança >= 0.85, responde diretamente. Caso contrário, indica que precisa de intervenção humana.',
+  parameters: {
+    type: 'object',
+    properties: {
+      message: { type: 'string', description: 'Mensagem do usuário descrevendo o problema' },
+      phone: { type: 'string', description: 'Telefone do usuário (formato: 5511999999999)' },
+      intent: { type: 'string', description: 'Intenção detectada (opcional)' },
+    },
+    required: ['message', 'phone'],
+  },
+};
+
+tools.push(autoResolveTool);
+
+toolImplementations.auto_resolve_attempt = async ({ message, phone, intent }) => {
+  if (backendCircuit.status.name === 'open') {
+    throw new Error('CIRCUIT_OPEN');
+  }
+  const res = await api.post('/api/captain/assist', { message, phoneNumber: phone, intent: intent || 'unknown' });
+  return res.data;
+};
+
+// Endpoint: POST /tools/auto-resolve-attempt
+app.post('/api/tools/auto-resolve-attempt', async (req, res) => {
+  const { message, phone, intent } = req.body;
+
+  if (!message || !phone) {
+    return res.status(400).json({ error: 'message e phone são obrigatórios' });
+  }
+
+  if (backendCircuit.status.name === 'open') {
+    return res.json({
+      success: false,
+      resolved: false,
+      confidence: 0,
+      message: 'Serviço temporariamente indisponível. Por favor, abra um ticket pelo portal.',
+      fallback: true,
+    });
+  }
+
+  try {
+    const result = await toolImplementations.auto_resolve_attempt({ message, phone, intent });
+    res.json({
+      success: true,
+      resolved: result.data?.resolved || false,
+      confidence: result.data?.confidence || 0,
+      message: result.data?.message || result.data?.answer || 'Não foi possível resolver automaticamente.',
+      requires_escalation: (result.data?.confidence || 0) < 0.85,
+    });
+  } catch (error) {
+    console.error('❌ Erro no auto-resolve:', error.message);
+    if (error.message === 'CIRCUIT_OPEN') {
+      return res.json({
+        success: false,
+        resolved: false,
+        confidence: 0,
+        message: 'Serviço temporariamente indisponível. Tente novamente ou abra um ticket.',
+        fallback: true,
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.message || error.message,
+    });
+  }
+});
+
+// ============================================
+// CIRCUIT BREAKER STATUS
+// ============================================
+
+app.get('/api/circuit-status', (req, res) => {
+  res.json({
+    backend: BACKEND_URL,
+    circuit_status: backendCircuit.status.name,
+  });
 });
 
 // ============================================
@@ -295,10 +440,13 @@ app.listen(PORT, () => {
   console.log(`   Backend: ${BACKEND_URL}`);
   console.log(`   Tools:   ${tools.length} disponíveis`);
   console.log(`   API Key: ${HERMES_API_KEY ? '✅ configurada' : '❌ não configurada'}`);
+  console.log(`   Circuit: ✅ enabled (opossum)`);
   console.log('');
   console.log('   Endpoints:');
-  console.log('   GET  /health          - Health check');
-  console.log('   GET  /api/tools       - Listar tools');
-  console.log('   POST /api/tools/execute - Executar tool');
+  console.log('   GET  /health                  - Health check');
+  console.log('   GET  /api/tools               - Listar tools');
+  console.log('   POST /api/tools/execute       - Executar tool');
+  console.log('   POST /api/tools/auto-resolve  - Auto-resolve via Captain');
+  console.log('   GET  /api/circuit-status     - Status do circuit breaker');
   console.log('');
 });

@@ -1,6 +1,6 @@
 /**
  * Hermes Service
- * 
+ *
  * Camada de serviço que encapsula a lógica de negócio dos endpoints do Hermes Agent.
  * Separa responsabilidades do controller, seguindo Clean Architecture.
  */
@@ -8,6 +8,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { AlertService } from '../../../infrastructure/services/alert.service';
+import { RedisService } from '../../../infrastructure/cache/redis.service';
 import {
   CreateHermesTicketDto,
   EscalateDto,
@@ -21,6 +22,7 @@ export class HermesService {
   constructor(
     private prisma: PrismaService,
     private alertService: AlertService,
+    private redis: RedisService,
   ) {}
 
   // ============================================
@@ -457,6 +459,16 @@ export class HermesService {
    * Usado para sincronizar eventos (conversa encerrada, feedback, etc.)
    */
   async handleWebhook(event: string, payload: any) {
+    // Idempotency check for WhatsApp messages
+    if (event === 'whatsapp.message' && payload.wa_message_id) {
+      const alreadyProcessed = await this.redis.tryMarkMessageProcessed(payload.wa_message_id);
+      if (!alreadyProcessed) {
+        this.logger.log(`⏭️ Mensagem WhatsApp ${payload.wa_message_id} já processada, ignorando`);
+        return { received: true, event, skipped: true, reason: 'duplicate_message' };
+      }
+      this.logger.log(`🔔 Nova mensagem WhatsApp: ${payload.wa_message_id}`);
+    }
+
     this.logger.log(`🔔 Hermes webhook: ${event}`);
 
     switch (event) {
@@ -490,11 +502,31 @@ export class HermesService {
         this.logger.log(`📊 Feedback Hermes: ${payload.helpful ? 'positivo' : 'negativo'}`);
         break;
 
+      case 'whatsapp.message':
+        // Processar mensagem WhatsApp - acionar Captain para auto-resolve
+        if (payload.text && payload.phone) {
+          this.handleWhatsAppMessage(payload).catch(err => {
+            this.logger.error(`❌ Erro ao processar mensagem WhatsApp: ${err.message}`);
+          });
+        }
+        break;
+
       default:
         this.logger.warn(`⚠️ Evento Hermes desconhecido: ${event}`);
     }
 
     return { received: true, event };
+  }
+
+  /**
+   * Process incoming WhatsApp message through Captain for auto-resolution.
+   */
+  private async handleWhatsAppMessage(payload: { text: string; phone: string; name?: string }) {
+    this.logger.log(`💬 Mensagem WhatsApp de ${payload.phone}: "${payload.text?.substring(0, 50)}..."`);
+
+    // This is handled by the Captain service which is called separately
+    // The webhook just acknowledges receipt
+    // The actual auto-resolve happens via POST /api/hermes/auto-resolve
   }
 
   // ============================================

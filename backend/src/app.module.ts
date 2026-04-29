@@ -55,6 +55,7 @@ import { CaptainModule } from './presentation/controllers/captain/captain.module
 import { HermesModule } from './presentation/controllers/hermes/hermes.module';
 import { ToolsModule } from './presentation/controllers/tools/tools.module';
 import { AssetsModule } from './presentation/controllers/assets/assets.module';
+import { LicensesModule } from './presentation/controllers/licenses/licenses.module';
 import { SlaModule } from './presentation/controllers/sla/sla.module';
 
 // Admin
@@ -127,6 +128,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     HermesModule,
     ToolsModule,
     AssetsModule,
+    LicensesModule,
     SlaModule,
     AdminModule,
   ],
