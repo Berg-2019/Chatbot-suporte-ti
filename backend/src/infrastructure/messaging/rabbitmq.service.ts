@@ -156,7 +156,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   }
 
   async publishNotification(data: {
-    type: 'ticket_created' | 'ticket_assigned' | 'ticket_updated' | 'new_message' | 'technician_alert' | 'user_mentioned';
+    type: 'ticket_created' | 'ticket_assigned' | 'ticket_updated' | 'new_message' | 'technician_alert' | 'user_mentioned' | 'purchase_request_updated';
     ticketId?: string;
     userId?: string;
     alertId?: string;

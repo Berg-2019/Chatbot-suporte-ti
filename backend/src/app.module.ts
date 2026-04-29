@@ -28,6 +28,7 @@ import { ContactsModule } from './presentation/controllers/contacts/contacts.mod
 import { TeamChatModule } from './presentation/controllers/team-chat.module';
 import { ChatModule } from './presentation/controllers/chat/chat.module';
 import { PurchasesModule } from './presentation/controllers/purchases/purchases.module';
+import { PurchaseRequestsModule } from './presentation/controllers/purchase-requests/purchase-requests.module';
 import { ReportsModule } from './presentation/controllers/reports/reports.module';
 import { StockModule } from './presentation/controllers/stock/stock.module';
 import { ReservationModule } from './presentation/controllers/reservations/reservation.module';
@@ -101,6 +102,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     TeamChatModule,
     ChatModule,
     PurchasesModule,
+    PurchaseRequestsModule,
     ReportsModule,
     StockModule,
     ReservationModule,

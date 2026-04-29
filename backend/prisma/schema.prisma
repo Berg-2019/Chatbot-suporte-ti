@@ -550,6 +550,8 @@ enum PurchaseRequestStatus {
   APPROVED // Aprovada
   REJECTED // Rejeitada
   CANCELLED // Cancelada pelo solicitante
+  PURCHASED // Comprada (produto adquirido)
+  DELIVERED // Entregue ao solicitante
 }
 
 model PurchaseRequest {
@@ -566,8 +568,12 @@ model PurchaseRequest {
 
   // Setor solicitante
   sector         Sector
-  requesterName  String // Nome de quem solicitou
+  requesterName  String
   requesterPhone String?
+  requestedById  String? // User ID do solicitante
+
+  // Link com Ticket (se criada a partir de um chamado)
+  ticketId String?
 
   // Status
   status PurchaseRequestStatus @default(PENDING)
@@ -586,6 +592,7 @@ model PurchaseRequest {
   @@index([sector])
   @@index([status])
   @@index([createdAt(sort: Desc)])
+  @@index([requestedById])
   @@map("purchase_requests")
 }
 
