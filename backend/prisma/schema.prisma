@@ -58,6 +58,9 @@ model User {
   agentMetrics      AgentMetric[]
   articleFeedback   ArticleFeedback[]
 
+  assetsOwned       Asset[]    @relation("AssetCurrentOwner")
+  assetAssignments  AssetAssignment[]
+
   @@index([role, active])
   @@index([email])
   @@map("users")
@@ -136,6 +139,9 @@ model Ticket {
   csatResponse CsatResponse?
   labels       TicketLabel[]
   emailMapping EmailTicketMapping?
+
+  affectedAssetId String?
+  affectedAsset   Asset?  @relation("AssetTickets", fields: [affectedAssetId], references: [id])
 
   @@index([phoneNumber])
   @@index([status])
@@ -1436,6 +1442,113 @@ model ArticleFeedback {
   @@index([articleId])
   @@index([userId])
   @@map("article_feedback")
+}
+
+// ===========================================================================
+// PHASE 2 - CMDB Nativo: Asset, License e Assignment
+// ===========================================================================
+
+model Asset {
+  id           String   @id @default(uuid())
+  tag          String   @unique // patrimônio (QR code)
+  serialNumber String?  @unique
+  name         String
+  category     AssetCategory
+  status       AssetLifecycle @default(IN_USE)
+  sector       Sector
+  location     String?
+  manufacturer String?
+  model        String?
+  purchaseDate DateTime?
+  warrantyEndsAt DateTime?
+  notes        String?
+
+  currentUserId String?
+  currentUser   User?   @relation("AssetCurrentOwner", fields: [currentUserId], references: [id])
+
+  assignments  AssetAssignment[]
+  tickets      Ticket[]    @relation("AssetTickets")
+  licenses     LicenseAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sector, status])
+  @@index([category])
+  @@index([currentUserId])
+  @@map("assets")
+}
+
+enum AssetCategory {
+  COMPUTER
+  LAPTOP
+  PRINTER
+  PHONE
+  PERIPHERAL
+  NETWORK_DEVICE
+  ELECTRICAL_TOOL
+  OTHER
+}
+
+enum AssetLifecycle {
+  IN_STOCK
+  IN_USE
+  IN_MAINTENANCE
+  RETIRED
+  LOST
+}
+
+model AssetAssignment {
+  id         String    @id @default(uuid())
+  assetId    String
+  asset      Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime  @default(now())
+  returnedAt DateTime?
+  reason     String?
+
+  @@index([assetId, returnedAt])
+  @@index([userId])
+  @@map("asset_assignments")
+}
+
+model License {
+  id          String   @id @default(uuid())
+  software    String
+  vendor      String?
+  licenseKey  String?
+  type        LicenseType
+  seats       Int      @default(1)
+  expiresAt   DateTime?
+  cost        Decimal? @db.Decimal(10, 2)
+
+  assignments LicenseAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("licenses")
+}
+
+enum LicenseType {
+  PERPETUAL
+  SUBSCRIPTION
+  OEM
+  VOLUME
+}
+
+model LicenseAssignment {
+  id        String   @id @default(uuid())
+  licenseId String
+  license   License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  assetId   String?
+  asset     Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  userId    String?
+  assignedAt DateTime @default(now())
+
+  @@map("license_assignments")
 }
 
 // ===========================================================================

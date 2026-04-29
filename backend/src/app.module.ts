@@ -53,6 +53,7 @@ import { AdaptiveAIModule } from './presentation/controllers/adaptive-ai/adaptiv
 import { CaptainModule } from './presentation/controllers/captain/captain.module';
 import { HermesModule } from './presentation/controllers/hermes/hermes.module';
 import { ToolsModule } from './presentation/controllers/tools/tools.module';
+import { AssetsModule } from './presentation/controllers/assets/assets.module';
 
 // Admin
 import { AdminModule } from './presentation/controllers/admin/admin.module';
@@ -122,6 +123,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     SettingsModule,
     HermesModule,
     ToolsModule,
+    AssetsModule,
     AdminModule,
   ],
   controllers: [HealthController],
