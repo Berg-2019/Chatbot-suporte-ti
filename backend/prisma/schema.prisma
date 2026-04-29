@@ -40,7 +40,7 @@ model User {
   // Alertas
   phoneNumber   String? // WhatsApp para receber alertas
   receiveAlerts Boolean @default(true)
-  sector        String  @default("TI") // TI ou ELECTRIC
+  sector        Sector  @default(TI)
 
   // Notification Preferences (Phase 5)
   notificationSound String  @default("default") // default, bell, chime, ping, custom
@@ -79,6 +79,12 @@ enum TechnicianLevel {
   N3 // Terceiro nível - especialista
 }
 
+enum Sector {
+  TI
+  ELECTRIC
+  COMPRAS
+}
+
 enum AgentStatus {
   ONLINE // Disponível para atendimento
   BUSY // Ocupado (não aceita novos tickets)
@@ -100,7 +106,7 @@ model Ticket {
   priority     Priority     @default(NORMAL)
   phoneNumber  String // Telefone do cliente
   customerName String? // Nome do cliente (coletado pelo bot)
-  sector       String? // Setor do cliente
+  sector       Sector?
   category     String? // Categoria/tipo do problema
 
   // Campos de fechamento
@@ -365,7 +371,7 @@ model Contact {
   phoneNumber String? // Número para exibição (opcional temporariamente)
   name        String // Nome do contato
   email       String? // Email do contato
-  sector      String // Setor do contato (mantido obrigatório por compatibilidade)
+  sector      Sector
   company     String? // Empresa/Organização
   department  String? // Departamento/subdivisão
   ramal       String? // Ramal telefônico
@@ -442,7 +448,7 @@ model TeamMessage {
   content   String
   senderId  String
   sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  sector    String   @default("TI") // TI ou ELECTRIC
+  sector    Sector   @default(TI)
   createdAt DateTime @default(now())
 
   @@index([createdAt])
@@ -501,7 +507,7 @@ model Purchase {
   supplierName String? // Backup caso não use fornecedor cadastrado
 
   // Destino
-  sector          String // Setor destino (Engenharia, RH, etc)
+  sector          Sector
   location        String? // Local específico
   responsibleName String? // Responsável pelo recebimento
 
@@ -551,7 +557,7 @@ model PurchaseRequest {
   justification String? @db.Text
 
   // Setor solicitante
-  sector         String // TI, ELECTRIC
+  sector         Sector
   requesterName  String // Nome de quem solicitou
   requesterPhone String?
 

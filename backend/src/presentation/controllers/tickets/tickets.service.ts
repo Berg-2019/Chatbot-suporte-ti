@@ -7,14 +7,14 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { GlpiService } from '../../../infrastructure/external/glpi.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
-import { TicketStatus, Priority, TicketType } from '@prisma/client';
+import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 
 interface CreateTicketDto {
   title: string;
   description: string;
   phoneNumber: string;
   customerName?: string;
-  sector?: string;
+  sector?: Sector;
   category?: string;
   priority?: Priority;
   type?: TicketType;
@@ -42,7 +42,7 @@ export class TicketsService {
     page?: number;
     limit?: number;
     type?: TicketType;
-    sector?: string;
+    sector?: Sector;
     isAdmin?: boolean;
   }) {
     const page = filters?.page || 1;
