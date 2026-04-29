@@ -21,7 +21,6 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   static readonly QUEUES = {
     INCOMING_MESSAGES: 'incoming_messages',
     OUTGOING_MESSAGES: 'outgoing_messages',
-    CREATE_TICKET: 'create_ticket',
     UPDATE_TICKET: 'update_ticket',
     NOTIFICATIONS: 'notifications',
   };
@@ -148,25 +147,12 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     text?: string;
     ticketId?: string;
     isAlert?: boolean;
-    // Mídia (anexos enviados pelo técnico)
     mediaUrl?: string;
     mediaType?: 'image' | 'audio' | 'video' | 'document';
     mimeType?: string;
     filename?: string;
   }): Promise<boolean> {
     return this.publish(RabbitMQService.QUEUES.OUTGOING_MESSAGES, data);
-  }
-
-  async publishCreateTicket(data: {
-    phoneNumber: string;
-    title: string;
-    description: string;
-    category?: string;
-    sector?: string;
-    customerName?: string;
-    localTicketId?: string;
-  }): Promise<boolean> {
-    return this.publish(RabbitMQService.QUEUES.CREATE_TICKET, data);
   }
 
   async publishNotification(data: {

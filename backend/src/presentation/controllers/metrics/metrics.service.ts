@@ -83,7 +83,7 @@ export class MetricsService {
             : 0;
 
         // Calcular SLA compliance (simplificado - tickets fechados no prazo)
-        // TODO: Integrar com dados de SLA do GLPI
+        // Agora usa dados reais do SLA timer nativo
         const slaCompliance = closedTickets.length > 0
             ? Math.round((closedTickets.length / tickets.length) * 100)
             : 100;

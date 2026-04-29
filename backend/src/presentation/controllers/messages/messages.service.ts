@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
+import { SlaService } from '../sla/sla.service';
 import { Direction, MessageType } from '@prisma/client';
 
 interface CreateMessageDto {
@@ -25,6 +26,7 @@ export class MessagesService {
     private prisma: PrismaService,
     private rabbitmq: RabbitMQService,
     private automationEngine: AutomationEngineService,
+    private slaService: SlaService,
   ) { }
 
   async findByTicket(ticketId: string) {
@@ -72,6 +74,9 @@ export class MessagesService {
           ticketId: dto.ticketId,
         });
       }
+
+      // 💬 Marcar primeira resposta SLA (técnico respondeu ao cliente pela 1ª vez)
+      await this.slaService.markFirstResponse(dto.ticketId);
     }
 
     // Notificar via Socket.IO
@@ -129,7 +134,7 @@ export class MessagesService {
       const [ticket, sender] = await Promise.all([
         this.prisma.ticket.findUnique({
           where: { id: ticketId },
-          select: { id: true, title: true, glpiId: true },
+          select: { id: true, title: true },
         }),
         senderId
           ? this.prisma.user.findUnique({
@@ -158,7 +163,7 @@ export class MessagesService {
       // Enviar notificação para cada usuário mencionado
       for (const user of mentionedUsers) {
         const senderName = sender?.name || 'Alguém';
-        const ticketRef = ticket.glpiId ? `#${ticket.glpiId}` : `#${ticket.id.slice(-6)}`;
+        const ticketRef = `#${ticket.id.slice(-6)}`;
 
         // Truncar conteúdo se muito longo
         const truncatedContent = content.length > 100
@@ -186,7 +191,7 @@ export class MessagesService {
           messageId,
           mentions,
           sender: sender?.name,
-          ticketRef: ticket.glpiId || ticket.id,
+          ticketRef: ticket.id,
         },
       });
     } catch (error: any) {

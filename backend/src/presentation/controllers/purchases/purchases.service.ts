@@ -29,23 +29,7 @@ interface CreatePurchaseDto {
     createdById?: string;
 }
 
-interface UpdatePurchaseDto extends Partial<CreatePurchaseDto> {
-    syncedToGlpi?: boolean;
-    glpiAssetId?: number;
-}
-
-interface PurchaseFilters {
-    sector?: string;
-    category?: EquipmentCategory;
-    startDate?: Date;
-    endDate?: Date;
-    supplierId?: string;
-}
-
-interface UpdatePurchaseDto extends Partial<CreatePurchaseDto> {
-    syncedToGlpi?: boolean;
-    glpiAssetId?: number;
-}
+interface UpdatePurchaseDto extends Partial<CreatePurchaseDto> {}
 
 interface PurchaseFilters {
     sector?: string;

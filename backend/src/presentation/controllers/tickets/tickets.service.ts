@@ -6,6 +6,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
+import { SlaService } from '../sla/sla.service';
 import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 
 interface CreateTicketDto {
@@ -31,6 +32,7 @@ export class TicketsService {
     private prisma: PrismaService,
     private rabbitmq: RabbitMQService,
     private automationEngine: AutomationEngineService,
+    private slaService: SlaService,
   ) { }
 
   async findAll(filters?: {
@@ -146,26 +148,11 @@ export class TicketsService {
         category: dto.category,
         priority: dto.priority || 'NORMAL',
 
-        status: dto.type === 'SERVICE_REPORT' ? 'RESOLVED' : 'NEW', // Relatórios já nascem resolvidos
+        status: dto.type === 'SERVICE_REPORT' ? 'RESOLVED' : 'NEW',
         type: dto.type || 'SUPPORT',
         location: dto.location,
         assignedToId: dto.assignedToId,
       },
-    });
-
-    // Se for um Service Report, não precisa de integração GLPI imediata ou pode ser diferente
-    // Mas se quiser registrar no GLPI como chamado fechado, mantém.
-    // Por enquanto, vamos manter a integração padrão para criar o registro lá também.
-
-    // Criar no GLPI (async via RabbitMQ para não bloquear)
-    await this.rabbitmq.publishCreateTicket({
-      phoneNumber: dto.phoneNumber,
-      title: dto.title,
-      description: dto.description,
-      category: dto.category,
-      sector: dto.sector,
-      customerName: dto.customerName,
-      localTicketId: ticket.id,
     });
 
     // Notificar painel
@@ -174,6 +161,9 @@ export class TicketsService {
       ticketId: ticket.id,
       payload: ticket,
     });
+
+    // 🤖 Trigger SLA timer creation
+    await this.slaService.createTimerForTicket(ticket.id);
 
     // 🤖 Trigger automation: ticket_created
     await this.automationEngine.processEvent('ticket_created', {
@@ -392,6 +382,15 @@ export class TicketsService {
       payload: ticket,
     });
 
+    // 🤖 Trigger SLA: pause on WAITING_CLIENT, resume on IN_PROGRESS, mark response on RESOLVED
+    if (status === 'WAITING_CLIENT') {
+      await this.slaService.pauseTimer(id);
+    } else if (status === 'IN_PROGRESS') {
+      await this.slaService.resumeTimer(id);
+    } else if (status === 'RESOLVED') {
+      await this.slaService.markFirstResponse(id);
+    }
+
     // 🤖 Trigger automation: ticket_updated / ticket_resolved / ticket_closed
     let eventType = 'ticket_updated';
     if (status === 'RESOLVED') eventType = 'ticket_resolved';
@@ -566,6 +565,9 @@ export class TicketsService {
       payload: ticket,
     });
 
+    // 🤖 Mark resolution SLA
+    await this.slaService.markResolved(id);
+
     // 🤖 Trigger automation: ticket_closed
     await this.automationEngine.processEvent('ticket_closed', {
       ticketId: ticket.id,
@@ -582,15 +584,6 @@ export class TicketsService {
 
     return ticket;
   }
-
-  async linkToGlpi(id: string, glpiId: number) {
-    return this.prisma.ticket.update({
-      where: { id },
-      data: { glpiId },
-    });
-  }
-
-  // === Novos métodos para bot ===
 
   async rate(id: string, rating: number) {
     if (rating < 1 || rating > 5) {
@@ -617,17 +610,6 @@ export class TicketsService {
         phoneNumber: { contains: phone },
       },
       orderBy: { createdAt: 'desc' },
-      include: {
-        assignedTo: { select: { id: true, name: true } },
-      },
-    });
-
-    return ticket;
-  }
-
-  async findByGlpiId(glpiId: number) {
-    const ticket = await this.prisma.ticket.findUnique({
-      where: { glpiId },
       include: {
         assignedTo: { select: { id: true, name: true } },
       },

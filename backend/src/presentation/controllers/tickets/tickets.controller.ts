@@ -149,12 +149,6 @@ export class TicketsController {
     return this.ticketsService.findByPhone(phone);
   }
 
-  @Get('glpi/:glpiId')
-  @SetMetadata('isPublic', true)
-  async findByGlpiId(@Param('glpiId') glpiId: string) {
-    return this.ticketsService.findByGlpiId(parseInt(glpiId));
-  }
-
   @Post(':id/attachments')
   @UseGuards(AuthGuard('jwt'))
   @UseInterceptors(FileInterceptor('file'))

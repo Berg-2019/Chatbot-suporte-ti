@@ -10,11 +10,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
 import { AutomationModule } from '../automation/automation.module';
+import { SlaModule } from '../sla/sla.module';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
 @Module({
   imports: [
     AutomationModule,
+    SlaModule,
     MulterModule.register({
       storage: diskStorage({
         destination: './uploads/attachments',

@@ -10,7 +10,6 @@ import { AlertType } from '@prisma/client';
 
 export interface AlertPayload {
     ticketId?: string;
-    glpiId?: number;
     type: AlertType;
     title: string;
     message: string;
@@ -50,7 +49,6 @@ export class AlertService {
             data: {
                 userId,
                 ticketId: payload.ticketId,
-                glpiId: payload.glpiId,
                 type: payload.type,
                 message: payload.message,
             },
@@ -117,7 +115,7 @@ export class AlertService {
     /**
      * Alerta de novo ticket
      */
-    async alertNewTicket(ticketId: string, glpiId: number, assignedToId: string, ticketData: {
+    async alertNewTicket(ticketId: string, assignedToId: string, ticketData: {
         title: string;
         customerName?: string;
         sector?: string;
@@ -125,10 +123,9 @@ export class AlertService {
     }): Promise<void> {
         await this.sendAlertToUser(assignedToId, {
             ticketId,
-            glpiId,
             type: 'NEW_TICKET',
             title: '🎫 Novo Chamado',
-            message: `Novo chamado #${glpiId}: ${ticketData.title}`,
+            message: `Novo ticket ${ticketId.slice(-6)}: ${ticketData.title}`,
             priority: ticketData.priority,
         });
     }
@@ -136,30 +133,33 @@ export class AlertService {
     /**
      * Alerta de escalonamento
      */
-    async alertEscalation(ticketId: string, glpiId: number, toLevel: 'N1' | 'N2' | 'N3', ticketData: {
+    async alertEscalation(ticketId: string, toLevel: 'N1' | 'N2' | 'N3', ticketData: {
         title: string;
         fromLevel: string;
         elapsed: string;
     }): Promise<void> {
         await this.sendAlertToLevel(toLevel, {
             ticketId,
-            glpiId,
             type: 'ESCALATED',
             title: '⚠️ Chamado Escalonado',
-            message: `Chamado #${glpiId} escalonado de ${ticketData.fromLevel} para ${toLevel}. Tempo: ${ticketData.elapsed}`,
+            message: `Ticket ${ticketId.slice(-6)} escalonado de ${ticketData.fromLevel} para ${toLevel}. Tempo: ${ticketData.elapsed}`,
         });
     }
 
     /**
      * Alerta de SLA warning (75%)
      */
-    async alertSLAWarning(ticketId: string, glpiId: number, assignedToId: string, remaining: string): Promise<void> {
+    async alertSLAWarning(ticketId: string, assignedToId: string, remaining: string): Promise<void> {
+        const ticket = await this.prisma.ticket.findUnique({
+            where: { id: ticketId },
+            select: { title: true, sector: true, priority: true },
+        });
+
         await this.sendAlertToUser(assignedToId, {
             ticketId,
-            glpiId,
             type: 'SLA_WARNING',
             title: '⚡ SLA em 75%',
-            message: `Chamado #${glpiId}: SLA em 75%. Tempo restante: ${remaining}`,
+            message: `Ticket ${ticketId.slice(-6)}: ${ticket?.title || 'Sem título'} - SLA em 75%. Tempo restante: ${remaining}`,
             slaRemaining: remaining,
         });
     }
@@ -167,13 +167,17 @@ export class AlertService {
     /**
      * Alerta de SLA breach
      */
-    async alertSLABreach(ticketId: string, glpiId: number, assignedToId: string): Promise<void> {
+    async alertSLABreach(ticketId: string, assignedToId: string): Promise<void> {
+        const ticket = await this.prisma.ticket.findUnique({
+            where: { id: ticketId },
+            select: { title: true, sector: true, priority: true },
+        });
+
         await this.sendAlertToUser(assignedToId, {
             ticketId,
-            glpiId,
             type: 'SLA_BREACH',
             title: '🚨 SLA Estourado!',
-            message: `Chamado #${glpiId}: SLA estourado! Atenda com urgência.`,
+            message: `SLA estourado no ticket ${ticketId.slice(-6)}: ${ticket?.title || 'Sem título'}. Atenda com urgência.`,
         });
     }
 
@@ -181,43 +185,44 @@ export class AlertService {
      * Formatar mensagem para WhatsApp
      */
     private formatWhatsAppMessage(payload: AlertPayload): string {
+        const ticketRef = payload.ticketId ? `#${payload.ticketId.slice(-6)}` : '';
         let message = '';
 
         switch (payload.type) {
             case 'NEW_TICKET':
-                message = `🎫 *Novo Chamado GLPI #${payload.glpiId}*\n\n`;
+                message = `🎫 *Novo Chamado ${ticketRef}*\n\n`;
                 message += `📋 ${payload.title}\n`;
                 if (payload.priority) message += `🔥 Prioridade: ${payload.priority}\n`;
                 message += `\nAcesse o painel para atender.`;
                 break;
 
             case 'ESCALATED':
-                message = `⚠️ *Chamado Escalonado #${payload.glpiId}*\n\n`;
+                message = `⚠️ *Chamado Escalonado ${ticketRef}*\n\n`;
                 message += `${payload.message}\n`;
                 message += `\nAtenda com urgência!`;
                 break;
 
             case 'SLA_WARNING':
-                message = `⚡ *Alerta SLA - Chamado #${payload.glpiId}*\n\n`;
+                message = `⚡ *Alerta SLA ${ticketRef}*\n\n`;
                 message += `O SLA está em 75% do tempo limite!\n`;
                 if (payload.slaRemaining) message += `⏰ Tempo restante: ${payload.slaRemaining}\n`;
                 message += `\nFinalize ou transfira o chamado.`;
                 break;
 
             case 'SLA_BREACH':
-                message = `🚨 *SLA ESTOURADO - Chamado #${payload.glpiId}*\n\n`;
+                message = `🚨 *SLA ESTOURADO ${ticketRef}*\n\n`;
                 message += `O prazo de SLA foi excedido!\n`;
                 message += `\nAtenda IMEDIATAMENTE!`;
                 break;
 
             case 'NEW_MESSAGE':
-                message = `💬 *Nova Mensagem - Chamado #${payload.glpiId}*\n\n`;
+                message = `💬 *Nova Mensagem ${ticketRef}*\n\n`;
                 message += `O cliente enviou uma nova mensagem.\n`;
                 message += `\nAcesse o painel para responder.`;
                 break;
 
             case 'TRANSFERRED':
-                message = `🔄 *Chamado Transferido #${payload.glpiId}*\n\n`;
+                message = `🔄 *Chamado Transferido ${ticketRef}*\n\n`;
                 message += `${payload.message}\n`;
                 message += `\nAcesse o painel para detalhes.`;
                 break;
