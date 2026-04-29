@@ -99,7 +99,7 @@ export class LiveViewService {
             return {
                 ticketId: ticket.id,
                 customerName: ticket.customerName,
-                customerJid: ticket.phoneNumber, // Using phoneNumber as JID
+                customerJid: ticket.phoneNumber ?? '',
                 assignedTo: ticket.assignedTo
                     ? {
                           id: ticket.assignedTo.id,

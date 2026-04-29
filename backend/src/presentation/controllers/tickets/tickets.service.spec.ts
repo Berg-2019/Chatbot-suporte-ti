@@ -7,6 +7,7 @@ import { TicketsService } from './tickets.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
+import { SlaService } from '../sla/sla.service';
 import { Sector } from '@prisma/client';
 
 describe('TicketsService', () => {
@@ -32,6 +33,10 @@ describe('TicketsService', () => {
     processEvent: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockSlaService = {
+    createTimerForTicket: jest.fn().mockResolvedValue({}),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -39,6 +44,7 @@ describe('TicketsService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: RabbitMQService, useValue: mockRabbitMQService },
         { provide: AutomationEngineService, useValue: mockAutomationEngine },
+        { provide: SlaService, useValue: mockSlaService },
       ],
     }).compile();
 

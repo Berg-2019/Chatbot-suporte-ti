@@ -69,7 +69,7 @@ export class MessagesService {
 
         // Enviar via RabbitMQ
         await this.rabbitmq.publishOutgoingMessage({
-          to: ticket.phoneNumber,
+          to: ticket.phoneNumber ?? '',
           text: formattedMessage,
           ticketId: dto.ticketId,
         });

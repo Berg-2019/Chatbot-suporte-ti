@@ -8,6 +8,7 @@ import { AppModule } from './app.module';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { json, urlencoded } from 'express';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -22,6 +23,8 @@ async function bootstrap() {
     },
     threshold: 1024, // Only compress responses > 1KB
   }));
+
+  app.use(cookieParser());
 
   // Increase payload limit
   app.use(json({ limit: '50mb' }));
