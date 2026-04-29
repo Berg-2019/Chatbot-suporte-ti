@@ -20,7 +20,6 @@ import { ServicesModule } from './infrastructure/services/services.module';
 import { AuthModule } from './presentation/controllers/auth/auth.module';
 import { TicketsModule } from './presentation/controllers/tickets/tickets.module';
 import { MessagesModule } from './presentation/controllers/messages/messages.module';
-import { BotModule } from './presentation/controllers/bot/bot.module';
 import { UsersModule } from './presentation/controllers/users/users.module';
 import { PartsModule } from './presentation/controllers/parts/parts.module';
 import { FaqModule } from './presentation/controllers/faq/faq.module';
@@ -90,7 +89,6 @@ import { HealthController } from './presentation/controllers/health.controller';
     AuthModule,
     TicketsModule,
     MessagesModule,
-    BotModule,
     UsersModule,
     AdaptiveAIModule, // 🧠 Sistema de IA Adaptativo
     CaptainModule, // 🤖 Captain AI Assistant
