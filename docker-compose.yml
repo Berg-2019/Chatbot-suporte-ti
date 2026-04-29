@@ -71,71 +71,6 @@ services:
       retries: 5
 
   # ============================================================================
-  # MySQL - Banco de dados para GLPI (GLPI só suporta MySQL)
-  # ============================================================================
-  mysql:
-    image: mysql:8.0
-    container_name: helpdesk_mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
-      MYSQL_DATABASE: glpi
-      MYSQL_USER: glpi
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-glpi123}
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - helpdesk_network
-    healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ============================================================================
-  # GLPI - Sistema de Tickets
-  # ============================================================================
-  glpi:
-    image: diouxx/glpi:latest
-    container_name: helpdesk_glpi
-    restart: unless-stopped
-    environment:
-      TIMEZONE: America/Porto_Velho
-    ports:
-      - "8080:80"
-    volumes:
-      - glpi_data:/var/www/html/glpi
-    networks:
-      - helpdesk_network
-    depends_on:
-      mysql:
-        condition: service_healthy
-
-  # ============================================================================
-  # Ollama - LLM Local (Intent Detection)
-  # ============================================================================
-  ollama:
-    image: ollama/ollama:latest
-    container_name: helpdesk_ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - helpdesk_network
-    # Uncomment if you have NVIDIA GPU
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-
-  # ============================================================================
   # Backend NestJS
   # ============================================================================
   backend:
@@ -155,14 +90,6 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
       JWT_SECRET: ${JWT_SECRET:-sua-chave-secreta-jwt}
       FRONTEND_URL: https://helpdeskmsm.com.br,https://www.helpdeskmsm.com.br,http://helpdeskmsm.com.br,http://www.helpdeskmsm.com.br,http://localhost:5173,http://localhost:3001
-      GLPI_URL: http://glpi/apirest.php
-      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN}
-      GLPI_USER_TOKEN: ${GLPI_USER_TOKEN}
-      GLPI_ADMIN_USER: ${GLPI_ADMIN_USER}
-      GLPI_ADMIN_PASSWORD: ${GLPI_ADMIN_PASSWORD}
-      # Ollama Configuration (usando host ao invés de container)
-      OLLAMA_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
     volumes:
       - backend_logs:/app/logs
     networks:
@@ -202,25 +129,10 @@ services:
 # ==============================================================================
 volumes:
   postgres_data:
-    name: helpdesk_postgres
   mysql_data:
-    name: helpdesk_mysql
   redis_data:
-    name: helpdesk_redis
   rabbitmq_data:
-    name: helpdesk_rabbitmq
-  glpi_data:
-    name: helpdesk_glpi
-  ollama_data:
-    name: helpdesk_ollama
   backend_logs:
-    name: helpdesk_backend_logs
-  bot_sessions:
-    name: helpdesk_bot_sessions
-  bot_logs:
-    name: helpdesk_bot_logs
-  bot_uploads:
-    name: helpdesk_bot_uploads
 
 # ==============================================================================
 # Networks
