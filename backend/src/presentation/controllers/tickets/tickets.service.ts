@@ -43,6 +43,7 @@ export class TicketsService {
     limit?: number;
     type?: TicketType;
     sector?: string;
+    isAdmin?: boolean;
   }) {
     const page = filters?.page || 1;
     const limit = filters?.limit || 50;
@@ -57,7 +58,9 @@ export class TicketsService {
       };
     }
     if (filters?.type) where.type = filters.type;
-    if (filters?.sector) where.sector = filters.sector;
+    if (!filters?.isAdmin && filters?.sector) {
+      where.sector = filters.sector;
+    }
 
     const [tickets, total] = await Promise.all([
       this.prisma.ticket.findMany({

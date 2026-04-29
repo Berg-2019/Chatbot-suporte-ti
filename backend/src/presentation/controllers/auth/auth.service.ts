@@ -372,6 +372,7 @@ export class AuthService {
       role: user.role,
       profile,
       permissions: [],
+      sector: user.sector,
     };
   }
 }

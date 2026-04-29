@@ -25,9 +25,12 @@ import { createReadStream, existsSync } from 'fs';
 import { TicketsService } from './tickets.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { TicketStatus, Priority, TicketType } from '@prisma/client';
+import { SectorGuard } from '../../../common/guards/sector.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
 
 @Controller('tickets')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), SectorGuard, RolesGuard)
 export class TicketsController {
   constructor(
     private ticketsService: TicketsService,
@@ -35,14 +38,15 @@ export class TicketsController {
   ) { }
 
   @Get()
+  @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'ADMIN_COMPRAS', 'AGENT')
   async findAll(
+    @Request() req: any,
     @Query('status') status?: TicketStatus,
     @Query('assignedTo') assignedToId?: string,
     @Query('category') category?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('type') type?: TicketType,
-    @Query('sector') sector?: string,
   ) {
     return this.ticketsService.findAll({
       status,
@@ -51,7 +55,8 @@ export class TicketsController {
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
       type,
-      sector,
+      sector: req.user.sector,
+      isAdmin: req.user.role.startsWith('ADMIN_'),
     });
   }
 
