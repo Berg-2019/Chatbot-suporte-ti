@@ -4,7 +4,6 @@
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { GlpiService } from '../../../infrastructure/external/glpi.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
@@ -30,7 +29,6 @@ interface AssignTicketDto {
 export class TicketsService {
   constructor(
     private prisma: PrismaService,
-    private glpi: GlpiService,
     private rabbitmq: RabbitMQService,
     private automationEngine: AutomationEngineService,
   ) { }
@@ -387,16 +385,6 @@ export class TicketsService {
       });
     }
 
-    // Se tiver GLPI ID, atualizar lá também
-    if (ticket.glpiId) {
-      try {
-        const glpiStatus = this.mapStatusToGlpi(status);
-        await this.glpi.updateTicketStatus(ticket.glpiId, glpiStatus);
-      } catch (error: any) {
-        console.warn('⚠️ GLPI status update falhou:', error.message);
-      }
-    }
-
     // Notificar painel para atualizar listas
     await this.rabbitmq.publishNotification({
       type: 'ticket_updated',
@@ -571,21 +559,6 @@ export class TicketsService {
       });
     }
 
-    // Atualizar GLPI
-    if (ticket.glpiId) {
-      try {
-        const technicianName = ticket.assignedTo?.name || 'Suporte';
-        await this.glpi.updateTicketStatus(ticket.glpiId, 6); // CLOSED
-        if (closeData?.solution) {
-          await this.glpi.addFollowup(ticket.glpiId, {
-            content: `[Solução por ${technicianName}]\n${closeData.solution}`,
-          });
-        }
-      } catch (error: any) {
-        console.warn('⚠️ GLPI update falhou:', error.message);
-      }
-    }
-
     // Notificar painel
     await this.rabbitmq.publishNotification({
       type: 'ticket_updated',
@@ -615,18 +588,6 @@ export class TicketsService {
       where: { id },
       data: { glpiId },
     });
-  }
-
-  private mapStatusToGlpi(status: TicketStatus): number {
-    const map: Record<TicketStatus, number> = {
-      NEW: 1,
-      ASSIGNED: 2,
-      IN_PROGRESS: 2,
-      WAITING_CLIENT: 4,
-      RESOLVED: 5,
-      CLOSED: 6,
-    };
-    return map[status] || 1;
   }
 
   // === Novos métodos para bot ===

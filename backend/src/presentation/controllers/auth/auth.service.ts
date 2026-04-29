@@ -7,16 +7,10 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
-import { GlpiService } from '../../../infrastructure/external/glpi.service';
-import { TechnicianLevel } from '@prisma/client';
+
 
 interface LoginDto {
   email: string;
-  password: string;
-}
-
-interface GlpiLoginDto {
-  login: string;
   password: string;
 }
 
@@ -27,66 +21,13 @@ interface RegisterDto {
   role?: 'ADMIN' | 'AGENT';
 }
 
-// Grupos do GLPI que definem o role ADMIN
-// Usuários em qualquer destes grupos terão acesso administrativo completo
-const ADMIN_GROUPS = ['admin', 'administradores', 'administrators', 'gestores', 'super-admin'];
-
-// Grupos de técnicos (qualquer usuário técnico)
-const TECH_GROUPS = ['tecnico', 'tecnicos', 'técnicos', 'suporte', 'support', 'l1', 'l2', 'l3', 'n1', 'n2', 'n3'];
-
-// Mapeamento de nível técnico baseado em subgrupos do GLPI (legado - não usado para escalonamento)
-const LEVEL_MAPPING = {
-  L3: ['l3', 'n3', 'tecnico l3', 'nivel 3', 'nível 3'],
-  L2: ['l2', 'n2', 'tecnico l2', 'nivel 2', 'nível 2'],
-  L1: ['l1', 'n1', 'tecnico l1', 'nivel 1', 'nível 1', 'tecnico', 'tecnicos', 'técnicos'],
-};
-
-// Mapeamento de perfis baseado nos 4 grupos específicos do GLPI
-const PROFILE_GROUPS = {
-  admin: ['admin'],
-  manager: ['gestao', 'gestão'],
-  tech_elect: ['eletrica', 'elétrica'],
-  tech_ti: ['tecnico ti', 'técnico ti', 'ti'],
-};
-
-// Tipos de perfil disponíveis
-type UserProfile = 'admin' | 'manager' | 'tech_elect' | 'tech_ti';
-
-/**
- * Determina o perfil do usuário baseado nos grupos GLPI
- * Ordem de prioridade: admin > manager > tech_elect > stock > tech_ti
- */
-function determineProfile(groups: string[]): UserProfile {
-  const groupsLower = groups.map(g => g.toLowerCase());
-
-  // Verificar cada perfil em ordem de prioridade
-  if (groupsLower.some(g => PROFILE_GROUPS.admin.some(pg => g.includes(pg)))) {
-    return 'admin';
-  }
-  if (groupsLower.some(g => PROFILE_GROUPS.manager.some(pg => g.includes(pg)))) {
-    return 'manager';
-  }
-  if (groupsLower.some(g => PROFILE_GROUPS.tech_elect.some(pg => g.includes(pg)))) {
-    return 'tech_elect';
-  }
-  // Default: técnico TI
-  return 'tech_ti';
-}
-
-// Determine sector based on profile
-function determineSector(profile: UserProfile): string {
-  return profile === 'tech_elect' ? 'ELECTRIC' : 'TI';
-}
-
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
-    private glpi: GlpiService,
   ) {
-    // Criar admin padrão se não existir
     this.ensureAdminExists();
   }
 
@@ -148,7 +89,7 @@ export class AuthService {
     let permissions: string[] = [];
 
     // Determinar perfil para o frontend
-    const profile: UserProfile = user.role === 'ADMIN' ? 'admin' :
+    const profile = user.role === 'ADMIN' ? 'admin' :
       user.sector === 'ELECTRIC' ? 'tech_elect' : 'tech_ti';
 
     const token = this.jwt.sign({
@@ -170,155 +111,6 @@ export class AuthService {
         profile,
         permissions,
         sector: user.sector,
-      },
-    };
-  }
-
-  /**
-   * Login via GLPI (SSO)
-   * Autentica no GLPI, cria usuário local se não existir, define role pelos grupos
-   */
-  async loginWithGlpi(dto: GlpiLoginDto) {
-    console.log(`Step 1: Authenticating with GLPI for user ${dto.login}`);
-    // 1. Autenticar no GLPI
-    const authResult = await this.glpi.authenticateWithCredentials(dto.login, dto.password);
-
-    if (!authResult.success || !authResult.user) {
-      console.log('Step 1 failed: Invalid credentials');
-      throw new UnauthorizedException(authResult.error || 'Credenciais inválidas');
-    }
-    console.log('Step 1 success: GLPI session started');
-
-    // 2. Buscar grupos do usuário no GLPI
-    console.log('Step 2: Fetching user groups');
-    const groups = await this.glpi.getUserGroups(authResult.user.id);
-    console.log(`Step 2 success: Found ${groups.length} groups`);
-    const groupNames = groups.map(g => g.name.toLowerCase());
-
-    // 3. Determinar role e nível baseado ESTRITAMENTE nos grupos
-    console.log('Step 3: Determining role and level (Strict Mode)');
-
-    // Listas estritas de grupos
-    // Listas simplificadas de grupos baseadas na solicitação do usuário
-    const STRICT_ADMIN_GROUPS = ['admin', 'gestao', 'gestão'];
-    const STRICT_TECH_GROUPS = ['tecnico ti', 'técnico ti', 'ti', 'eletrica', 'elétrica'];
-
-    // Normalizar nomes dos grupos do usuário
-    const userGroupsLower = groupNames; // Já estão em lower (line 131)
-
-    // Verificar pertinência aos grupos
-    const isAdmin = userGroupsLower.some(g => STRICT_ADMIN_GROUPS.some(ag => g.includes(ag)));
-    const isTech = userGroupsLower.some(g => STRICT_TECH_GROUPS.some(tg => g.includes(tg)));
-
-    // Se não for nem Admin nem Técnico, NEGAR ACESSO
-    if (!isAdmin && !isTech) {
-      console.log(`❌ Login negado: Usuário '${dto.login}' não pertence a grupos autorizados (Grupos: ${userGroupsLower.join(', ')})`);
-      throw new UnauthorizedException('Acesso negado: Usuário não pertence a grupos de TI ou Administração.');
-    }
-
-    let role: 'ADMIN' | 'AGENT' = isAdmin ? 'ADMIN' : 'AGENT';
-    let technicianLevel: TechnicianLevel = TechnicianLevel.N1;
-
-    if (role === 'AGENT') {
-      // Definir nível técnico com prioridade N3 > N2 > N1
-      if (userGroupsLower.some(g => g.includes('n3') || g.includes('l3') || g.includes('nivel 3'))) {
-        technicianLevel = TechnicianLevel.N3;
-      } else if (userGroupsLower.some(g => g.includes('n2') || g.includes('l2') || g.includes('nivel 2'))) {
-        technicianLevel = TechnicianLevel.N2;
-      } else {
-        technicianLevel = TechnicianLevel.N1; // Default p/ técnicos genéricos
-      }
-    } else {
-      // Admins são considerados N3 para fins de permissão técnica
-      technicianLevel = TechnicianLevel.N3;
-    }
-
-    console.log(`Step 3 success: Role=${role}, Level=${technicianLevel}`);
-    console.log(`Groups matched: Admin=${isAdmin}, Tech=${isTech}`);
-
-    // 4. Buscar ou criar usuário local
-    console.log('Step 4: Syncing local user');
-    let user = await this.prisma.user.findFirst({
-      where: { glpiUserId: authResult.user.id },
-    });
-
-    const fullName = [authResult.user.firstname, authResult.user.realname]
-      .filter(Boolean)
-      .join(' ') || authResult.user.name;
-
-    if (!user) {
-      // Criar novo usuário
-      console.log('Creating new user');
-      const randomPassword = await bcrypt.hash(Math.random().toString(36), 12);
-
-      // Determine sector from profile (set after Step 4 for new users)
-      const profile = determineProfile(groupNames);
-      const sector = determineSector(profile);
-
-      user = await this.prisma.user.create({
-        data: {
-          email: authResult.user.email || `${dto.login}@glpi.local`,
-          password: randomPassword, // Senha aleatória (não usada para login)
-          name: fullName,
-          role,
-          glpiUserId: authResult.user.id,
-          technicianLevel,
-          phoneNumber: authResult.user.phone || null,
-          sector,
-        },
-      });
-      console.log(`✅ Usuário GLPI sincronizado: ${user.name} (${role}, sector: ${sector})`);
-    } else {
-      // Atualizar dados se mudaram
-      console.log('Updating existing user');
-      const profile = determineProfile(groupNames);
-      const sector = determineSector(profile);
-
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          name: fullName,
-          // role, // Não sobrescrever role existente
-          technicianLevel,
-          phoneNumber: authResult.user.phone || user.phoneNumber,
-          // sector, // Não sobrescrever setor existente
-          glpiUserId: authResult.user.id,
-        },
-      });
-    }
-    console.log('Step 4 success: User synced');
-
-    // 5. Encerrar sessão GLPI (limpeza)
-    if (authResult.sessionToken) {
-      console.log('Step 5: Killing GLPI session');
-      await this.glpi.killSession(authResult.sessionToken);
-      console.log('Step 5 success: Session killed');
-    }
-
-    // 6. Gerar token JWT local
-    console.log('Step 6: Generating JWT');
-    const token = this.jwt.sign({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      glpiId: user.glpiUserId,
-      sector: user.sector,
-    });
-    console.log('Step 6 success: Token generated');
-
-    // 7. Determinar perfil para redirecionamento no frontend
-    const profile = determineProfile(groupNames);
-    console.log(`Step 7: Profile determined: ${profile}`);
-
-    return {
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        profile, // Perfil para redirecionamento: admin, manager, tech_elect, tech_ti
-        permissions: [],
       },
     };
   }
@@ -363,7 +155,7 @@ export class AuthService {
     }
 
     // Determinar perfil baseado no setor/role para o frontend
-    const profile: UserProfile = user.role === 'ADMIN' ? 'admin' : user.sector === 'ELECTRIC' ? 'tech_elect' : 'tech_ti';
+    const profile = user.role === 'ADMIN' ? 'admin' : user.sector === 'ELECTRIC' ? 'tech_elect' : 'tech_ti';
 
     return {
       id: user.id,

@@ -16,14 +16,6 @@ class LoginDto {
   password: string;
 }
 
-class GlpiLoginDto {
-  @IsString()
-  login: string;
-
-  @IsString()
-  password: string;
-}
-
 class RegisterDto {
   @IsEmail()
   email: string;
@@ -50,15 +42,6 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
-  }
-
-  /**
-   * Login via GLPI (SSO)
-   * Usa credenciais do GLPI para autenticar
-   */
-  @Post('glpi-login')
-  async glpiLogin(@Body() dto: GlpiLoginDto) {
-    return this.authService.loginWithGlpi(dto);
   }
 
   @Post('register')

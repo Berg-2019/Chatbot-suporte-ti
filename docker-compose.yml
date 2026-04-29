@@ -197,34 +197,6 @@ services:
     depends_on:
       - backend
 
-  # ============================================================================
-  # Bot WhatsApp
-  # ============================================================================
-  bot:
-    build:
-      context: ./bot
-      dockerfile: Dockerfile
-    container_name: helpdesk_bot
-    restart: unless-stopped
-    environment:
-      REDIS_URL: redis://redis:6379
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
-      BACKEND_URL: http://backend:3000
-      GLPI_URL: http://glpi/apirest.php
-      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN}
-      GLPI_USER_TOKEN: ${GLPI_USER_TOKEN}
-    volumes:
-      - bot_sessions:/app/sessions
-      - bot_logs:/app/logs
-      - bot_uploads:/app/uploads
-    networks:
-      - helpdesk_network
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-
 # ==============================================================================
 # Volumes
 # ==============================================================================

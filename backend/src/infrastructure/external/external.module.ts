@@ -3,11 +3,10 @@
  */
 
 import { Global, Module } from '@nestjs/common';
-import { GlpiService } from './glpi.service';
 
 @Global()
 @Module({
-  providers: [GlpiService],
-  exports: [GlpiService],
+  providers: [],
+  exports: [],
 })
 export class ExternalModule {}

@@ -4,7 +4,6 @@
 
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { GlpiService } from '../../../infrastructure/external/glpi.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { Direction, MessageType } from '@prisma/client';
@@ -24,7 +23,6 @@ interface CreateMessageDto {
 export class MessagesService {
   constructor(
     private prisma: PrismaService,
-    private glpi: GlpiService,
     private rabbitmq: RabbitMQService,
     private automationEngine: AutomationEngineService,
   ) { }
@@ -73,17 +71,6 @@ export class MessagesService {
           text: formattedMessage,
           ticketId: dto.ticketId,
         });
-
-        // Adicionar followup no GLPI (não bloqueia se falhar)
-        if (ticket.glpiId) {
-          try {
-            await this.glpi.addFollowup(ticket.glpiId, {
-              content: `[${message.sender?.name || 'Sistema'}] ${dto.content}`,
-            });
-          } catch (glpiError: any) {
-            console.warn('⚠️ GLPI followup falhou (não crítico):', glpiError.message);
-          }
-        }
       }
     }
 

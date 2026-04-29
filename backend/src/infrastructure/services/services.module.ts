@@ -5,12 +5,9 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AlertService } from './alert.service';
-import { GlpiSyncService } from './glpi-sync.service';
 import { PrismaModule } from '../database/prisma.module';
 import { RabbitMQModule } from '../messaging/rabbitmq.module';
 import { ExternalModule } from '../external/external.module';
-import { IncomingMessagesConsumer } from './incoming-messages.consumer';
-import { TicketCreationConsumer } from './ticket-creation.consumer';
 import { MessagesModule } from '../../presentation/controllers/messages/messages.module';
 
 @Module({
@@ -19,10 +16,10 @@ import { MessagesModule } from '../../presentation/controllers/messages/messages
         PrismaModule,
         forwardRef(() => RabbitMQModule),
         ExternalModule,
-        MessagesModule, // Adicionar aqui
+        MessagesModule,
     ],
-    providers: [AlertService, GlpiSyncService, IncomingMessagesConsumer, TicketCreationConsumer],
-    exports: [AlertService, GlpiSyncService],
+    providers: [AlertService],
+    exports: [AlertService],
 })
 export class ServicesModule { }
 

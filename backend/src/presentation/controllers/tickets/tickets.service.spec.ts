@@ -5,7 +5,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TicketsService } from './tickets.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { GlpiService } from '../../../infrastructure/external/glpi.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { Sector } from '@prisma/client';
@@ -24,10 +23,6 @@ describe('TicketsService', () => {
     },
   };
 
-  const mockGlpiService = {
-    updateTicketStatus: jest.fn(),
-  };
-
   const mockRabbitMQService = {
     publishCreateTicket: jest.fn(),
     publishNotification: jest.fn(),
@@ -42,7 +37,6 @@ describe('TicketsService', () => {
       providers: [
         TicketsService,
         { provide: PrismaService, useValue: mockPrismaService },
-        { provide: GlpiService, useValue: mockGlpiService },
         { provide: RabbitMQService, useValue: mockRabbitMQService },
         { provide: AutomationEngineService, useValue: mockAutomationEngine },
       ],
