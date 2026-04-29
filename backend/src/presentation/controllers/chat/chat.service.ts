@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { Sector } from '@prisma/client';
 
 @Injectable()
 export class ChatService {
     constructor(private prisma: PrismaService) { }
 
-    async getConversations(sector?: string) {
+    async getConversations(sector?: Sector) {
         const tickets = await this.prisma.ticket.findMany({
             where: sector ? { sector } : undefined,
             orderBy: { updatedAt: 'desc' },

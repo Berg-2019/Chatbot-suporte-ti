@@ -11,6 +11,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Sector } from '@prisma/client';
 
 export enum HermesTicketArea {
   TI = 'TI',
@@ -31,9 +32,9 @@ export class CreateHermesTicketDto {
   @IsEnum(HermesTicketArea, { message: 'Área deve ser TI ou ELECTRIC' })
   area: HermesTicketArea;
 
-  @IsString()
+  @IsEnum(Sector)
   @IsOptional()
-  sector?: string;
+  sector?: Sector;
 
   @IsString()
   @IsOptional()

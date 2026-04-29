@@ -86,7 +86,7 @@ export class TicketsController {
       assignedToId?: string;
     },
   ) {
-    return this.ticketsService.create(dto);
+    return this.ticketsService.create(dto as any);
   }
 
   @Post(':id/assign')

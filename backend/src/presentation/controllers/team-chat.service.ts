@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { Sector } from '@prisma/client';
 
 @Injectable()
 export class TeamChatService {
     constructor(private prisma: PrismaService) { }
 
     async getChannels() {
-        const sectors = ['TI', 'ELECTRIC', 'COMPRAS'];
+        const sectors: Sector[] = ['TI', 'ELECTRIC', 'COMPRAS'];
         const channels = await Promise.all(
             sectors.map(async (sector) => {
                 const lastMessage = await this.prisma.teamMessage.findFirst({
@@ -36,7 +37,7 @@ export class TeamChatService {
 
     async getChannelMessages(channelId: string) {
         const messages = await this.prisma.teamMessage.findMany({
-            where: { sector: channelId },
+            where: { sector: channelId as Sector },
             orderBy: { createdAt: 'asc' },
             take: 100,
             include: {
@@ -58,7 +59,7 @@ export class TeamChatService {
             data: {
                 content,
                 senderId: userId,
-                sector: channelId,
+                sector: channelId as Sector,
             },
             include: {
                 sender: {
@@ -73,7 +74,7 @@ export class TeamChatService {
         });
     }
 
-    async getMessages(sector: string = 'TI') {
+    async getMessages(sector: Sector = 'TI') {
         const messages = await this.prisma.teamMessage.findMany({
             where: { sector },
             orderBy: { createdAt: 'desc' },
@@ -92,7 +93,7 @@ export class TeamChatService {
         return messages.reverse();
     }
 
-    async saveMessage(userId: string, content: string, sector: string = 'TI') {
+    async saveMessage(userId: string, content: string, sector: Sector = 'TI') {
         return this.prisma.teamMessage.create({
             data: {
                 content,

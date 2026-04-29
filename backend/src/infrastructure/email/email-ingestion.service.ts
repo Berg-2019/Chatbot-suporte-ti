@@ -5,6 +5,7 @@
 
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { Sector } from '@prisma/client';
 import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { TicketsService } from '../../presentation/controllers/tickets/tickets.service';
@@ -426,8 +427,8 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
         jid: `email-${fromEmail}`,
         phoneNumber: 'email-only',
         name: fromName,
-        sector: config.defaultSector || 'Email',
-      });
+        sector: (config.defaultSector || 'TI') as Sector,
+      } as any);
     }
 
     // Create ticket
@@ -436,7 +437,7 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
       description: body,
       phoneNumber: contact.phoneNumber || 'email-only',
       customerName: contact.name,
-      sector: config.defaultSector || 'TI',
+      sector: (config.defaultSector || 'TI') as Sector,
       category: 'Email',
       priority: config.defaultPriority as any || 'NORMAL',
     });

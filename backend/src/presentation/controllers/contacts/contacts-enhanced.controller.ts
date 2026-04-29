@@ -33,7 +33,7 @@ export class ContactsEnhancedController {
   @Get()
   @RequirePermissions('contacts:view')
   async findAll(@Query() query: QueryContactDto) {
-    return this.contactService.findAll(query);
+    return this.contactService.findAll(query as any);
   }
 
   /**
@@ -104,7 +104,7 @@ export class ContactsEnhancedController {
   @Post()
   @RequirePermissions('contacts:create')
   async create(@Body() dto: CreateContactDto) {
-    return this.contactService.create(dto);
+    return this.contactService.create(dto as any);
   }
 
   /**
@@ -127,7 +127,10 @@ export class ContactsEnhancedController {
     },
   ) {
     const { jid, ...data } = dto;
-    return this.contactService.upsertByJid(jid, data);
+    return this.contactService.upsertByJid(jid, {
+      ...data,
+      sector: data.sector as any,
+    });
   }
 
   /**
@@ -148,7 +151,7 @@ export class ContactsEnhancedController {
     },
   ) {
     const { phoneNumber, ...data } = dto;
-    return this.contactService.upsertByPhone(phoneNumber, data);
+    return this.contactService.upsertByPhone(phoneNumber, data as any);
   }
 
   /**
@@ -168,7 +171,7 @@ export class ContactsEnhancedController {
   @Patch(':id')
   @RequirePermissions('contacts:update')
   async update(@Param('id') id: string, @Body() dto: UpdateContactDto) {
-    return this.contactService.update(id, dto);
+    return this.contactService.update(id, dto as any);
   }
 
   /**

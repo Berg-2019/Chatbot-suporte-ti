@@ -26,7 +26,7 @@ export class ContactsController {
 
     @Get()
     async findAll(@Query('sector') sector?: string) {
-        return this.contactsService.findAll(sector);
+        return this.contactsService.findAll(sector as any);
     }
 
     @Get('sectors')
@@ -41,7 +41,7 @@ export class ContactsController {
 
     @Post()
     async create(@Body() dto: CreateContactDto) {
-        return this.contactsService.create(dto);
+        return this.contactsService.create(dto as any);
     }
 
     /**
@@ -52,12 +52,12 @@ export class ContactsController {
     @SetMetadata('isPublic', true) // Allow bot to call without JWT
     async upsert(@Body() dto: UpsertContactDto) {
         const { jid, ...contactData } = dto;
-        return this.contactsService.upsertByJid(jid, contactData);
+        return this.contactsService.upsertByJid(jid, contactData as any);
     }
 
     @Put(':id')
     async update(@Param('id') id: string, @Body() dto: UpdateContactDto) {
-        return this.contactsService.update(id, dto);
+        return this.contactsService.update(id, dto as any);
     }
 
     @Delete(':id')

@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, Sector } from '@prisma/client';
 
 @Injectable()
 export class ContactService {
@@ -12,7 +12,7 @@ export class ContactService {
    * Listar todos os contatos com filtros e paginação
    */
   async findAll(filters?: {
-    sector?: string;
+    sector?: Sector;
     search?: string;
     page?: number;
     limit?: number;
@@ -24,7 +24,7 @@ export class ContactService {
     const where: Prisma.ContactWhereInput = {};
 
     if (filters?.sector) {
-      where.sector = filters.sector;
+      where.sector = filters.sector as Sector;
     }
 
     if (filters?.search) {
@@ -98,7 +98,7 @@ export class ContactService {
     phoneNumber: string;
     name: string;
     email?: string;
-    sector?: string;
+    sector?: Sector;
     company?: string;
     department?: string;
     ramal?: string;
@@ -112,7 +112,7 @@ export class ContactService {
         phoneNumber: data.phoneNumber,
         name: data.name,
         email: data.email,
-        sector: data.sector || 'Não informado',
+        sector: (data.sector || 'TI') as Sector,
         company: data.company,
         department: data.department,
         ramal: data.ramal,
@@ -136,7 +136,7 @@ export class ContactService {
       phoneNumber?: string;
       name?: string;
       email?: string;
-      sector?: string;
+      sector?: Sector;
       company?: string;
       department?: string;
       ramal?: string;
@@ -153,7 +153,7 @@ export class ContactService {
     if (data.phoneNumber !== undefined) updateData.phoneNumber = data.phoneNumber;
     if (data.name !== undefined) updateData.name = data.name;
     if (data.email !== undefined) updateData.email = data.email;
-    if (data.sector !== undefined) updateData.sector = data.sector;
+    if (data.sector !== undefined) updateData.sector = data.sector as Sector;
     if (data.company !== undefined) updateData.company = data.company;
     if (data.department !== undefined) updateData.department = data.department;
     if (data.ramal !== undefined) updateData.ramal = data.ramal;
@@ -196,7 +196,7 @@ export class ContactService {
       phoneNumber: string;
       name: string;
       email?: string;
-      sector?: string;
+      sector?: Sector;
       company?: string;
       department?: string;
       ramal?: string;
@@ -211,7 +211,7 @@ export class ContactService {
         phoneNumber: data.phoneNumber,
         name: data.name,
         email: data.email,
-        sector: data.sector || 'Não informado',
+        sector: (data.sector || 'TI') as Sector,
         company: data.company,
         department: data.department,
         ramal: data.ramal,
@@ -224,7 +224,7 @@ export class ContactService {
         phoneNumber: data.phoneNumber,
         name: data.name,
         email: data.email,
-        ...(data.sector && { sector: data.sector }),
+        ...(data.sector && { sector: data.sector as Sector }),
         company: data.company,
         department: data.department,
         ramal: data.ramal,
@@ -244,13 +244,12 @@ export class ContactService {
       name: string;
       jid?: string;
       email?: string;
-      sector?: string;
+      sector?: Sector;
       company?: string;
     },
   ) {
     this.logger.debug(`Upserting contact by phone: ${phoneNumber}`);
 
-    // Verificar se já existe
     const existing = await this.findByPhone(phoneNumber);
 
     if (existing) {
@@ -417,11 +416,7 @@ export class ContactService {
   async getSectors() {
     const contacts = await this.prisma.contact.groupBy({
       by: ['sector'],
-      where: {
-        sector: {
-          not: '',
-        },
-      },
+      where: {},
       _count: true,
       orderBy: {
         _count: {

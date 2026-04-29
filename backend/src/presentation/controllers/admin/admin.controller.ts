@@ -21,7 +21,7 @@ class CreateUserDto {
 
   @IsOptional()
   @IsString()
-  role?: 'ADMIN' | 'AGENT';
+  role?: string;
 
   @IsOptional()
   @IsString()
@@ -39,7 +39,7 @@ class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  role?: 'ADMIN' | 'AGENT';
+  role?: string;
 
   @IsOptional()
   @IsString()
@@ -86,8 +86,8 @@ export class AdminController {
         email: dto.email,
         password: hashedPassword,
         name: dto.name,
-        role: dto.role || 'AGENT',
-        sector: dto.sector || 'TI',
+        role: (dto.role || 'AGENT') as any,
+        sector: (dto.sector || 'TI') as any,
         phoneNumber: dto.phoneNumber,
       },
       select: {
@@ -104,9 +104,12 @@ export class AdminController {
 
   @Patch('users/:id')
   async updateUser(@Param('id') id: string, @Body() dto: UpdateUserDto) {
+    const data: any = { ...dto };
+    if (dto.role) data.role = dto.role as any;
+    if (dto.sector) data.sector = dto.sector as any;
     const user = await this.prisma.user.update({
       where: { id },
-      data: dto,
+      data,
       select: {
         id: true,
         email: true,

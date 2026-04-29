@@ -2,7 +2,8 @@
  * DTOs for Contacts
  */
 
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsEnum } from 'class-validator';
+import { Sector } from '@prisma/client';
 
 export class UpsertContactDto {
   @IsString()
@@ -15,8 +16,8 @@ export class UpsertContactDto {
   @IsString()
   name: string;
 
-  @IsString()
-  sector: string;
+  @IsEnum(Sector)
+  sector: Sector;
 
   @IsOptional()
   @IsString()
@@ -50,8 +51,8 @@ export class CreateContactDto {
   @IsString()
   name: string;
 
-  @IsString()
-  sector: string;
+  @IsEnum(Sector)
+  sector: Sector;
 
   @IsOptional()
   @IsString()
@@ -83,9 +84,9 @@ export class UpdateContactDto {
   @IsString()
   name?: string;
 
+  @IsEnum(Sector)
   @IsOptional()
-  @IsString()
-  sector?: string;
+  sector?: Sector;
 
   @IsOptional()
   @IsString()

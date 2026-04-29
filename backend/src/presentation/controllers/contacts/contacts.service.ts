@@ -4,12 +4,13 @@
 
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { Sector } from '@prisma/client';
 
 interface CreateContactDto {
     jid: string;
     phoneNumber?: string;
     name: string;
-    sector: string;
+    sector: Sector;
     department?: string;
     ramal?: string;
 }
@@ -17,7 +18,7 @@ interface CreateContactDto {
 interface UpdateContactDto {
     phoneNumber?: string;
     name?: string;
-    sector?: string;
+    sector?: Sector;
     department?: string;
     ramal?: string;
 }
@@ -26,7 +27,7 @@ interface UpdateContactDto {
 export class ContactsService {
     constructor(private prisma: PrismaService) { }
 
-    async findAll(sector?: string) {
+    async findAll(sector?: Sector) {
         const where = sector ? { sector } : {};
         return this.prisma.contact.findMany({
             where,
@@ -85,6 +86,7 @@ export class ContactsService {
             create: {
                 jid,
                 ...dto,
+                sector: dto.sector || 'TI' as Sector,
                 firstContactAt: now,
                 lastContactAt: now,
                 totalTickets: 0,
@@ -92,8 +94,8 @@ export class ContactsService {
             },
             update: {
                 ...dto,
-                lastContactAt: now, // Sempre atualiza último contato
-                totalTickets: existing ? { increment: 1 } : 1, // Incrementa contador
+                lastContactAt: now,
+                totalTickets: existing ? { increment: 1 } : 1,
                 customAttributes: dtoWithAttributes.customAttributes || existing?.customAttributes || {},
             },
         });

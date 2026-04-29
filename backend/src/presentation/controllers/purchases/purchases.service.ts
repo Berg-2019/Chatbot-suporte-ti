@@ -4,7 +4,7 @@
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma } from '@prisma/client';
 
 // Tipo local para categoria (até migration rodar)
 type EquipmentCategory = 'COMPUTER' | 'PRINTER' | 'MONITOR' | 'PERIPHERAL' | 'NETWORK' | 'SOFTWARE' | 'OTHER';
@@ -27,6 +27,19 @@ interface CreatePurchaseDto {
     purchaseDate?: Date;
     notes?: string;
     createdById?: string;
+}
+
+interface UpdatePurchaseDto extends Partial<CreatePurchaseDto> {
+    syncedToGlpi?: boolean;
+    glpiAssetId?: number;
+}
+
+interface PurchaseFilters {
+    sector?: string;
+    category?: EquipmentCategory;
+    startDate?: Date;
+    endDate?: Date;
+    supplierId?: string;
 }
 
 interface UpdatePurchaseDto extends Partial<CreatePurchaseDto> {
@@ -100,10 +113,10 @@ export class PurchasesService {
                 serialNumber: dto.serialNumber,
                 assetTag: dto.assetTag,
                 quantity: dto.quantity || 1,
-                unitPrice: new Decimal(dto.unitPrice),
+                unitPrice: new Prisma.Decimal(dto.unitPrice),
                 supplierId: dto.supplierId,
                 supplierName: dto.supplierName,
-                sector: dto.sector,
+                sector: dto.sector as any,
                 location: dto.location,
                 responsibleName: dto.responsibleName,
                 invoiceNumber: dto.invoiceNumber,
@@ -123,10 +136,16 @@ export class PurchasesService {
         const data: any = { ...dto };
 
         if (dto.unitPrice !== undefined) {
-            data.unitPrice = new Decimal(dto.unitPrice);
+            data.unitPrice = new Prisma.Decimal(dto.unitPrice);
         }
         if (dto.invoiceDate) {
             data.invoiceDate = new Date(dto.invoiceDate);
+        }
+        if (dto.purchaseDate) {
+            data.purchaseDate = new Date(dto.purchaseDate);
+        }
+        if (dto.sector) {
+            data.sector = dto.sector as any;
         }
         if (dto.purchaseDate) {
             data.purchaseDate = new Date(dto.purchaseDate);
