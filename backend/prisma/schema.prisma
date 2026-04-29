@@ -143,6 +143,8 @@ model Ticket {
   affectedAssetId String?
   affectedAsset   Asset?  @relation("AssetTickets", fields: [affectedAssetId], references: [id])
 
+  slaTimer         SlaTimer?
+
   @@index([phoneNumber])
   @@index([status])
   @@index([glpiId])
@@ -1549,6 +1551,76 @@ model LicenseAssignment {
   assignedAt DateTime @default(now())
 
   @@map("license_assignments")
+}
+
+// ===========================================================================
+// PHASE 3 - SLA Engine
+// ===========================================================================
+
+model SlaPolicy {
+  id               String   @id @default(uuid())
+  name             String
+  sector           Sector
+  priority         Priority
+  responseTimeMins Int      // tempo para 1ª resposta
+  resolutionTimeMins Int   // tempo para fechar
+  businessHoursId  String?
+  businessHours    BusinessHours? @relation(fields: [businessHoursId], references: [id])
+  active           Boolean  @default(true)
+
+  @@unique([sector, priority])
+  @@map("sla_policies")
+}
+
+model BusinessHours {
+  id        String  @id @default(uuid())
+  name      String
+  timezone  String  @default("America/Sao_Paulo")
+  schedule  Json    // { mon: [{start:"08:00", end:"18:00"}], ... }
+  holidays  Json?    // ["2026-12-25", ...]
+
+  policies  SlaPolicy[]
+
+  @@map("business_hours")
+}
+
+model SlaTimer {
+  id               String    @id
+  ticketId         String    @unique
+  ticket           Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  policyId         String?
+  startedAt        DateTime  @default(now())
+  pausedAt         DateTime?
+  resumedAt        DateTime?
+  responseDueAt    DateTime
+  resolutionDueAt DateTime
+  responseMetAt    DateTime?
+  resolutionMetAt   DateTime?
+  responseBreached  Boolean   @default(false)
+  resolutionBreached Boolean @default(false)
+
+  @@index([responseDueAt, responseMetAt])
+  @@index([resolutionDueAt, resolutionMetAt])
+  @@map("sla_timers")
+}
+
+model EscalationRule {
+  id                String   @id @default(uuid())
+  name              String
+  sector            Sector
+  triggerAfterMins  Int
+  triggerOn         EscalationTrigger
+  action            Json     // { type:"NOTIFY_MANAGER" } | { type:"REASSIGN", level:"L2" }
+  active            Boolean  @default(true)
+
+  @@map("escalation_rules")
+}
+
+enum EscalationTrigger {
+  NO_RESPONSE
+  NO_RESOLUTION
+  SLA_BREACH_IMMINENT
+  SLA_BREACHED
 }
 
 // ===========================================================================
