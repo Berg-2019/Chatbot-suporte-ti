@@ -103,7 +103,7 @@ async function bootstrap() {
   console.log('║                                                                ║');
   console.log('║   🎫 HELPDESK - Sistema de Atendimento Técnico               ║');
   console.log('║                                                                ║');
-  console.log('║   Backend API + GLPI Integration                              ║');
+  console.log('║   Backend API - Helpdesk MSM                                   ║');
   console.log(`║   Rodando em: http://localhost:${port}                           ║`);
   console.log('║                                                                ║');
   console.log('╚════════════════════════════════════════════════════════════════╝\n');

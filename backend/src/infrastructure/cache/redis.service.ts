@@ -67,14 +67,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.del(`session:${phoneNumber}`);
   }
 
-  // === GLPI Token ===
+  // === WhatsApp Session ===
 
-  async getGlpiSession(): Promise<string | null> {
-    return this.get('glpi:session');
+  async getWhatsAppSession(): Promise<string | null> {
+    return this.get('whatsapp:session');
   }
 
-  async setGlpiSession(token: string, ttl: number = 3600): Promise<void> {
-    await this.set('glpi:session', token, ttl);
+  async setWhatsAppSession(token: string, ttl: number = 3600): Promise<void> {
+    await this.set('whatsapp:session', token, ttl);
   }
 
   // === User Online Status ===

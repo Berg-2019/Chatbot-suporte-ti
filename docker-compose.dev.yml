@@ -71,49 +71,6 @@ services:
       retries: 5
 
   # ============================================================================
-  # MySQL - Banco de dados para GLPI
-  # ============================================================================
-  mysql:
-    image: mysql:8.0
-    container_name: helpdesk_mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
-      MYSQL_DATABASE: glpi
-      MYSQL_USER: glpi
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-glpi123}
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - helpdesk_network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ============================================================================
-  # GLPI - Sistema de Tickets
-  # ============================================================================
-  glpi:
-    image: diouxx/glpi:latest
-    container_name: helpdesk_glpi
-    restart: unless-stopped
-    environment:
-      TIMEZONE: America/Porto_Velho
-    ports:
-      - "8080:80"
-    volumes:
-      - glpi_data:/var/www/html/glpi
-    networks:
-      - helpdesk_network
-    depends_on:
-      mysql:
-        condition: service_healthy
-
-  # ============================================================================
   # Backend NestJS - DEV com Hot Reload
   # ============================================================================
   backend:
@@ -133,13 +90,7 @@ services:
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
       JWT_SECRET: ${JWT_SECRET:-dev-secret-jwt}
-      GLPI_URL: http://glpi/apirest.php
-      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-dev-app-token}
-      GLPI_USER_TOKEN: ${GLPI_USER_TOKEN:-dev-user-token}
       FRONTEND_URL: http://localhost:5173,http://192.168.7.118,http://192.168.7.118:5173,http://helpdeskmsm.com.br,https://helpdeskmsm.com.br,https://www.helpdeskmsm.com.br
-      # Ollama Configuration
-      OLLAMA_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
     volumes:
       - ./backend:/app:delegated
       - /app/node_modules
@@ -316,26 +267,14 @@ services:
 volumes:
   postgres_data:
     name: helpdesk_postgres_dev
-  mysql_data:
-    name: helpdesk_mysql_dev
   redis_data:
     name: helpdesk_redis_dev
   rabbitmq_data:
     name: helpdesk_rabbitmq_dev
-  glpi_data:
-    name: helpdesk_glpi_dev
   backend_node_modules:
     name: helpdesk_backend_node_modules_dev
   backend_logs:
     name: helpdesk_backend_logs_dev
-  frontend_node_modules:
-    name: helpdesk_frontend_node_modules_dev
-  bot_node_modules:
-    name: helpdesk_bot_node_modules_dev
-  bot_sessions:
-    name: helpdesk_bot_sessions_dev
-  bot_logs:
-    name: helpdesk_bot_logs_dev
   hermes_data:
     name: helpdesk_hermes_data
   hermes_skills:

@@ -40,15 +40,10 @@ class EnvironmentVariables {
   @IsOptional()
   JWT_EXPIRES_IN: string = '7d';
 
-  // GLPI
-  @IsUrl({ require_tld: false })
-  GLPI_URL: string;
-
+  // WhatsApp
   @IsString()
-  GLPI_APP_TOKEN: string;
-
-  @IsString()
-  GLPI_USER_TOKEN: string;
+  @IsOptional()
+  WHATSAPP_SESSION: string;
 
   // Frontend
   @IsString()
