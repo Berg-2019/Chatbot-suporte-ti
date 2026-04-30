@@ -7,6 +7,7 @@ import { AssetsService } from './assets.service';
 import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { CreateAssetDto, UpdateAssetDto, AssignAssetDto, ReturnAssetDto } from './dto';
 
 @Controller('assets')
 @UseGuards(AuthGuard('jwt'), SectorGuard, RolesGuard)
@@ -55,38 +56,25 @@ export class AssetsController {
 
   @Post()
   @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC')
-  async create(@Body() body: {
-    tag: string;
-    serialNumber?: string;
-    name: string;
-    category: string;
-    status?: string;
-    sector: string;
-    location?: string;
-    manufacturer?: string;
-    model?: string;
-    purchaseDate?: string;
-    warrantyEndsAt?: string;
-    notes?: string;
-  }) {
-    return this.assetsService.create(body as any);
+  async create(@Body() dto: CreateAssetDto) {
+    return this.assetsService.create(dto);
   }
 
   @Patch(':id')
   @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC')
-  async update(@Param('id') id: string, @Body() body: any) {
-    return this.assetsService.update(id, body as any);
+  async update(@Param('id') id: string, @Body() dto: UpdateAssetDto) {
+    return this.assetsService.update(id, dto);
   }
 
   @Post(':id/assign')
   @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC')
-  async assign(@Param('id') id: string, @Body() body: { userId: string; reason?: string }) {
-    return this.assetsService.assign(id, body.userId, body.reason);
+  async assign(@Param('id') id: string, @Body() dto: AssignAssetDto) {
+    return this.assetsService.assign(id, dto.userId, dto.reason);
   }
 
   @Post(':id/return')
   @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC')
-  async returnAsset(@Param('id') id: string) {
+  async returnAsset(@Param('id') id: string, @Body() _dto: ReturnAssetDto) {
     return this.assetsService.returnAsset(id);
   }
 
