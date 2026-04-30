@@ -143,7 +143,7 @@ describe('LicensesService', () => {
       const result = await service.findOne('1');
 
       expect(result.software).toBe('Microsoft 365');
-      expect(result.assignments[0].asset.tag).toBe('PAT001');
+      expect(result.assignments[0]?.asset?.tag).toBe('PAT001');
     });
   });
 
