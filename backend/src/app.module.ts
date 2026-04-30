@@ -57,6 +57,7 @@ import { ToolsModule } from './presentation/controllers/tools/tools.module';
 import { AssetsModule } from './presentation/controllers/assets/assets.module';
 import { LicensesModule } from './presentation/controllers/licenses/licenses.module';
 import { SlaModule } from './presentation/controllers/sla/sla.module';
+import { PushModule } from './presentation/controllers/push/push.module';
 
 // Admin
 import { AdminModule } from './presentation/controllers/admin/admin.module';
@@ -130,6 +131,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     AssetsModule,
     LicensesModule,
     SlaModule,
+    PushModule,
     AdminModule,
   ],
   controllers: [HealthController],

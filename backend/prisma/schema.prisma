@@ -60,6 +60,7 @@ model User {
 
   assetsOwned      Asset[]           @relation("AssetCurrentOwner")
   assetAssignments AssetAssignment[]
+  pushSubscriptions PushSubscription[]
 
   @@index([role, active])
   @@index([email])
@@ -1656,3 +1657,19 @@ model Setting {
 // key: "notifications.sound.enabled", value: "true"
 // key: "email.poll.interval", value: "60"
 // key: "sla.warning.threshold", value: "75"
+
+// Push Notification Subscriptions (PWA)
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @db.Text
+  p256dh    String   @db.Text
+  auth      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([endpoint])
+  @@index([userId])
+  @@map("push_subscriptions")
+}
