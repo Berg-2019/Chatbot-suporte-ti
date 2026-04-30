@@ -7,6 +7,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { SlaService } from '../sla/sla.service';
+import { PushService } from '../push/push.service';
 import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 
 interface CreateTicketDto {
@@ -33,6 +34,7 @@ export class TicketsService {
     private rabbitmq: RabbitMQService,
     private automationEngine: AutomationEngineService,
     private slaService: SlaService,
+    private pushService: PushService,
   ) { }
 
   async findAll(filters?: {
@@ -284,6 +286,15 @@ export class TicketsService {
       priority: ticket.priority,
       status: ticket.status,
     });
+
+    if (technician?.name) {
+      await this.pushService.sendToUser(
+        dto.userId,
+        '🎫 Ticket Atribuído',
+        `Ticket #${ticket.id.slice(-6)}: ${ticket.title}`,
+        { ticketId: ticket.id, type: 'ticket_assigned' },
+      );
+    }
 
     return ticket;
   }

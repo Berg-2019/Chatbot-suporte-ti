@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
+import { PushService } from '../push/push.service';
 import { CreatePurchaseRequestDto, QueryPurchaseRequestDto } from './purchase-requests.dto';
 import { PurchaseRequestStatus, Sector, Prisma } from '@prisma/client';
 
@@ -9,6 +10,7 @@ export class PurchaseRequestsService {
   constructor(
     private prisma: PrismaService,
     private rabbitmq: RabbitMQService,
+    private pushService: PushService,
   ) {}
 
   async create(dto: CreatePurchaseRequestDto, requestedById?: string) {
@@ -90,6 +92,16 @@ export class PurchaseRequestsService {
       ticketId: updated.ticketId || undefined,
       payload: updated,
     });
+
+    if (updated.requestedById) {
+      await this.pushService.sendToUser(
+        updated.requestedById,
+        '✅ Requisição Aprovada',
+        `PR #${id.slice(-6)}: ${updated.title} foi aprovada`,
+        { prId: id, type: 'pr_approved' },
+      );
+    }
+
     return updated;
   }
 
@@ -116,6 +128,16 @@ export class PurchaseRequestsService {
       ticketId: updated.ticketId || undefined,
       payload: updated,
     });
+
+    if (updated.requestedById) {
+      await this.pushService.sendToUser(
+        updated.requestedById,
+        '❌ Requisição Rejeitada',
+        `PR #${id.slice(-6)}: ${updated.title} foi rejeitada - ${updated.rejectionReason}`,
+        { prId: id, type: 'pr_rejected' },
+      );
+    }
+
     return updated;
   }
 
@@ -128,7 +150,11 @@ export class PurchaseRequestsService {
 
     const purchased = await this.prisma.purchaseRequest.update({
       where: { id },
-      data: { status: PurchaseRequestStatus.PURCHASED },
+      data: {
+        status: PurchaseRequestStatus.PURCHASED,
+        purchasedById,
+        purchasedAt: new Date(),
+      },
     });
     await this.rabbitmq.publishNotification({
       type: 'purchase_request_updated',
@@ -147,7 +173,11 @@ export class PurchaseRequestsService {
 
     const updated = await this.prisma.purchaseRequest.update({
       where: { id },
-      data: { status: PurchaseRequestStatus.DELIVERED },
+      data: {
+        status: PurchaseRequestStatus.DELIVERED,
+        deliveredById,
+        deliveredAt: new Date(),
+      },
     });
 
     await this.notifyRequester(updated, 'delivered');
@@ -159,7 +189,7 @@ export class PurchaseRequestsService {
     return updated;
   }
 
-  async cancel(id: string, userId?: string) {
+  async cancel(id: string, _userId?: string) {
     const pr = await this.findById(id);
 
     const cancellable: PurchaseRequestStatus[] = [PurchaseRequestStatus.PENDING, PurchaseRequestStatus.APPROVED];

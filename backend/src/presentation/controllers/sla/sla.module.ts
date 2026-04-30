@@ -6,10 +6,11 @@ import { SlaCalculatorService } from '../../../infrastructure/sla/sla-calculator
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { AlertService } from '../../../infrastructure/services/alert.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
+import { SlaBreachJob } from '../../../infrastructure/jobs/sla-breach.job';
 
 @Module({
   controllers: [SlaController],
-  providers: [SlaService, SlaSeedService, SlaCalculatorService, PrismaService, AlertService, RabbitMQService],
+  providers: [SlaService, SlaSeedService, SlaCalculatorService, PrismaService, AlertService, RabbitMQService, SlaBreachJob],
   exports: [SlaService, SlaCalculatorService],
 })
 export class SlaModule {}
