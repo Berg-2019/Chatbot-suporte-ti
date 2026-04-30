@@ -15,7 +15,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "npx tsx prisma/seed.ts"
+    "prisma:seed": "npx tsx prisma/seed.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
@@ -58,6 +61,7 @@
     "@nestjs/schematics": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
     "@nestjs/throttler": "^6.5.0",
+    "@playwright/test": "^1.59.1",
     "@types/amqplib": "^0.10.5",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",
