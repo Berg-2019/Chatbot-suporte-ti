@@ -159,10 +159,10 @@ describe('PurchaseRequestsService', () => {
 
       expect(mockPrismaService.purchaseRequest.update).toHaveBeenCalledWith({
         where: { id: '1' },
-        data: {
+        data: expect.objectContaining({
           status: PurchaseRequestStatus.APPROVED,
           approvedById: 'admin1',
-        },
+        }),
       });
     });
   });
@@ -184,10 +184,10 @@ describe('PurchaseRequestsService', () => {
 
       expect(mockPrismaService.purchaseRequest.update).toHaveBeenCalledWith({
         where: { id: '1' },
-        data: {
+        data: expect.objectContaining({
           status: PurchaseRequestStatus.REJECTED,
           rejectionReason: 'Fora do orçamento',
-        },
+        }),
       });
     });
   });

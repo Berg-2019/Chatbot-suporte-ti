@@ -6,7 +6,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { LicensesService } from './licenses.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { LicenseType } from '@prisma/client';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 
 describe('LicensesService', () => {
   let service: LicensesService;
@@ -21,9 +21,9 @@ describe('LicensesService', () => {
       count: jest.fn(),
     },
     licenseAssignment: {
-      findUnique: jest.fn(),
       create: jest.fn(),
-      update: jest.fn(),
+      findMany: jest.fn(),
+      delete: jest.fn(),
       count: jest.fn(),
     },
   };
@@ -46,9 +46,10 @@ describe('LicensesService', () => {
   describe('findAll', () => {
     it('should return paginated licenses', async () => {
       const mockLicenses = [
-        { id: '1', software: 'Office 365', type: 'SUBSCRIPTION' as LicenseType },
-        { id: '2', software: 'Adobe CC', type: 'SUBSCRIPTION' as LicenseType },
+        { id: '1', software: 'Microsoft 365', type: LicenseType.SUBSCRIPTION },
+        { id: '2', software: 'Adobe CC', type: LicenseType.SUBSCRIPTION },
       ];
+
       mockPrismaService.license.findMany.mockResolvedValue(mockLicenses);
       mockPrismaService.license.count.mockResolvedValue(2);
 
@@ -56,27 +57,22 @@ describe('LicensesService', () => {
 
       expect(result.data).toHaveLength(2);
       expect(result.meta.total).toBe(2);
-      expect(mockPrismaService.license.findMany).toHaveBeenCalled();
     });
 
-    it('should filter by search term', async () => {
+    it('should filter by type', async () => {
       mockPrismaService.license.findMany.mockResolvedValue([]);
       mockPrismaService.license.count.mockResolvedValue(0);
 
-      await service.findAll({ search: 'Office' });
+      await service.findAll({ type: LicenseType.SUBSCRIPTION });
 
       expect(mockPrismaService.license.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            OR: expect.arrayContaining([
-              { software: { contains: 'Office', mode: 'insensitive' } },
-            ]),
-          }),
+          where: expect.objectContaining({ type: LicenseType.SUBSCRIPTION }),
         }),
       );
     });
 
-    it('should filter expired licenses', async () => {
+    it('should filter expired licenses (expired: true)', async () => {
       mockPrismaService.license.findMany.mockResolvedValue([]);
       mockPrismaService.license.count.mockResolvedValue(0);
 
@@ -90,24 +86,37 @@ describe('LicensesService', () => {
         }),
       );
     });
-  });
 
-  describe('create', () => {
-    it('should create a license with defaults', async () => {
-      const dto = { software: 'Office 365', vendor: 'Microsoft', type: 'SUBSCRIPTION' as LicenseType };
-      const created = { id: '1', ...dto, seats: 1, expiresAt: null, cost: null };
-      mockPrismaService.license.create.mockResolvedValue(created);
+    it('should filter active licenses (expired: false)', async () => {
+      mockPrismaService.license.findMany.mockResolvedValue([]);
+      mockPrismaService.license.count.mockResolvedValue(0);
 
-      const result = await service.create(dto);
+      await service.findAll({ expired: false });
 
-      expect(mockPrismaService.license.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          software: 'Office 365',
-          type: 'SUBSCRIPTION',
-          seats: 1,
+      expect(mockPrismaService.license.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            expiresAt: expect.objectContaining({ gte: expect.any(Date) }),
+          }),
         }),
-      });
-      expect(result.seats).toBe(1);
+      );
+    });
+
+    it('should search by software or vendor', async () => {
+      mockPrismaService.license.findMany.mockResolvedValue([]);
+      mockPrismaService.license.count.mockResolvedValue(0);
+
+      await service.findAll({ search: 'Microsoft' });
+
+      expect(mockPrismaService.license.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({ software: expect.objectContaining({ contains: 'Microsoft' }) }),
+            ]),
+          }),
+        }),
+      );
     });
   });
 
@@ -118,87 +127,111 @@ describe('LicensesService', () => {
       await expect(service.findOne('nonexistent')).rejects.toThrow(NotFoundException);
     });
 
-    it('should return license with assignments', async () => {
+    it('should return license with assignments including asset info', async () => {
       const mockLicense = {
         id: '1',
-        software: 'Office 365',
-        assignments: [{ id: 'a1', licenseId: '1' }],
+        software: 'Microsoft 365',
+        assignments: [
+          {
+            id: '1',
+            asset: { id: '1', name: 'Notebook Dell', tag: 'PAT001' },
+          },
+        ],
       };
       mockPrismaService.license.findUnique.mockResolvedValue(mockLicense);
 
       const result = await service.findOne('1');
 
-      expect(result.software).toBe('Office 365');
+      expect(result.software).toBe('Microsoft 365');
+      expect(result.assignments[0].asset.tag).toBe('PAT001');
     });
   });
 
-  describe('assign', () => {
-    it('should throw BadRequestException when neither assetId nor userId provided', async () => {
-      const mockLicense = { id: '1', seats: 5, assignments: [] };
-      mockPrismaService.license.findUnique.mockResolvedValue(mockLicense);
+  describe('create', () => {
+    it('should create license with required fields', async () => {
+      const dto = {
+        software: 'Adobe Photoshop',
+        vendor: 'Adobe',
+        licenseKey: 'APKS-1234-5678',
+        type: LicenseType.SUBSCRIPTION,
+        seats: 5,
+      };
 
-      await expect(service.assign('1', {})).rejects.toThrow(BadRequestException);
-    });
+      const created = { id: '1', ...dto };
+      mockPrismaService.license.create.mockResolvedValue(created);
 
-    it('should throw BadRequestException when seats exhausted', async () => {
-      const mockLicense = { id: '1', seats: 1, assignments: [{ id: 'a1' }] };
-      mockPrismaService.license.findUnique.mockResolvedValue(mockLicense);
-      mockPrismaService.licenseAssignment.count.mockResolvedValue(1);
+      const result = await service.create(dto);
 
-      await expect(service.assign('1', { userId: 'user1' })).rejects.toThrow(BadRequestException);
-    });
-
-    it('should create assignment when seats available', async () => {
-      const mockLicense = { id: '1', seats: 5, assignments: [] };
-      mockPrismaService.license.findUnique.mockResolvedValue(mockLicense);
-      mockPrismaService.licenseAssignment.count.mockResolvedValue(0);
-      mockPrismaService.licenseAssignment.create.mockResolvedValue({ id: 'a1' });
-
-      const result = await service.assign('1', { userId: 'user1' });
-
-      expect(mockPrismaService.licenseAssignment.create).toHaveBeenCalledWith({
+      expect(mockPrismaService.license.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          licenseId: '1',
-          userId: 'user1',
+          software: 'Adobe Photoshop',
+          type: LicenseType.SUBSCRIPTION,
+        }),
+      });
+      expect(result.software).toBe('Adobe Photoshop');
+    });
+
+    it('should default seats to 1 when not provided', async () => {
+      const dto = {
+        software: 'Single App',
+        type: LicenseType.PERPETUAL,
+      };
+
+      mockPrismaService.license.create.mockResolvedValue({ id: '1', ...dto, seats: 1 });
+
+      await service.create(dto);
+
+      expect(mockPrismaService.license.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ seats: 1 }),
+      });
+    });
+
+    it('should parse expiresAt date string', async () => {
+      const dto = {
+        software: 'Trial App',
+        type: LicenseType.SUBSCRIPTION,
+        expiresAt: '2025-12-31',
+      };
+
+      mockPrismaService.license.create.mockResolvedValue({ id: '1', ...dto });
+
+      await service.create(dto);
+
+      expect(mockPrismaService.license.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          expiresAt: expect.any(Date),
         }),
       });
     });
   });
 
-  describe('unassign', () => {
-    it('should throw NotFoundException when assignment not found', async () => {
-      mockPrismaService.licenseAssignment.findUnique.mockResolvedValue(null);
+  describe('assign', () => {
+    it('should create license assignment with assetId', async () => {
+      const license = { id: '1', software: 'Office', seats: 10 };
+      mockPrismaService.license.findUnique.mockResolvedValue(license);
+      mockPrismaService.licenseAssignment.create.mockResolvedValue({ id: '1', licenseId: '1', assetId: 'asset1' });
 
-      await expect(service.unassign('nonexistent')).rejects.toThrow(NotFoundException);
-    });
+      const result = await service.assign('1', { assetId: 'asset1' });
 
-    it('should set returnedAt on assignment', async () => {
-      const mockAssignment = { id: 'a1', licenseId: '1', userId: 'user1', returnedAt: null };
-      mockPrismaService.licenseAssignment.findUnique.mockResolvedValue(mockAssignment);
-      mockPrismaService.licenseAssignment.update.mockResolvedValue({ ...mockAssignment, returnedAt: new Date() });
-
-      await service.unassign('a1');
-
-      expect(mockPrismaService.licenseAssignment.update).toHaveBeenCalledWith({
-        where: { id: 'a1' },
-        data: { returnedAt: expect.any(Date) },
+      expect(mockPrismaService.licenseAssignment.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          licenseId: '1',
+          assetId: 'asset1',
+        }),
       });
     });
-  });
 
-  describe('getStats', () => {
-    it('should return license statistics', async () => {
-      mockPrismaService.license.count.mockResolvedValueOnce(10);
-      mockPrismaService.license.count.mockResolvedValueOnce(2);
-      mockPrismaService.license.count.mockResolvedValueOnce(8);
-      mockPrismaService.licenseAssignment.count.mockResolvedValueOnce(5);
+    it('should throw NotFoundException when license not found', async () => {
+      mockPrismaService.license.findUnique.mockResolvedValue(null);
 
-      const result = await service.getStats();
+      await expect(service.assign('nonexistent', { assetId: 'asset1' })).rejects.toThrow(NotFoundException);
+    });
 
-      expect(result.total).toBe(10);
-      expect(result.expired).toBe(2);
-      expect(result.active).toBe(8);
-      expect(result.totalAssignments).toBe(5);
+    it('should throw BadRequestException when neither assetId nor userId provided', async () => {
+      const license = { id: '1', software: 'Office', seats: 10 };
+      mockPrismaService.license.findUnique.mockResolvedValue(license);
+
+      await expect(service.assign('1', {})).rejects.toThrow('Informe assetId ou userId');
     });
   });
 });

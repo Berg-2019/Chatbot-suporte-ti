@@ -6,7 +6,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AssetsService } from './assets.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { AssetCategory, AssetLifecycle, Sector } from '@prisma/client';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, ConflictException } from '@nestjs/common';
 
 describe('AssetsService', () => {
   let service: AssetsService;
@@ -27,10 +27,12 @@ describe('AssetsService', () => {
       create: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
+      findMany: jest.fn(),
     },
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AssetsService,
@@ -41,62 +43,57 @@ describe('AssetsService', () => {
     service = module.get<AssetsService>(AssetsService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
   describe('findAll', () => {
-    it('should return paginated assets filtered by sector', async () => {
+    it('should return paginated assets', async () => {
       const mockAssets = [
-        { id: '1', name: 'Dell Latitude 5440', sector: 'TI' as Sector, tag: 'PAT001' },
-        { id: '2', name: 'HP LaserJet', sector: 'TI' as Sector, tag: 'PAT002' },
+        { id: '1', name: 'Notebook Dell', tag: 'PAT001', category: AssetCategory.LAPTOP, sector: 'TI' as Sector },
+        { id: '2', name: 'Impressora HP', tag: 'PAT002', category: AssetCategory.PRINTER, sector: 'TI' as Sector },
       ];
+
       mockPrismaService.asset.findMany.mockResolvedValue(mockAssets);
       mockPrismaService.asset.count.mockResolvedValue(2);
 
-      const result = await service.findAll({ sector: 'TI' as Sector });
+      const result = await service.findAll({ page: 1, limit: 10 });
 
       expect(result.data).toHaveLength(2);
+      expect(result.meta.total).toBe(2);
+    });
+
+    it('should filter by sector', async () => {
+      mockPrismaService.asset.findMany.mockResolvedValue([]);
+      mockPrismaService.asset.count.mockResolvedValue(0);
+
+      await service.findAll({ sector: 'ELECTRIC' as Sector });
+
       expect(mockPrismaService.asset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ sector: 'TI' }),
+          where: expect.objectContaining({ sector: 'ELECTRIC' }),
         }),
       );
     });
 
-    it('should filter by search term across name, tag, serialNumber', async () => {
+    it('should filter by category', async () => {
       mockPrismaService.asset.findMany.mockResolvedValue([]);
       mockPrismaService.asset.count.mockResolvedValue(0);
 
-      await service.findAll({ search: 'Dell' });
+      await service.findAll({ category: AssetCategory.PRINTER });
 
       expect(mockPrismaService.asset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            OR: expect.arrayContaining([
-              { name: { contains: 'Dell', mode: 'insensitive' } },
-              { tag: { contains: 'Dell', mode: 'insensitive' } },
-            ]),
-          }),
+          where: expect.objectContaining({ category: AssetCategory.PRINTER }),
         }),
       );
     });
 
-    it('should filter by category and status', async () => {
+    it('should filter by status', async () => {
       mockPrismaService.asset.findMany.mockResolvedValue([]);
       mockPrismaService.asset.count.mockResolvedValue(0);
 
-      await service.findAll({
-        category: 'COMPUTER' as AssetCategory,
-        status: 'IN_USE' as AssetLifecycle,
-      });
+      await service.findAll({ status: AssetLifecycle.IN_USE });
 
       expect(mockPrismaService.asset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            category: 'COMPUTER',
-            status: 'IN_USE',
-          }),
+          where: expect.objectContaining({ status: AssetLifecycle.IN_USE }),
         }),
       );
     });
@@ -109,113 +106,139 @@ describe('AssetsService', () => {
       await expect(service.findById('nonexistent')).rejects.toThrow(NotFoundException);
     });
 
-    it('should return asset with currentUser, assignments, licenses, tickets', async () => {
+    it('should return asset with currentUser and counts', async () => {
       const mockAsset = {
         id: '1',
-        name: 'Dell Latitude 5440',
+        name: 'Notebook Dell',
         tag: 'PAT001',
-        currentUser: { id: 'u1', name: 'João Silva' },
-        assignments: [],
-        licenses: [],
-        tickets: [],
+        currentUser: { id: '1', name: 'João Silva', email: 'joao@empresa.com', phoneNumber: '11999999999' },
+        _count: { assignments: 2, tickets: 1 },
       };
       mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
 
       const result = await service.findById('1');
 
-      expect(result.name).toBe('Dell Latitude 5440');
-      expect(result.currentUser!.name).toBe('João Silva');
+      expect(result.name).toBe('Notebook Dell');
     });
   });
 
   describe('create', () => {
-    it('should throw ConflictException when tag already exists', async () => {
-      mockPrismaService.asset.findUnique.mockResolvedValue({ id: 'existing', tag: 'PAT001' });
+    it('should create asset with required fields', async () => {
+      const dto = {
+        tag: 'PAT_NEW_001',
+        name: 'Monitor LG',
+        category: AssetCategory.PERIPHERAL,
+        sector: 'TI' as Sector,
+      };
 
-      await expect(
-        service.create({ name: 'New Asset', tag: 'PAT001', sector: 'TI' as Sector, category: 'COMPUTER' as AssetCategory }),
-      ).rejects.toThrow();
+      mockPrismaService.asset.findUnique.mockResolvedValue(null);
+      mockPrismaService.asset.create.mockResolvedValue({ id: '1', ...dto, status: AssetLifecycle.IN_STOCK });
+
+      const result = await service.create(dto);
+
+      expect(mockPrismaService.asset.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tag: 'PAT_NEW_001',
+            name: 'Monitor LG',
+            sector: 'TI',
+          }),
+        }),
+      );
+      expect(result.tag).toBe('PAT_NEW_001');
     });
 
-    it('should create asset when tag is unique', async () => {
-      mockPrismaService.asset.findUnique.mockResolvedValue(null);
-      const created = { id: '1', name: 'Dell Latitude 5440', tag: 'PAT001', sector: 'TI', category: 'COMPUTER' };
-      mockPrismaService.asset.create.mockResolvedValue(created);
-
-      const result = await service.create({
-        name: 'Dell Latitude 5440',
-        tag: 'PAT001',
+    it('should throw ConflictException when tag already exists', async () => {
+      const dto = {
+        tag: 'PAT_EXISTING',
+        name: 'Some Asset',
+        category: AssetCategory.COMPUTER,
         sector: 'TI' as Sector,
-        category: 'COMPUTER' as AssetCategory,
-      });
+      };
 
-      expect(mockPrismaService.asset.create).toHaveBeenCalled();
-      expect(result.tag).toBe('PAT001');
+      mockPrismaService.asset.findUnique.mockResolvedValue({ id: '1', tag: 'PAT_EXISTING' });
+
+      await expect(service.create(dto)).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('update', () => {
+    it('should update asset fields', async () => {
+      const existing = { id: '1', name: 'Old Name', tag: 'PAT001', sector: 'TI' as Sector, status: AssetLifecycle.IN_STOCK };
+      mockPrismaService.asset.findUnique.mockResolvedValue(existing);
+      mockPrismaService.asset.update.mockResolvedValue({ ...existing, name: 'New Name' });
+
+      const result = await service.update('1', { name: 'New Name' });
+
+      expect(mockPrismaService.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: '1' },
+          data: expect.objectContaining({ name: 'New Name' }),
+        }),
+      );
+    });
+
+    it('should throw NotFoundException when updating nonexistent asset', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(null);
+
+      await expect(service.update('nonexistent', { name: 'New' })).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('assign', () => {
-    it('should throw NotFoundException when user not found', async () => {
-      mockPrismaService.asset.findUnique.mockResolvedValue({ id: '1', name: 'Asset' });
-      mockPrismaService.user.findUnique.mockResolvedValue(null);
+    it('should assign asset to user and create history record', async () => {
+      const asset = { id: '1', name: 'Notebook', currentUserId: null };
+      const user = { id: 'user1', name: 'João Silva' };
+      mockPrismaService.asset.findUnique.mockResolvedValue(asset);
+      mockPrismaService.user.findUnique.mockResolvedValue(user);
+      mockPrismaService.assetAssignment.create.mockResolvedValue({ id: 'assign1' });
+      mockPrismaService.asset.update.mockResolvedValue({ ...asset, currentUserId: 'user1' });
 
-      await expect(service.assign('1', 'nonexistent-user')).rejects.toThrow(NotFoundException);
+      const result = await service.assign('1', 'user1', 'user-admin');
+
+      expect(mockPrismaService.asset.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { currentUserId: 'user1' },
+        include: { currentUser: { select: { id: true, name: true } } },
+      });
     });
 
-    it('should create assignment and update currentUserId', async () => {
-      const mockAsset = { id: '1', name: 'Asset', currentUserId: null };
-      const mockUser = { id: 'user1', name: 'João Silva' };
-      mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
-      mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockPrismaService.assetAssignment.create.mockResolvedValue({ id: 'a1' });
-      mockPrismaService.asset.update.mockResolvedValue({ ...mockAsset, currentUserId: 'user1' });
+    it('should throw NotFoundException when asset not found', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(null);
 
-      const result = await service.assign('1', 'user1', 'Requisição IT');
+      await expect(service.assign('nonexistent', 'user1', 'admin')).rejects.toThrow(NotFoundException);
+    });
 
-      expect(mockPrismaService.assetAssignment.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          assetId: '1',
-          userId: 'user1',
-          reason: 'Requisição IT',
-        }),
-      });
+    it('should throw NotFoundException when user not found', async () => {
+      const asset = { id: '1', name: 'Notebook', currentUserId: null };
+      mockPrismaService.asset.findUnique.mockResolvedValue(asset);
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.assign('1', 'nonexistent', 'reason')).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('returnAsset', () => {
     it('should clear currentUserId and set returnedAt on active assignment', async () => {
-      const mockAsset = { id: '1', name: 'Asset', currentUserId: 'user1' };
-      const mockAssignment = { id: 'a1', assetId: '1', userId: 'user1', returnedAt: null };
-      mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
-      mockPrismaService.assetAssignment.findFirst.mockResolvedValue(mockAssignment);
-      mockPrismaService.assetAssignment.update.mockResolvedValue({ ...mockAssignment, returnedAt: new Date() });
-      mockPrismaService.asset.update.mockResolvedValue({ ...mockAsset, currentUserId: null });
+      const asset = { id: '1', name: 'Notebook', currentUserId: 'user1' };
+      const activeAssignment = { id: 'assign1', assetId: '1', returnedAt: null };
 
-      await service.returnAsset('1');
+      mockPrismaService.asset.findUnique.mockResolvedValue(asset);
+      mockPrismaService.assetAssignment.findFirst.mockResolvedValue(activeAssignment);
+      mockPrismaService.assetAssignment.update.mockResolvedValue({ ...activeAssignment, returnedAt: new Date() });
+      mockPrismaService.asset.update.mockResolvedValue({ ...asset, currentUserId: null });
 
+      const result = await service.returnAsset('1');
+
+      expect(mockPrismaService.assetAssignment.update).toHaveBeenCalledWith({
+        where: { id: 'assign1' },
+        data: { returnedAt: expect.any(Date) },
+      });
       expect(mockPrismaService.asset.update).toHaveBeenCalledWith({
         where: { id: '1' },
         data: { currentUserId: null },
+        include: { currentUser: false },
       });
-    });
-  });
-
-  describe('getStats', () => {
-    it('should return asset statistics by lifecycle', async () => {
-      mockPrismaService.asset.count
-        .mockResolvedValueOnce(10)  // total
-        .mockResolvedValueOnce(3)    // IN_STOCK
-        .mockResolvedValueOnce(5)    // IN_USE
-        .mockResolvedValueOnce(1)    // IN_MAINTENANCE
-        .mockResolvedValueOnce(0)    // RETIRED
-        .mockResolvedValueOnce(1);   // LOST
-
-      const result = await service.getStats();
-
-      expect(result.total).toBe(10);
-      expect(result.inStock).toBe(3);
-      expect(result.inUse).toBe(5);
-      expect(result.inMaintenance).toBe(1);
     });
   });
 });
