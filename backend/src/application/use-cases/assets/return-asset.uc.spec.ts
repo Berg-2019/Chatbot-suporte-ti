@@ -8,6 +8,27 @@ describe('ReturnAssetUseCase', () => {
   let uc: ReturnAssetUseCase;
 
   const mockPrisma = {
+    $transaction: jest.fn().mockImplementation(async (args) => {
+      if (typeof args === 'function') {
+        const mockTx = {
+          asset: {
+            findUnique: jest.fn().mockResolvedValue({ id: '1', name: 'Notebook', currentUserId: null, status: AssetLifecycle.IN_STOCK }),
+            update: mockPrisma.asset.update,
+          },
+          assetAssignment: {
+            update: mockPrisma.assetAssignment.update,
+          },
+        };
+        return args(mockTx);
+      }
+      if (Array.isArray(args)) {
+        return [
+          { id: 'assign1', assetId: '1', userId: 'user1', returnedAt: new Date() },
+          { id: '1', name: 'Notebook', currentUserId: null, status: AssetLifecycle.IN_STOCK },
+        ];
+      }
+      return args;
+    }),
     asset: {
       findUnique: jest.fn(),
       update: jest.fn(),

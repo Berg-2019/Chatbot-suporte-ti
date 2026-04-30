@@ -8,6 +8,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { SlaService } from '../sla/sla.service';
+import { PushService } from '../push/push.service';
 import { Sector } from '@prisma/client';
 
 describe('TicketsService', () => {
@@ -37,6 +38,11 @@ describe('TicketsService', () => {
     createTimerForTicket: jest.fn().mockResolvedValue({}),
   };
 
+  const mockPushService = {
+    sendToUser: jest.fn().mockResolvedValue({ sent: 0 }),
+    sendToRole: jest.fn().mockResolvedValue({ sent: 0 }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -45,6 +51,7 @@ describe('TicketsService', () => {
         { provide: RabbitMQService, useValue: mockRabbitMQService },
         { provide: AutomationEngineService, useValue: mockAutomationEngine },
         { provide: SlaService, useValue: mockSlaService },
+        { provide: PushService, useValue: mockPushService },
       ],
     }).compile();
 

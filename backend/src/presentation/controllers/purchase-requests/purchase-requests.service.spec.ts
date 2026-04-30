@@ -6,6 +6,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PurchaseRequestsService } from './purchase-requests.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
+import { PushService } from '../push/push.service';
 import { Sector } from '@prisma/client';
 import { PurchaseRequestStatus } from './purchase-requests.dto';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
@@ -26,6 +27,12 @@ describe('PurchaseRequestsService', () => {
   const mockRabbitMQService = {
     publishNotification: jest.fn(),
     publishPurchaseRequestEvent: jest.fn(),
+    publishOutgoingMessage: jest.fn(),
+  };
+
+  const mockPushService = {
+    sendToUser: jest.fn().mockResolvedValue({ sent: 0 }),
+    sendToRole: jest.fn().mockResolvedValue({ sent: 0 }),
   };
 
   beforeEach(async () => {
@@ -34,6 +41,7 @@ describe('PurchaseRequestsService', () => {
         PurchaseRequestsService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: RabbitMQService, useValue: mockRabbitMQService },
+        { provide: PushService, useValue: mockPushService },
       ],
     }).compile();
 
@@ -187,6 +195,56 @@ describe('PurchaseRequestsService', () => {
         data: expect.objectContaining({
           status: PurchaseRequestStatus.REJECTED,
           rejectionReason: 'Fora do orçamento',
+        }),
+      });
+    });
+  });
+
+  describe('markPurchased', () => {
+    it('should throw BadRequestException when not APPROVED', async () => {
+      const mockPR = { id: '1', status: PurchaseRequestStatus.PENDING };
+      mockPrismaService.purchaseRequest.findUnique.mockResolvedValue(mockPR);
+
+      await expect(service.markPurchased('1', 'admin1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should update status to PURCHASED and set purchasedById', async () => {
+      const mockPR = { id: '1', status: PurchaseRequestStatus.APPROVED };
+      mockPrismaService.purchaseRequest.findUnique.mockResolvedValue(mockPR);
+      mockPrismaService.purchaseRequest.update.mockResolvedValue({ ...mockPR, status: PurchaseRequestStatus.PURCHASED, purchasedById: 'admin1' });
+
+      const result = await service.markPurchased('1', 'admin1');
+
+      expect(mockPrismaService.purchaseRequest.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: expect.objectContaining({
+          status: PurchaseRequestStatus.PURCHASED,
+          purchasedById: 'admin1',
+        }),
+      });
+    });
+  });
+
+  describe('markDelivered', () => {
+    it('should throw BadRequestException when not PURCHASED', async () => {
+      const mockPR = { id: '1', status: PurchaseRequestStatus.APPROVED };
+      mockPrismaService.purchaseRequest.findUnique.mockResolvedValue(mockPR);
+
+      await expect(service.markDelivered('1', 'admin1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should update status to DELIVERED and set deliveredById', async () => {
+      const mockPR = { id: '1', status: PurchaseRequestStatus.PURCHASED };
+      mockPrismaService.purchaseRequest.findUnique.mockResolvedValue(mockPR);
+      mockPrismaService.purchaseRequest.update.mockResolvedValue({ ...mockPR, status: PurchaseRequestStatus.DELIVERED, deliveredById: 'admin1' });
+
+      const result = await service.markDelivered('1', 'admin1');
+
+      expect(mockPrismaService.purchaseRequest.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: expect.objectContaining({
+          status: PurchaseRequestStatus.DELIVERED,
+          deliveredById: 'admin1',
         }),
       });
     });

@@ -2,12 +2,22 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AssignAssetUseCase } from './assign-asset.uc';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { NotFoundException } from '@nestjs/common';
-import { Sector } from '@prisma/client';
+import { Sector, AssetLifecycle } from '@prisma/client';
 
 describe('AssignAssetUseCase', () => {
   let uc: AssignAssetUseCase;
 
   const mockPrisma = {
+    $transaction: jest.fn().mockImplementation(async (args) => {
+      if (Array.isArray(args)) {
+        return [
+          { id: 'assignNew', assetId: '1', userId: 'user1' },
+          { id: '1', name: 'Notebook', tag: 'PAT001', currentUserId: 'user1', status: AssetLifecycle.IN_USE },
+        ];
+      }
+      if (typeof args === 'function') return args(mockPrisma);
+      return args;
+    }),
     asset: {
       findUnique: jest.fn(),
       update: jest.fn(),

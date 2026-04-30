@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsPositive, Min, Max, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsPositive, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Sector } from '@prisma/client';
 

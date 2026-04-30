@@ -586,6 +586,14 @@ model PurchaseRequest {
   rejectedAt      DateTime?
   rejectionReason String?
 
+  // Compra
+  purchasedById String?
+  purchasedAt   DateTime?
+
+  // Entrega
+  deliveredById String?
+  deliveredAt   DateTime?
+
   // Controle
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
