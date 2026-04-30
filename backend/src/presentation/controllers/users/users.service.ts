@@ -71,7 +71,7 @@ export class UsersService {
 
     // Hash password if provided
     if (data.password) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       const bcrypt = require('bcryptjs');
       updateData.password = await bcrypt.hash(data.password, 12);
     }
@@ -107,7 +107,7 @@ export class UsersService {
     // 2. Hash password
     let hashedPassword = '';
     if (data.password) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       const bcrypt = require('bcryptjs');
       hashedPassword = await bcrypt.hash(data.password, 12);
     }

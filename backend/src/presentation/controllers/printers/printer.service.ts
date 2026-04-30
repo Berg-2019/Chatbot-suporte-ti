@@ -5,7 +5,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+ 
 const snmp = require('net-snmp');
 
 // OIDs SNMP comuns para impressoras

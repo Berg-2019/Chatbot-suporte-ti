@@ -118,7 +118,7 @@ export class AssetsService {
     return asset;
   }
 
-  async create(data: CreateAssetInput) {
+  async create(data: any) {
     const existing = await this.prisma.asset.findUnique({ where: { tag: data.tag } });
     if (existing) throw new ConflictException(`Asset with tag "${data.tag}" already exists`);
 
@@ -133,7 +133,7 @@ export class AssetsService {
     });
   }
 
-  async update(id: string, data: UpdateAssetInput) {
+  async update(id: string, data: any) {
     await this.findById(id);
     return this.prisma.asset.update({
       where: { id },
