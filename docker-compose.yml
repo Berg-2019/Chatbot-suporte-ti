@@ -138,7 +138,6 @@ services:
 # ==============================================================================
 volumes:
   postgres_data:
-  mysql_data:
   redis_data:
   rabbitmq_data:
   backend_logs:
@@ -148,16 +147,6 @@ volumes:
     driver: local
   certbot_webroot:
     driver: local
-
-# ==============================================================================
-# Volumes
-# ==============================================================================
-volumes:
-  postgres_data:
-  mysql_data:
-  redis_data:
-  rabbitmq_data:
-  backend_logs:
 
 # ==============================================================================
 # Networks

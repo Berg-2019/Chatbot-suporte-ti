@@ -58,8 +58,8 @@ model User {
   agentMetrics      AgentMetric[]
   articleFeedback   ArticleFeedback[]
 
-  assetsOwned       Asset[]    @relation("AssetCurrentOwner")
-  assetAssignments  AssetAssignment[]
+  assetsOwned      Asset[]           @relation("AssetCurrentOwner")
+  assetAssignments AssetAssignment[]
 
   @@index([role, active])
   @@index([email])
@@ -143,7 +143,7 @@ model Ticket {
   affectedAssetId String?
   affectedAsset   Asset?  @relation("AssetTickets", fields: [affectedAssetId], references: [id])
 
-  slaTimer         SlaTimer?
+  slaTimer SlaTimer?
 
   @@index([phoneNumber])
   @@index([status])
@@ -728,14 +728,14 @@ enum MovementType {
 // ===========================================================================
 
 model Tool {
-  id    String @id @default(uuid())
-  name  String
-  category ToolCategory @default(MANUAL)
+  id           String       @id @default(uuid())
+  name         String
+  category     ToolCategory @default(MANUAL)
   serialNumber String?
-  brand String?
-  status ToolStatus @default(AVAILABLE)
-  location String?
-  notes String?
+  brand        String?
+  status       ToolStatus   @default(AVAILABLE)
+  location     String?
+  notes        String?
 
   stockType StockType @default(TI)
 
@@ -769,11 +769,11 @@ model ToolLoan {
   id String @id @default(uuid())
 
   toolId String
-  tool   Tool @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  tool   Tool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
 
-  borrower String // Nome de quem pegou
-  loanedBy String? // Nome de quem emprestou
-  reason String?
+  borrower       String // Nome de quem pegou
+  loanedBy       String? // Nome de quem emprestou
+  reason         String?
   expectedReturn DateTime?
 
   returnedAt DateTime?
@@ -1458,26 +1458,26 @@ model ArticleFeedback {
 // ===========================================================================
 
 model Asset {
-  id           String   @id @default(uuid())
-  tag          String   @unique // patrimônio (QR code)
-  serialNumber String?  @unique
-  name         String
-  category     AssetCategory
-  status       AssetLifecycle @default(IN_USE)
-  sector       Sector
-  location     String?
-  manufacturer String?
-  model        String?
-  purchaseDate DateTime?
+  id             String         @id @default(uuid())
+  tag            String         @unique // patrimônio (QR code)
+  serialNumber   String?        @unique
+  name           String
+  category       AssetCategory
+  status         AssetLifecycle @default(IN_USE)
+  sector         Sector
+  location       String?
+  manufacturer   String?
+  model          String?
+  purchaseDate   DateTime?
   warrantyEndsAt DateTime?
-  notes        String?
+  notes          String?
 
   currentUserId String?
   currentUser   User?   @relation("AssetCurrentOwner", fields: [currentUserId], references: [id])
 
-  assignments  AssetAssignment[]
-  tickets      Ticket[]    @relation("AssetTickets")
-  licenses     LicenseAssignment[]
+  assignments AssetAssignment[]
+  tickets     Ticket[]            @relation("AssetTickets")
+  licenses    LicenseAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1523,14 +1523,14 @@ model AssetAssignment {
 }
 
 model License {
-  id          String   @id @default(uuid())
-  software    String
-  vendor      String?
-  licenseKey  String?
-  type        LicenseType
-  seats       Int      @default(1)
-  expiresAt   DateTime?
-  cost        Decimal? @db.Decimal(10, 2)
+  id         String      @id @default(uuid())
+  software   String
+  vendor     String?
+  licenseKey String?
+  type       LicenseType
+  seats      Int         @default(1)
+  expiresAt  DateTime?
+  cost       Decimal?    @db.Decimal(10, 2)
 
   assignments LicenseAssignment[]
 
@@ -1566,46 +1566,46 @@ model LicenseAssignment {
 // ===========================================================================
 
 model SlaPolicy {
-  id               String   @id @default(uuid())
-  name             String
-  sector           Sector
-  priority         Priority
-  responseTimeMins Int      // tempo para 1ª resposta
-  resolutionTimeMins Int   // tempo para fechar
-  businessHoursId  String?
-  businessHours    BusinessHours? @relation(fields: [businessHoursId], references: [id])
-  active           Boolean  @default(true)
+  id                 String         @id @default(uuid())
+  name               String
+  sector             Sector
+  priority           Priority
+  responseTimeMins   Int // tempo para 1ª resposta
+  resolutionTimeMins Int // tempo para fechar
+  businessHoursId    String?
+  businessHours      BusinessHours? @relation(fields: [businessHoursId], references: [id])
+  active             Boolean        @default(true)
 
   @@unique([sector, priority])
   @@map("sla_policies")
 }
 
 model BusinessHours {
-  id        String  @id @default(uuid())
-  name      String
-  timezone  String  @default("America/Sao_Paulo")
-  schedule  Json    // { mon: [{start:"08:00", end:"18:00"}], ... }
-  holidays  Json?    // ["2026-12-25", ...]
+  id       String @id @default(uuid())
+  name     String
+  timezone String @default("America/Sao_Paulo")
+  schedule Json // { mon: [{start:"08:00", end:"18:00"}], ... }
+  holidays Json? // ["2026-12-25", ...]
 
-  policies  SlaPolicy[]
+  policies SlaPolicy[]
 
   @@map("business_hours")
 }
 
 model SlaTimer {
-  id               String    @id
-  ticketId         String    @unique
-  ticket           Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  policyId         String?
-  startedAt        DateTime  @default(now())
-  pausedAt         DateTime?
-  resumedAt        DateTime?
-  responseDueAt    DateTime
-  resolutionDueAt DateTime
-  responseMetAt    DateTime?
-  resolutionMetAt   DateTime?
-  responseBreached  Boolean   @default(false)
-  resolutionBreached Boolean @default(false)
+  id                 String    @id
+  ticketId           String    @unique
+  ticket             Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  policyId           String?
+  startedAt          DateTime  @default(now())
+  pausedAt           DateTime?
+  resumedAt          DateTime?
+  responseDueAt      DateTime
+  resolutionDueAt    DateTime
+  responseMetAt      DateTime?
+  resolutionMetAt    DateTime?
+  responseBreached   Boolean   @default(false)
+  resolutionBreached Boolean   @default(false)
 
   @@index([responseDueAt, responseMetAt])
   @@index([resolutionDueAt, resolutionMetAt])
@@ -1613,13 +1613,13 @@ model SlaTimer {
 }
 
 model EscalationRule {
-  id                String   @id @default(uuid())
-  name              String
-  sector            Sector
-  triggerAfterMins  Int
-  triggerOn         EscalationTrigger
-  action            Json     // { type:"NOTIFY_MANAGER" } | { type:"REASSIGN", level:"L2" }
-  active            Boolean  @default(true)
+  id               String            @id @default(uuid())
+  name             String
+  sector           Sector
+  triggerAfterMins Int
+  triggerOn        EscalationTrigger
+  action           Json // { type:"NOTIFY_MANAGER" } | { type:"REASSIGN", level:"L2" }
+  active           Boolean           @default(true)
 
   @@map("escalation_rules")
 }

@@ -214,53 +214,42 @@ const tools = [
 
 const toolImplementations = {
   async create_helpdesk_ticket(params) {
-    const res = await api.post('/api/hermes/tickets', params);
-    return res.data;
+    return safeBackendRequest({ method: 'post', url: '/api/hermes/tickets', data: params });
   },
 
   async check_helpdesk_ticket({ ticket_id }) {
     const cleanId = ticket_id.replace('#', '');
-    const res = await api.get(`/api/hermes/tickets/${cleanId}`);
-    return res.data;
+    return safeBackendRequest({ method: 'get', url: `/api/hermes/tickets/${cleanId}` });
   },
 
   async check_active_ticket({ phone }) {
-    const res = await api.get(`/api/hermes/tickets/by-phone/${phone}`);
-    return res.data;
+    return safeBackendRequest({ method: 'get', url: `/api/hermes/tickets/by-phone/${phone}` });
   },
 
   async search_helpdesk_faq({ query, category }) {
     const params = { q: query };
     if (category) params.category = category;
-    const res = await api.get('/api/hermes/faq/search', { params });
-    return res.data;
+    return safeBackendRequest({ method: 'get', url: '/api/hermes/faq/search', params });
   },
 
   async mark_faq_helpful({ faq_id, helpful }) {
-    const res = await api.post(`/api/hermes/faq/${faq_id}/helpful`, { helpful });
-    return res.data;
+    return safeBackendRequest({ method: 'post', url: `/api/hermes/faq/${faq_id}/helpful`, data: { helpful } });
   },
 
   async check_equipment_availability({ stock_type }) {
-    const res = await api.get('/api/hermes/stock', {
-      params: { stockType: stock_type },
-    });
-    return res.data;
+    return safeBackendRequest({ method: 'get', url: '/api/hermes/stock', params: { stockType: stock_type } });
   },
 
   async create_equipment_reservation(params) {
-    const res = await api.post('/api/hermes/reservations', params);
-    return res.data;
+    return safeBackendRequest({ method: 'post', url: '/api/hermes/reservations', data: params });
   },
 
   async notify_agent_escalation(params) {
-    const res = await api.post('/api/hermes/escalate', params);
-    return res.data;
+    return safeBackendRequest({ method: 'post', url: '/api/hermes/escalate', data: params });
   },
 
   async get_agent_status() {
-    const res = await api.get('/api/hermes/agents/status');
-    return res.data;
+    return safeBackendRequest({ method: 'get', url: '/api/hermes/agents/status' });
   },
 };
 
@@ -320,7 +309,7 @@ app.post('/api/tools/execute', async (req, res) => {
     console.log(`🔧 Executando tool: ${tool_name}`);
     const result = await implementation(parameters || {});
     console.log(`✅ Tool ${tool_name} executada com sucesso`);
-    res.json({ success: true, tool: tool_name, result });
+    res.json({ success: true, tool: tool_name, result: result.data });
   } catch (error) {
     if (error.message === 'CIRCUIT_OPEN') {
       return res.status(503).json({
@@ -363,11 +352,11 @@ const autoResolveTool = {
 tools.push(autoResolveTool);
 
 toolImplementations.auto_resolve_attempt = async ({ message, phone, intent }) => {
-  if (backendCircuit.status.name === 'open') {
-    throw new Error('CIRCUIT_OPEN');
-  }
-  const res = await api.post('/api/captain/assist', { message, phoneNumber: phone, intent: intent || 'unknown' });
-  return res.data;
+  return safeBackendRequest({
+    method: 'post',
+    url: '/api/captain/assist',
+    data: { message, phoneNumber: phone, intent: intent || 'unknown' },
+  });
 };
 
 // Endpoint: POST /tools/auto-resolve-attempt
