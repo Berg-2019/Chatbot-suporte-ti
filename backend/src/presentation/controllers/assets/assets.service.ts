@@ -96,6 +96,7 @@ export class AssetsService {
           orderBy: { createdAt: 'desc' },
           select: { id: true, title: true, status: true, createdAt: true },
         },
+        _count: { select: { assignments: true, tickets: true, licenses: true } },
       },
     });
     if (!asset) throw new NotFoundException(`Asset "${id}" not found`);

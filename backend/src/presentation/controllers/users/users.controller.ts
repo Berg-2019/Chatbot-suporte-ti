@@ -40,7 +40,14 @@ export class UsersController {
 
   @Post()
   async createLocalUser(
-    @Body() data: { name: string; email: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean },
+    @Body() data: {
+      name: string;
+      email: string;
+      password?: string;
+      role?: 'ADMIN' | 'AGENT' | 'ADMIN_TI' | 'ADMIN_ELECTRIC' | 'ADMIN_COMPRAS';
+      sector?: 'TI' | 'ELECTRIC' | 'COMPRAS';
+      active?: boolean;
+    },
     @Request() req: any,
   ) {
     if (req.user.role !== 'ADMIN') {

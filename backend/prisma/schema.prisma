@@ -108,7 +108,7 @@ model Ticket {
   description  String
   status       TicketStatus @default(NEW)
   priority     Priority     @default(NORMAL)
-  phoneNumber  String // Telefone do cliente
+  phoneNumber  String? // Telefone do cliente (opcional — tickets criados via web podem não ter)
   customerName String? // Nome do cliente (coletado pelo bot)
   sector       Sector?
   category     String? // Categoria/tipo do problema

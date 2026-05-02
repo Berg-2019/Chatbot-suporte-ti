@@ -13,7 +13,7 @@ import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 interface CreateTicketDto {
   title: string;
   description: string;
-  phoneNumber: string;
+  phoneNumber?: string;
   customerName?: string;
   sector?: Sector;
   category?: string;
@@ -21,6 +21,7 @@ interface CreateTicketDto {
   type?: TicketType;
   location?: string;
   assignedToId?: string;
+  affectedAssetId?: string;
 }
 
 interface AssignTicketDto {
@@ -154,6 +155,7 @@ export class TicketsService {
         type: dto.type || 'SUPPORT',
         location: dto.location,
         assignedToId: dto.assignedToId,
+        affectedAssetId: dto.affectedAssetId,
       },
     });
 

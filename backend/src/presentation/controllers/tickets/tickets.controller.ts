@@ -76,7 +76,7 @@ export class TicketsController {
     dto: {
       title: string;
       description: string;
-      phoneNumber: string;
+      phoneNumber?: string;
       customerName?: string;
       sector?: string;
       category?: string;
@@ -84,6 +84,7 @@ export class TicketsController {
       type?: TicketType;
       location?: string;
       assignedToId?: string;
+      affectedAssetId?: string;
     },
   ) {
     return this.ticketsService.create(dto as any);

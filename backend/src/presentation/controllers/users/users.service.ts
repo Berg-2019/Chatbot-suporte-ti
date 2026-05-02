@@ -94,7 +94,14 @@ export class UsersService {
     return { message: 'Usuário deletado' };
   }
 
-  async createLocal(data: { name: string; email: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean }) {
+  async createLocal(data: {
+    name: string;
+    email: string;
+    password?: string;
+    role?: 'ADMIN' | 'AGENT' | 'ADMIN_TI' | 'ADMIN_ELECTRIC' | 'ADMIN_COMPRAS';
+    sector?: 'TI' | 'ELECTRIC' | 'COMPRAS';
+    active?: boolean;
+  }) {
     // 1. Verify email uniqueness
     const existing = await this.prisma.user.findFirst({
       where: { email: data.email },
@@ -107,18 +114,19 @@ export class UsersService {
     // 2. Hash password
     let hashedPassword = '';
     if (data.password) {
-       
+
       const bcrypt = require('bcryptjs');
       hashedPassword = await bcrypt.hash(data.password, 12);
     }
 
-    // 3. Create user
+    // 3. Create user (sector default = TI quando não informado)
     return this.prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
         password: hashedPassword,
         role: data.role || 'AGENT',
+        sector: data.sector || 'TI',
         active: data.active ?? true,
       },
       select: {
@@ -126,6 +134,7 @@ export class UsersService {
         email: true,
         name: true,
         role: true,
+        sector: true,
         active: true,
         createdAt: true,
       },
