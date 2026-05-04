@@ -127,7 +127,7 @@ const data = result.data;  // não result.data.data
 ```
 
 ### Docker compose — volumes duplicados
-O `docker-compose.yml` tem duaschaves `volumes:` no mesmo nível (linhas 139 e 155). Sempre que editar, verificar se não duplicou.
+O `docker-compose.yml` NÃO tem `volumes:` duplicado. Esse era um falso positivo na checklist. Seções `volumes:` (linha 139) e `networks:` (linha 155) são distintas. Sempre que editar, verificar se não duplicou.
 
 ### API response errors
 ```typescript
@@ -141,14 +141,14 @@ const data = result.data.data;
 
 ## Repos siblings (não mexer aqui)
 
-- Frontend: `~/Projetos/profile-driven-app/` — TanStack Start + React 19 + Tailwind 4 + Bun
+- Frontend: `profile-driven-app/` (clonado na raiz deste repo) — TanStack Start + React 19 + Tailwind 4 + Bun
 - Nginx (produção): config vive aqui (`nginx/sites-enabled/`), mas docker-compose referencia `./nginx:/etc/nginx/conf.d`
 
 ---
 
 ## Status do branch
 
-`feature/chatbot-upgrade`: 151 commits ahead de `main`. Branch de produção — não force-push, não rebase. Merge strategy: `--no-ff` sequencial (não squash).
+`feature/chatbot-upgrade`: 165 commits ahead de `main`. Branch de produção — não force-push, não rebase. Merge strategy: `--no-ff` sequencial (não squash).
 
 `main` e `develop` rodam em produção em paralelo. Sem janela de merge confirmada ainda. Aguardar 1-2 semanas.
 

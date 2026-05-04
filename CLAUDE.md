@@ -2,8 +2,18 @@
 
 > Instruções para o Claude Code trabalhar neste projeto.
 > **Plano vigente:** [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) — toda decisão de arquitetura, fase e prioridade vem de lá.
+> **Estado operacional:** [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md) — checklist e indicadores atualizados.
+> **Armadilhas conhecidas:** [`AGENTS.md`](AGENTS.md).
 > Plano anterior arquivado: [`IMPLEMENTATION_PLAN_V2.archived.md`](IMPLEMENTATION_PLAN_V2.archived.md) (não usar como referência atual).
-> Última atualização: 2026-04-29
+> Última atualização: 2026-05-02
+
+## 📌 Estado atual (snapshot 2026-05-04)
+
+- **Fases 0-5** ✅ completas; **Fase 6** 🔄 em progresso (tarefas pendentes executadas 2026-05-04)
+- **Stack rodando E2E localmente** — backend/Hermes/frontend/postgres/redis/rabbitmq operacionais
+- **WhatsApp pareado** — confirmado 2026-05-04 via logs `helpdesk_hermes`
+- **165 commits ahead de main** — aguardando janela de 1-2 sem para merge `--no-ff` (sem squash, sem rebase). Detalhe em [§9 do plano](IMPLEMENTATION_PLAN_V3.md)
+- **Bloqueadores pré-merge restantes:** forward-merge `git merge origin/main`, Playwright E2E suite, smoke test mobile real
 
 ---
 
@@ -22,7 +32,7 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
 
 **Repositórios:**
 - Backend (este repo): https://github.com/Berg-2019/Chatbot-suporte-ti — branch atual `feature/chatbot-upgrade`
-- Frontend único: https://github.com/Berg-2019/profile-driven-app (TanStack Start + React 19 + Tailwind 4 + Bun)
+- Frontend único: https://github.com/Berg-2019/profile-driven-app (TanStack Start + React 19 + Tailwind 4 + Bun) — clonado em `profile-driven-app/` na raiz deste repo
 - Produção: https://*.helpdeskmsm.com.br (wildcard cert Let's Encrypt DNS-01)
 
 ---

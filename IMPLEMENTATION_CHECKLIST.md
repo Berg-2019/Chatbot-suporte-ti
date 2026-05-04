@@ -1,10 +1,11 @@
 # Checklist de Implementação V3
 
-> Snapshot de progresso em **2026-04-30** baseado em auditoria QA contra `IMPLEMENTATION_PLAN_V3.md`.
+> Snapshot de progresso em **2026-05-04** baseado em auditoria QA + smoke test E2E real contra `IMPLEMENTATION_PLAN_V3.md`.
 > Marcar `[x]` quando concluir. Atualizar este arquivo a cada commit relevante.
 
-**Estado atual:** Fases 0-5 ✅ completas · Fase 6 🔄 em progresso
-**Branch:** `feature/chatbot-upgrade` · 154 commits ahead de `main`
+**Estado atual:** Fases 0-5 ✅ completas · Fase 6 🔄 em progresso · **Stack rodando localmente E2E**
+**Branch:** `feature/chatbot-upgrade` · 165 commits ahead de `main`
+**Último marco:** Chat routing corrigido — conversa não carregava ao clicar (2026-05-04)
 
 ---
 
@@ -161,7 +162,7 @@
 ## 🔄 Fase 6 — Frontend + PWA mobile (EM PROGRESSO)
 
 ### 6.1 — Dockerizar e conectar
-- [x] `profile-driven-app` clonado em `~/Projetos/profile-driven-app/`
+- [x] `profile-driven-app` clonado em `profile-driven-app/` (raiz do projeto) ✅ (2026-05-04)
 - [x] `nginx/sites-enabled/helpdeskmsm.conf` com 4 server blocks — commit `6b1cfa8`
 - [x] Service `frontend` em docker-compose.dev.yml (comentado, aguardando build)
 - [x] CORS no backend aceita 3 origens com `credentials: true` ✅ (app.module.ts verificado)
@@ -170,8 +171,8 @@
 ### 6.2 — Multi-tenancy via host + role
 - [x] `ThemeContext.tsx` lê sector via host com `detectSectorFromHost()`
 - [x] CSS vars por setor aplicadas ✅
-- [ ] Redirect 403 para subdomínio correto quando `user.sector ≠ host`
-- [ ] Route gates `beforeLoad` em `_authed/`
+- [x] Redirect para subdomínio correto quando `user.sector ≠ host` em produção (`_authed.tsx`) — commit `88840c6`
+- [x] Route gates `beforeLoad` em `_authed/` ✅ — commit `88840c6`
 
 ### 6.3 — Features de domínio
 - [x] `_authed/tickets/` (list + detail + create com foto) ✅
@@ -179,7 +180,7 @@
 - [x] `_authed/purchase-requests/` (list + detail + approve/reject) ✅
 - [x] `_authed/knowledge/` (KB + FAQ) ✅
 - [x] `_authed/safety/` (NR-10/35 checklists) ✅ — commit `b6a121c` (chinês→pt-BR)
-- [ ] `_authed/admin/sla-policies/`
+- [x] `_authed/admin/sla-policies/` ✅
 - [x] WebSocket client + invalidate queries ✅
 - [x] Badge de SLA (verde/amarelo/vermelho) em ticket ✅
 
@@ -194,12 +195,9 @@
 - [x] Compressão client-side (`browser-image-compression`) ✅
 - [x] QR scanner em `/assets/scan` (`barcode-detector` + torch) ✅ — `assets.scan.tsx`
 - [x] `usePushNotifications.ts` hook com VAPID subscription ✅
-- [ ] UI de toggle push em settings
+- [x] UI de toggle push em settings ✅ (2026-05-04)
 - [ ] Background sync em POSTs (offline ticket creation)
-- [ ] Ícones PNG para PWA (3 variantes por setor) — dirs vazios
-  - `public/icons/ti/` — VAZIO
-  - `public/icons/electric/` — VAZIO
-  - `public/icons/compras/` — VAZIO
+- [x] Ícones PWA por sector ✅ — logos de `docs/` copiados para `public/icons/{ti,electric,compras}/`
 
 ### Push Notifications ✅ (backend)
 - [x] `PushSubscription` model + migration — commit `4960dda`
@@ -208,7 +206,7 @@
 - [x] Dispara em: ticket atribuído (`cc2a93f`), PR aprovado/rejeitado (`cc2a93f`)
 
 ### 6.5 — Dev local
-- [ ] Scripts `bun run dev:ti / dev:electric / dev:compras / dev:all`
+- [x] Scripts `bun run dev:ti / dev:electric / dev:compras / dev:all` (via profile-driven-app, fora do repo)
 - [ ] `docker-compose.staging.yml` para smoke test multi-subdomínio
 
 ### 6.6 — QA
@@ -216,36 +214,159 @@
 - [ ] Lighthouse mobile: Performance ≥ 85, PWA ≥ 95, A11y ≥ 95
 - [ ] Teste de campo: tablet no prédio MSM, instalar PWA, escanear QR
 
+### 6.7 — Padronização de espaçamento e layout (UI polish)
+> **Sintoma observado (2026-05-03):** dashboard `/tickets` com header colado no topo do viewport (sem `safe-top`), cards sem respiro entre colunas em viewport ≥ md, e sobreposição com `BottomNav` em algumas listas longas. Vale para os 3 fronts (TI/ELECTRIC/COMPRAS) e em todas as abas (`tickets`, `assets`, `purchases`, `knowledge`, `safety`, `admin`).
+
+- [x] Definir tokens de espaçamento padrão em `src/styles.css` (via `@theme` Tailwind 4):
+  - `--page-padding-x`, `--page-padding-y`, `--section-gap`, `--card-gap`
+- [x] Criar layout-wrapper único usado por todas as rotas `_authed/*`:
+  - Padding `safe-top` + `safe-bottom` (já há helpers, aplicar consistentemente)
+  - `pb-24` mínimo pra não sobrepor com `BottomNav` (h-20 + folga)
+  - `max-w-screen-xl` + grid responsivo `md:grid-cols-2` com `gap-6`
+- [x] Auditar e corrigir cada rota em `src/routes/_authed/`:
+  - [x] `tickets/index.tsx` (caso do screenshot)
+  - [x] `tickets/$id.tsx` e `tickets/new.tsx`
+  - [x] `assets/index.tsx`, `assets/$id.tsx`, `assets/scan.tsx`
+  - [x] `purchases/index.tsx`, `purchases/$id.tsx`, `purchases/new.tsx`
+  - [x] `knowledge/`, `safety/`, `admin/`, `settings/`
+- [x] Validar nos 3 hosts (5173/5174/5175) e em viewport mobile (375px), tablet (768px) e desktop (≥1280px)
+- [x] Nenhuma sobreposição com `BottomNav` em scroll até o fim de listas longas
+- [x] Header não cola no notch (testar em iOS Safari simulado)
+
+### 6.8 — Correções de integração API ↔ Frontend
+> **Sintomas observados (2026-05-03, console em `localhost:5173`):**
+> - `GET /api/tickets/my?sector=TI` → **404 Not Found** ([api.ts:63](../profile-driven-app/src/lib/api.ts#L63)). Backend não expõe `GET /tickets/my` — o endpoint correto é `GET /tickets` ([tickets.controller.ts:40](backend/src/presentation/controllers/tickets/tickets.controller.ts#L40)), que já filtra por `req.user.sector` no JWT (passar `sector` como query param é ignorado).
+> - Mesmo com 404, a tela mostra dados — porque cada rota tem **fallback demo** com mocks hardcoded ([ex.: tickets.index.tsx:45-78](../profile-driven-app/src/routes/_authed/tickets.index.tsx#L45-L78)). Mascara bugs reais e cria a falsa impressão de que está integrado.
+
+- [x] **Corrigir `ticketService.getMyTickets`** em [api.ts:62-63](../profile-driven-app/src/lib/api.ts#L62-L63): trocar `/tickets/my` por `/tickets` (sector vem do JWT, não passar como query).
+- [x] **Auditar paridade de endpoints** entre backend e frontend (tabela em [§ Endpoints do CLAUDE.md](CLAUDE.md)). Verificar caso a caso:
+  - tickets, assets, purchase-requests, knowledge, sla, push, admin/users
+- [x] **Padronizar shape de respostas paginadas** (2026-05-04, opção b). Interceptor de resposta em [api.ts](../profile-driven-app/src/lib/api.ts) nivela quatro endpoints envelopados pra `Array<T>`, preservando `total` em `x-total-count`:
+  - `GET /tickets` (`tickets`), `GET /purchase-requests` (`items`), `GET /knowledge/articles` (`articles`), `GET /assets` (`data`)
+  - Componentes voltam a fazer `res.data as T[]` direto, sem desempacotar manualmente.
+  - Decisão futura (opção a — backend devolve array nativo): segue como tarefa de cleanup no backend, não-bloqueante.
+- [x] **Remover fallbacks demo** de todas as rotas com `} catch {` que retornam mocks (13 arquivos identificados):
+  - `tickets.index.tsx`, `tickets.$id.tsx`, `tickets.new.tsx`
+  - `assets.tsx`, `assets.scan.tsx`
+  - `purchases.tsx`, `purchases.new.tsx`
+  - `chat/index.tsx`, `chat/$ticketId.tsx`, `team.tsx`
+  - `knowledge.tsx`, `admin/users.tsx`, `admin/sla-policies.tsx`
+  - Substituir por estado de erro real (`isError` do TanStack Query) com toast/empty state.
+- [x] Opcional: gatear demo atrás de `import.meta.env.VITE_DEMO=1` (não ligado por padrão), pra ainda permitir preview offline sem mascarar bugs em dev normal.
+- [x] Ignorar erros de extensão `Uncaught Error: Extension context invalidated` (origem `content.js` — extensão do browser, não da app).
+
+### 6.9 — Chat de Ticket (bugs de contrato backend↔frontend)
+> **Sintoma (2026-05-04):** ao clicar em "Conversar" num ticket, a tela `/chat/$ticketId` carrega mas mensagens renderizam no lado errado, header mostra "Chat" genérico, "Encerrar"/"Transferir" silenciam erros. Causa: 4 contratos quebrados convergindo.
+
+- [ ] Bug 1 — normalizar `getMessages` payload: `direction`+`sender:{role}` → `sender: 'user'|'technician'|'bot'` + `senderName` flat ([chat.service.ts:44-52](backend/src/presentation/controllers/chat/chat.service.ts#L44-L52))
+- [ ] Bug 2 — criar `GET /ai/reply-suggestions/:ticketId` (atual `/ai/suggestions` retorna analytics, não sugestões de resposta) ([adaptive-ai.controller.ts:63](backend/src/presentation/controllers/adaptive-ai/adaptive-ai.controller.ts#L63))
+- [ ] Bug 3 — frontend usa **verbo errado** (`api.patch` vs backend `@Put(':id/status')`). Validado via curl 2026-05-04: PATCH=404, PUT 'CLOSED'=200, POST /close=201. Trocar `api.patch` → `api.put` (ou usar endpoint dedicado `POST /tickets/:id/close`). Status sempre em UPPERCASE. Remover `catch {}` silenciosos.
+- [ ] Bug 4 — endpoint `POST /tickets/:id/transfer` aceita `userId` (UUID), frontend manda `"N2"` (string) — decidir: ocultar botão OU criar `POST /tickets/:id/escalate` com `{ targetLevel }`
+- [ ] Bug 5 — empty state no chat quando não há mensagens
+- [ ] Critério de aceite: 10 passos manuais + smoke test curl — ver [`docs/CHAT_FIX_HANDOFF.md`](docs/CHAT_FIX_HANDOFF.md)
+
 ---
 
-## 📊 Indicadores de qualidade (atualizado 2026-04-30)
+## 🧪 Smoke Test E2E (2026-05-01 → 2026-05-02)
+
+Stack completa subida e validada localmente. Detalhes em [logs](docs/SMOKE_TEST_2026-05-02.md) (a criar se quiser histórico).
+
+### Stack ativada ✅
+- [x] Backend NestJS http://localhost:3000 — health 200
+- [x] Hermes Tools bridge :3003 — 10 tools, opossum circuit breaker ativo
+- [x] Hermes Gateway — daemon mode (`hermes gateway run`), aguardando pareamento WhatsApp
+- [x] PostgreSQL/Redis/RabbitMQ healthy 26h+
+- [x] Frontend TI :5173 / Electric :5174 / Compras :5175 (HTTP 200, 3 ports)
+- [x] 18 migrations + 1 nova (`20260502120000_ticket_phone_optional`) aplicadas
+
+### Usuários de teste criados ✅ (7 users — admin@helpdesk.com, admin.ti, admin.eletrica, admin.compras, tecnico.ti, tecnico.eletrica, agente.compras)
+
+### Validações E2E que passaram ✅
+- [x] Login dos 3 sectors → JWT carrega `{sub, email, role, sector}` corretamente
+- [x] Cookie httpOnly em `.helpdeskmsm.com.br` (HttpOnly + Secure + SameSite=Lax) — confirmado em runtime
+- [x] CRUD Asset (criar, listar, scan via tag, stats) — endpoints todos 200
+- [x] Endpoints autenticados V3 (`/assets`, `/licenses`, `/purchase-requests`, `/sla/dashboard`, `/sla/breaches`, `/auth/me`, `/tickets`) — todos HTTP 200
+- [x] **Criar Ticket → SLA Timer auto-gerado com timezone correto** (sex 20:46 → response devida segunda 09:00, respeitando fim de semana + horário comercial)
+- [x] DB tabelas V3 todas presentes (assets, asset_assignments, licenses, license_assignments, sla_policies, business_hours, escalation_rules, sla_timers)
+- [x] 12 SlaPolicy seedadas (3 sectors × 4 prioridades)
+
+### 4 bugs corrigidos no commit `76f6513` ✅
+- [x] **Bug 1**: `POST /tickets` retornava 500 sem `phoneNumber` → schema agora `String?` + DTO opcional + migration
+- [x] **Bug 2**: `POST /tickets` ignorava `affectedAssetId` → DTO + service `data:` mapping
+- [x] **Bug 3**: `POST /users` ignorava `sector` (sempre TI) → body type + `createLocal` aceita+passa sector
+- [x] **Bug 4**: `GET /assets/:id` sem `_count` → findById include `_count: {assignments, tickets, licenses}`
+
+### Bugs ainda pendentes (detectados no smoke test, não bloqueantes)
+- [ ] Frontend SSR style hydration warning (TanStack auto-injection vs manual `<link>`) — `suppressHydrationWarning=true` já cuida; some em prod build
+- [x] WhatsApp pareado — confirmado via logs `helpdesk_hermes` (2026-05-04)
+- [x] `/api/sla/policies` CRUD exposto na API — `GET/POST/PATCH /sla/policies` implementados em `sla.controller.ts:63-85`
+- [x] `profile-driven-app` movido para dentro do projeto — `profile-driven-app/` na raiz
+- [x] **Bug: chat não carregava ao clicar em conversa** — `chat.$ticketId.tsx` era rota filha de `chat.tsx` sem `<Outlet />`. Corrigido com reestruturação: `chat-layout.tsx` (layout) + `chat/index.tsx` (lista) + `chat/$ticketId.tsx` (chat individual) — 2026-05-04
+
+---
+
+## 📊 Indicadores de qualidade (atualizado 2026-05-04)
 
 | Métrica | Alvo | Atual | Status |
 |---------|------|-------|--------|
-| Commits ahead de main | < 30 | **154** | ❌ |
+| Commits ahead de main | < 30 | **165** | 🔴 esperando janela 1-2 sem |
 | Refs `glpi` em backend/src | 0 | **0** | ✅ |
-| Tests unitários (`.spec.ts`) | ≥ 20 | **8 suites / 76+ testes** | ✅ |
-| Tests passando | 100% | **69/69 (91%)** | 🔄 |
-| DTOs com class-validator | ≥ 50 | ~32 | 🔄 |
-| Controllers com `@UseGuards(SectorGuard)` | ≥ 8 | ~2-3 | 🔴 |
+| Tests unitários (`.spec.ts`) | ≥ 20 | **7 suites / 69 testes** | ✅ |
+| Tests passando | 100% | **69/69 (100%)** | ✅ |
+| DTOs com class-validator | ≥ 50 | ~32 | 🟡 |
+| Controllers com `@UseGuards(SectorGuard)` | ≥ 8 | **8** (tickets, assets, licenses, purchase-requests, knowledge, team-chat, chat, sla) | ✅ |
 | hermes-tools circuit breaker | 10 tools | **10 tools** | ✅ |
 | WhatsApp idempotência | Redis TTL | **implementado** | ✅ |
+| Cookie httpOnly em produção | implementado | **✅ runtime confirmado** | ✅ |
+| Migrations aplicadas (DB ≅ schema) | sim | **19 migrations** | ✅ |
+| Backend `tsc --noEmit` | exit 0 | **✅ exit 0** | ✅ |
+| docker-compose.yml YAML válido | sim | ✅ `volumes:` e `networks:` em seções separadas | ✅ |
+| nginx 4 vhosts (`sites-enabled/helpdeskmsm.conf`) | sim | **✅ 208 linhas** | ✅ |
+| 6 colunas GLPI legacy no schema | 0 | **6** (User.glpiUserId, glpiGroupId, Ticket.glpiId+index, Message.glpiId, StockItem.glpiAssetId) | 🟡 dívida pós-merge |
+| Stack rodando E2E (8 containers) | sim | **✅ rodando** | ✅ |
 
 ---
 
-## 🎯 Próximas ações (prioridade)
+## 🎯 Próximas ações (prioridade — atualizado 2026-05-04)
 
-### Alta prioridade
-1. **UI push notifications toggle em settings** — só falta a UI no frontend
-2. **Frontend icons PNG** — dirs vazios impedem PWA installável (precisa design ou placeholder SVG)
-3. **Rebase em main** — 154 commits ahead está crítico
+### 🟡 Antes da janela de merge
 
-### Média prioridade
-4. Validar worker SLA cron em runtime (requer DB online)
-5. Route gate `beforeLoad` para sector mismatch
-6. E2E tests Playwright
+1. **Corrigir bugs de contrato chat (6.9)** — 4 bugs bloqueiam o chat de ticket
+2. **Forward-merge `git merge origin/main`** semanal para manter feature current
+3. Smoke test em device móvel real (instalar PWA, escanear QR, criar ticket com foto)
 
-### Baixa (deferred)
-7. iOS push tutorial ("Add to Home Screen")
-8. Background sync offline ticket creation
-9. PWA icons definitivos (precisa design)
+### 🟢 Pre-flight checks (1 dia antes da janela)
+
+3. `cd backend && bun run build` exit 0
+4. `cd backend && bun run test` 100% green
+5. Playwright E2E suite verde
+6. **Backup PostgreSQL prod** (`pg_dump`) externo
+7. **Backup volume `hermes_whatsapp_session`**
+8. Plano de rollback escrito
+
+### 🚀 Janela de merge (sequencial, ver §9 do plano)
+
+9. `git checkout develop && git merge --no-ff feature/chatbot-upgrade` → push → migrations → monitorar 24-48h
+10. Se OK, repetir para `main`
+11. Tag `v3.0.0`
+
+### ⏳ Deferred (pós-merge)
+
+12. Drop 6 colunas GLPI legacy do schema (migration drop após confirmar zero queries)
+13. iOS push tutorial ("Add to Home Screen")
+14. Background sync offline ticket creation
+15. Refatoração Clean Arch v2 (extrair use cases dos 55 controllers que importam Prisma direto)
+16. Reduzir `: any` types (149 → < 30)
+17. Prisma 6 → 7 major upgrade
+
+---
+
+## 📁 Arquivos importantes (referência rápida)
+
+| Arquivo | Propósito |
+|---------|-----------|
+| [IMPLEMENTATION_PLAN_V3.md](IMPLEMENTATION_PLAN_V3.md) | Plano vigente — arquitetura, fases, deploy strategy |
+| [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) | Este arquivo — estado operacional |
+| [CLAUDE.md](CLAUDE.md) | Instruções para agentes — convenções, restrições, decisões irrevogáveis |
+| [AGENTS.md](AGENTS.md) | Armadilhas conhecidas + padrões do repo |
+| [IMPLEMENTATION_PLAN_V2.archived.md](IMPLEMENTATION_PLAN_V2.archived.md) | Plano anterior arquivado (referência histórica) |
