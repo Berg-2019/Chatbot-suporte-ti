@@ -258,11 +258,11 @@
 ### 6.9 — Chat de Ticket (bugs de contrato backend↔frontend)
 > **Sintoma (2026-05-04):** ao clicar em "Conversar" num ticket, a tela `/chat/$ticketId` carrega mas mensagens renderizam no lado errado, header mostra "Chat" genérico, "Encerrar"/"Transferir" silenciam erros. Causa: 4 contratos quebrados convergindo.
 
-- [ ] Bug 1 — normalizar `getMessages` payload: `direction`+`sender:{role}` → `sender: 'user'|'technician'|'bot'` + `senderName` flat ([chat.service.ts:44-52](backend/src/presentation/controllers/chat/chat.service.ts#L44-L52))
-- [ ] Bug 2 — criar `GET /ai/reply-suggestions/:ticketId` (atual `/ai/suggestions` retorna analytics, não sugestões de resposta) ([adaptive-ai.controller.ts:63](backend/src/presentation/controllers/adaptive-ai/adaptive-ai.controller.ts#L63))
-- [ ] Bug 3 — frontend usa **verbo errado** (`api.patch` vs backend `@Put(':id/status')`). Validado via curl 2026-05-04: PATCH=404, PUT 'CLOSED'=200, POST /close=201. Trocar `api.patch` → `api.put` (ou usar endpoint dedicado `POST /tickets/:id/close`). Status sempre em UPPERCASE. Remover `catch {}` silenciosos.
-- [ ] Bug 4 — endpoint `POST /tickets/:id/transfer` aceita `userId` (UUID), frontend manda `"N2"` (string) — decidir: ocultar botão OU criar `POST /tickets/:id/escalate` com `{ targetLevel }`
-- [ ] Bug 5 — empty state no chat quando não há mensagens
+- [x] Bug 1 — normalizar `getMessages` payload: `direction`+`sender:{role}` → `sender: 'user'|'technician'|'bot'` + `senderName` flat ([chat.service.ts:44-52](backend/src/presentation/controllers/chat/chat.service.ts#L44-L52)) — commit `05d4134`
+- [x] Bug 2 — criar `GET /ai/reply-suggestions/:ticketId` (atual `/ai/suggestions` retorna analytics, não sugestões de resposta) ([adaptive-ai.controller.ts:63](backend/src/presentation/controllers/adaptive-ai/adaptive-ai.controller.ts#L63)) — commit `05d4134`
+- [x] Bug 3 — frontend usa **verbo errado** (`api.patch` vs backend `@Put(':id/status')`). Validado via curl 2026-05-04: PATCH=404, PUT 'CLOSED'=200, POST /close=201. Trocar `api.patch` → `api.put` (ou usar endpoint dedicado `POST /tickets/:id/close`). Status sempre em UPPERCASE. Remover `catch {}` silenciosos — commit `05d4134`
+- [x] Bug 4 — endpoint `POST /tickets/:id/transfer` aceita `userId` (UUID), frontend mandava `"N2"` (string) — botão Transferir removido — commit `05d4134`
+- [x] Bug 5 — empty state no chat quando não há mensagens — commit `05d4134`
 - [ ] Critério de aceite: 10 passos manuais + smoke test curl — ver [`docs/CHAT_FIX_HANDOFF.md`](docs/CHAT_FIX_HANDOFF.md)
 
 ---
@@ -331,7 +331,7 @@ Stack completa subida e validada localmente. Detalhes em [logs](docs/SMOKE_TEST_
 
 ### 🟡 Antes da janela de merge
 
-1. **Corrigir bugs de contrato chat (6.9)** — 4 bugs bloqueiam o chat de ticket
+1. **Corrigir bugs de contrato chat (6.9)** — ✅ 5/5 bugs resolvidos (05d4134)
 2. **Forward-merge `git merge origin/main`** semanal para manter feature current
 3. Smoke test em device móvel real (instalar PWA, escanear QR, criar ticket com foto)
 
