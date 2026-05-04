@@ -15,13 +15,14 @@ import {
   Request,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 import { KnowledgeService } from './knowledge.service';
 import { KnowledgeSearchService } from './knowledge-search.service';
 
 @Controller('knowledge')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, SectorGuard, RolesGuard)
 export class KnowledgeController {
   constructor(
     private knowledgeService: KnowledgeService,

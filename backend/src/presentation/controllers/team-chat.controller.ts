@@ -1,10 +1,11 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { SectorGuard } from '../../../common/guards/sector.guard';
 import { TeamChatService } from './team-chat.service';
 import { TeamChatGateway } from '../websockets/team-chat.gateway';
 
 @Controller('team-chat')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), SectorGuard)
 export class TeamChatController {
     constructor(
         private service: TeamChatService,

@@ -1,13 +1,15 @@
 import {
-  Controller, Get, Post, Patch, Body, Param, UseGuards,
+  Controller, Get, Post, Patch, Body, Param, UseGuards, Query,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SlaService } from './sla.service';
+import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { CreateSlaPolicyDto, UpdateSlaPolicyDto } from './dto/sla-policy.dto';
 
 @Controller('sla')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AuthGuard('jwt'), SectorGuard, RolesGuard)
 export class SlaController {
   constructor(private readonly slaService: SlaService) {}
 
@@ -57,5 +59,29 @@ export class SlaController {
   @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'AGENT')
   async getTimer(@Param('ticketId') ticketId: string) {
     return this.slaService.getTimer(ticketId);
+  }
+
+  @Get('policies')
+  @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'ADMIN_COMPRAS')
+  async getPolicies(@Query('sector') sector?: string, @Query('priority') priority?: string) {
+    return this.slaService.getPolicies(sector, priority);
+  }
+
+  @Get('policies/:id')
+  @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'ADMIN_COMPRAS')
+  async getPolicy(@Param('id') id: string) {
+    return this.slaService.getPolicy(id);
+  }
+
+  @Post('policies')
+  @Roles('ADMIN')
+  async createPolicy(@Body() dto: CreateSlaPolicyDto) {
+    return this.slaService.createPolicy(dto);
+  }
+
+  @Patch('policies/:id')
+  @Roles('ADMIN')
+  async updatePolicy(@Param('id') id: string, @Body() dto: UpdateSlaPolicyDto) {
+    return this.slaService.updatePolicy(id, dto);
   }
 }

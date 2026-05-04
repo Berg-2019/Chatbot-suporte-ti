@@ -10,6 +10,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { PurchaseRequestsService } from './purchase-requests.service';
@@ -22,7 +23,7 @@ import {
 import { Sector } from '@prisma/client';
 
 @Controller('purchase-requests')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, SectorGuard, RolesGuard)
 export class PurchaseRequestsController {
   constructor(private readonly service: PurchaseRequestsService) {}
 

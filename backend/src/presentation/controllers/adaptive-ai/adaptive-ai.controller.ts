@@ -66,6 +66,15 @@ export class AdaptiveAIController {
   }
 
   /**
+   * 4b. Obter sugestões de resposta para chat de ticket
+   * GET /api/ai/reply-suggestions/:ticketId
+   */
+  @Get('reply-suggestions/:ticketId')
+  async getReplySuggestions(@Param('ticketId') ticketId: string) {
+    return [];
+  }
+
+  /**
    * 5. Buscar conversas similares (RAG)
    * POST /api/ai/similar-conversations
    */
