@@ -57,6 +57,7 @@ model User {
   knowledgeArticles KnowledgeArticle[]
   agentMetrics      AgentMetric[]
   articleFeedback   ArticleFeedback[]
+  messageReads      MessageRead[]
 
   assetsOwned      Asset[]           @relation("AssetCurrentOwner")
   assetAssignments AssetAssignment[]
@@ -193,13 +194,19 @@ model Message {
   senderId String?
   sender   User?   @relation(fields: [senderId], references: [id])
 
-  waMessageId String? // ID da mensagem no WhatsApp
+  waMessageId String?
 
-  // ✅ NOVO: Notas internas e mentions (Chatwoot)
-  isInternal Boolean  @default(false) // Nota interna (invisível ao cliente)
-  mentions   String[] @default([]) // IDs dos usuários mencionados
+  isInternal Boolean  @default(false)
+  mentions   String[] @default([])
 
-  createdAt DateTime @default(now())
+  mediaUrl     String?
+  fileName     String?
+  fileSize     Int?
+  duration     Int?
+  thumbnailUrl String?
+
+  reads      MessageRead[]
+  createdAt  DateTime      @default(now())
 
   @@index([ticketId])
   @@index([ticketId, createdAt(sort: Desc)])
@@ -207,10 +214,24 @@ model Message {
   @@map("messages")
 }
 
+model MessageRead {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  readAt    DateTime @default(now())
+
+  @@unique([messageId, userId])
+  @@index([userId])
+  @@map("message_reads")
+}
+
 enum MessageType {
   TEXT
   IMAGE
   AUDIO
+  VIDEO
   DOCUMENT
 }
 

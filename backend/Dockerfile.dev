@@ -16,8 +16,8 @@ RUN npm install
 # Gerar Prisma Client
 RUN npx prisma generate
 
-# Criar diretório de logs
-RUN mkdir -p /app/logs
+# Criar diretório de uploads com permissão correta
+RUN mkdir -p /app/uploads/messages && chown -R node:node /app/uploads
 
 # Expor portas (app + debug)
 EXPOSE 3000 9229

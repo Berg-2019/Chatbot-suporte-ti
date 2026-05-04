@@ -3,15 +3,17 @@
  */
 
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { json, urlencoded } from 'express';
-import cookieParser from 'cookie-parser';
+import * as cookieParser from 'cookie-parser';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Enable gzip compression
   app.use(compression({
@@ -102,6 +104,10 @@ async function bootstrap() {
       disableErrorMessages: process.env.NODE_ENV === 'production', // Hide error details in production
     }),
   );
+
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
