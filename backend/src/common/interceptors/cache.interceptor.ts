@@ -3,6 +3,7 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  Logger,
 } from '@nestjs/common';
 import { Observable, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
@@ -19,6 +20,8 @@ import { RedisService } from '../../infrastructure/cache/redis.service';
  */
 @Injectable()
 export class HttpCacheInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(HttpCacheInterceptor.name);
+
   constructor(
     private readonly redisService: RedisService,
     private readonly ttl: number = 60, // Default 60 seconds
@@ -41,11 +44,11 @@ export class HttpCacheInterceptor implements NestInterceptor {
     // Try to get from cache
     const cachedResponse = await this.redisService.getCache(cacheKey);
     if (cachedResponse) {
-      console.log(`[Cache HIT] ${cacheKey}`);
+      this.logger.debug(`[Cache HIT] ${cacheKey}`);
       return of(cachedResponse);
     }
 
-    console.log(`[Cache MISS] ${cacheKey}`);
+      this.logger.debug(`[Cache MISS] ${cacheKey}`);
 
     // Execute request and cache result
     return next.handle().pipe(

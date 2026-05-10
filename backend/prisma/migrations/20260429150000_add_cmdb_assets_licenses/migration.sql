@@ -106,9 +106,9 @@ CREATE TABLE "license_assignments" (
 );
 
 -- ============================================================================
--- Ticket: add affectedAssetId
+-- Tickets: add affectedAssetId
 -- ============================================================================
-ALTER TABLE "ticket" ADD COLUMN "affectedAssetId" TEXT;
-ALTER TABLE "ticket" ADD CONSTRAINT "ticket_affectedAssetId_fkey"
+ALTER TABLE "tickets" ADD COLUMN "affectedAssetId" TEXT;
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_affectedAssetId_fkey"
   FOREIGN KEY ("affectedAssetId") REFERENCES "assets"("id") ON DELETE SET NULL;
-CREATE INDEX "ticket_affectedAssetId_idx" ON "ticket"("affectedAssetId");
+CREATE INDEX "tickets_affectedAssetId_idx" ON "tickets"("affectedAssetId");

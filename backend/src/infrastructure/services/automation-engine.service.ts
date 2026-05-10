@@ -1,12 +1,13 @@
 /**
  * Automation Engine Service
  * Sistema de regras de automação (evento → condição → ação)
- * Inspirado no Chatwoot
+ * Helpdesk MSM
  */
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { WebhookService } from './webhook.service';
+import { redactName } from '../logger/redact';
 
 interface AutomationCondition {
   field: string;
@@ -444,7 +445,7 @@ export class AutomationEngineService {
         },
       });
 
-      this.logger.log(`✓ Escalated ticket ${ticketId} to ${newLevel} (${newAgent.name})`);
+      this.logger.log(`✓ Escalated ticket ${ticketId} to ${newLevel} (uid:${newAgent.id.slice(0, 8)})`);
     } else {
       this.logger.warn(`No available agent found for level ${newLevel}`);
     }

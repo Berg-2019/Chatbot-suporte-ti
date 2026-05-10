@@ -2,7 +2,7 @@
  * RabbitMQ Service - Filas de Mensagens
  */
 
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
 
@@ -13,6 +13,7 @@ export interface QueueMessage {
 
 @Injectable()
 export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(RabbitMQService.name);
   private connection: any;
   private channel: any;
   private isConnected = false;
@@ -47,28 +48,27 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       }
 
       this.isConnected = true;
-      console.log('✅ RabbitMQ conectado');
+      this.logger.log('✅ RabbitMQ conectado');
 
-      // Reconectar em caso de erro
       this.connection.on('error', async (err: any) => {
-        console.error('❌ Erro no RabbitMQ:', err.message);
+        this.logger.error('❌ Erro no RabbitMQ', err.message);
         this.isConnected = false;
         await this.reconnect();
       });
 
       this.connection.on('close', async () => {
-        console.warn('⚠️ Conexão RabbitMQ fechada');
+        this.logger.warn('⚠️ Conexão RabbitMQ fechada');
         this.isConnected = false;
         await this.reconnect();
       });
     } catch (error: any) {
-      console.error('❌ Falha ao conectar RabbitMQ:', error.message);
+      this.logger.error('❌ Falha ao conectar RabbitMQ', error.message);
       await this.reconnect();
     }
   }
 
   private async reconnect(): Promise<void> {
-    console.log('🔄 Tentando reconectar ao RabbitMQ em 5s...');
+    this.logger.log('🔄 Tentando reconectar ao RabbitMQ em 5s...');
     setTimeout(() => this.connect(), 5000);
   }
 
@@ -87,7 +87,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
    */
   async publish(queue: string, data: any): Promise<boolean> {
     if (!this.isConnected || !this.channel) {
-      console.error('❌ RabbitMQ não conectado');
+      this.logger.error('❌ RabbitMQ não conectado');
       return false;
     }
 
@@ -96,20 +96,17 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       this.channel.sendToQueue(queue, message, { persistent: true });
       return true;
     } catch (error: any) {
-      console.error('❌ Erro ao publicar mensagem:', error.message);
+      this.logger.error('❌ Erro ao publicar mensagem', error.message);
       return false;
     }
   }
 
-  /**
-   * Consome mensagens de uma fila
-   */
   async consume(
     queue: string,
     callback: (data: any) => Promise<void>,
   ): Promise<void> {
     if (!this.isConnected || !this.channel) {
-      console.error('❌ RabbitMQ não conectado');
+      this.logger.error('❌ RabbitMQ não conectado');
       return;
     }
 
@@ -120,14 +117,13 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
           await callback(data);
           this.channel.ack(msg);
         } catch (error: any) {
-          console.error('❌ Erro ao processar mensagem:', error.message);
-          // Rejeitar e não requeue para evitar loop infinito
+          this.logger.error('❌ Erro ao processar mensagem', error.message);
           this.channel.nack(msg, false, false);
         }
       }
     });
 
-    console.log(`📥 Consumindo fila: ${queue}`);
+    this.logger.log(`📥 Consumindo fila: ${queue}`);
   }
 
   /**
@@ -151,6 +147,9 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     mediaType?: 'image' | 'audio' | 'video' | 'document';
     mimeType?: string;
     filename?: string;
+    messageId?: string;
+    direction?: 'INCOMING' | 'OUTGOING';
+    content?: string;
   }): Promise<boolean> {
     return this.publish(RabbitMQService.QUEUES.OUTGOING_MESSAGES, data);
   }

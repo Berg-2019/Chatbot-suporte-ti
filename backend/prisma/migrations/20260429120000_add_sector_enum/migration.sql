@@ -9,34 +9,30 @@ CREATE TYPE "Sector" AS ENUM ('TI', 'ELECTRIC', 'COMPRAS');
 -- ============================================================================
 -- Users table
 -- ============================================================================
-ALTER TABLE "users" ALTER COLUMN sector SET DEFAULT 'TI';
+ALTER TABLE "users" ALTER COLUMN sector DROP DEFAULT;
 ALTER TABLE "users" ALTER COLUMN sector TYPE "Sector" USING sector::"Sector";
+ALTER TABLE "users" ALTER COLUMN sector SET DEFAULT 'TI';
 
 -- ============================================================================
 -- Tickets table
 -- ============================================================================
-ALTER TABLE "ticket" ALTER COLUMN sector TYPE "Sector" USING CASE WHEN sector IS NULL THEN 'TI' ELSE sector::"Sector" END;
+ALTER TABLE "tickets" ALTER COLUMN sector DROP DEFAULT;
+ALTER TABLE "tickets" ALTER COLUMN sector TYPE "Sector" USING CASE WHEN sector IS NULL OR sector = '' THEN 'TI'::"Sector" ELSE sector::"Sector" END;
+ALTER TABLE "tickets" ALTER COLUMN sector SET DEFAULT 'TI';
 
 -- ============================================================================
--- Contact table
+-- Contacts table
 -- ============================================================================
-ALTER TABLE "contact" ALTER COLUMN sector TYPE "Sector" USING sector::"Sector";
+ALTER TABLE "contacts" ALTER COLUMN sector DROP DEFAULT;
+ALTER TABLE "contacts" ALTER COLUMN sector TYPE "Sector" USING sector::"Sector";
+ALTER TABLE "contacts" ALTER COLUMN sector SET DEFAULT 'TI';
 
 -- ============================================================================
--- TeamMessage table
+-- Purchases table
 -- ============================================================================
-ALTER TABLE "team_message" ALTER COLUMN sector SET DEFAULT 'TI';
-ALTER TABLE "team_message" ALTER COLUMN sector TYPE "Sector" USING sector::"Sector";
-
--- ============================================================================
--- PurchaseRequest table
--- ============================================================================
-ALTER TABLE "purchase_request" ALTER COLUMN sector TYPE "Sector" USING sector::"Sector";
-
--- ============================================================================
--- PurchaseRequestItem table
--- ============================================================================
-ALTER TABLE "purchase_request_item" ALTER COLUMN sector TYPE "Sector" USING sector::"Sector";
+ALTER TABLE "purchases" ALTER COLUMN sector DROP DEFAULT;
+ALTER TABLE "purchases" ALTER COLUMN sector TYPE "Sector" USING sector::"Sector";
+ALTER TABLE "purchases" ALTER COLUMN sector SET DEFAULT 'TI';
 
 -- ============================================================================
 -- Verify

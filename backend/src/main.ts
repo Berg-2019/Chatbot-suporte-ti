@@ -4,13 +4,16 @@
 
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { json, urlencoded } from 'express';
 import * as cookieParser from 'cookie-parser';
 import { join } from 'path';
+
+const logger = new Logger('Bootstrap');
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -81,8 +84,7 @@ async function bootstrap() {
       if (normalizedAllowed.includes(normalizedOrigin)) {
         callback(null, true);
       } else {
-        console.log(`⚠️ CORS bloqueado para origin: "${origin}"`);
-        console.log(`   Allowed origins:`, allowedOrigins);
+        logger.warn(`CORS bloqueado para origin: "${origin}"`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -104,10 +106,6 @@ async function bootstrap() {
       disableErrorMessages: process.env.NODE_ENV === 'production', // Hide error details in production
     }),
   );
-
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads/',
-  });
 
   const port = process.env.PORT || 3000;
   await app.listen(port);

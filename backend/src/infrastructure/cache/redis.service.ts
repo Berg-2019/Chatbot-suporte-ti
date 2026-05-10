@@ -2,12 +2,13 @@
  * Redis Service - Cache e Sessões
  */
 
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(RedisService.name);
   private client: Redis;
 
   constructor(private config: ConfigService) {}
@@ -17,11 +18,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.client = new Redis(redisUrl);
 
     this.client.on('connect', () => {
-      console.log('✅ Redis conectado');
+      this.logger.log('✅ Redis conectado');
     });
 
     this.client.on('error', (err) => {
-      console.error('❌ Erro no Redis:', err.message);
+      this.logger.error('❌ Erro no Redis', err.message);
     });
   }
 

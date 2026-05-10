@@ -20,4 +20,4 @@ CREATE INDEX "push_subscriptions_userId_idx" ON "push_subscriptions"("userId");
 
 ALTER TABLE "push_subscriptions"
   ADD CONSTRAINT "push_subscriptions_userId_fkey"
-  FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE;
+  FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;

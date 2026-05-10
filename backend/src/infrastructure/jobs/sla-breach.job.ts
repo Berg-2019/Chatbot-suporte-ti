@@ -4,6 +4,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AlertService } from '../../infrastructure/services/alert.service';
 import { RabbitMQService } from '../../infrastructure/messaging/rabbitmq.service';
 import { Sector } from '@prisma/client';
+import { redactName } from '../../infrastructure/logger/redact';
 
 interface EscalationAction {
   type: 'NOTIFY_MANAGER' | 'REASSIGN' | 'ESCALATE_TO_L2' | 'ESCALATE_TO_L3';
@@ -177,7 +178,7 @@ export class SlaBreachJob {
               fromLevel: currentLevel || 'N1',
               elapsed: `${Math.floor((Date.now() - breachedAt.getTime()) / 60000)}min`,
             });
-            this.logger.log(`Ticket ${ticket.id} escalated to ${targetLevel}, assigned to ${seniorTechs.name}`);
+            this.logger.log(`Ticket ${ticket.id} escalated to ${targetLevel}, assigned to uid:${seniorTechs.id.slice(0, 8)}`);
           }
           break;
         }

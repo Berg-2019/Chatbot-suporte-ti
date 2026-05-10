@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { Prisma, Sector } from '@prisma/client';
+import { redactPhone, redactName } from '../logger/redact';
 
 @Injectable()
 export class ContactService {
@@ -104,7 +105,7 @@ export class ContactService {
     ramal?: string;
     customAttributes?: Record<string, any>;
   }) {
-    this.logger.log(`Creating contact: ${data.name} (${data.phoneNumber})`);
+    this.logger.log(`Creating contact: ${redactName(data.name)} (${redactPhone(data.phoneNumber)})`);
 
     const contact = await this.prisma.contact.create({
       data: {
@@ -248,7 +249,7 @@ export class ContactService {
       company?: string;
     },
   ) {
-    this.logger.debug(`Upserting contact by phone: ${phoneNumber}`);
+    this.logger.debug(`Upserting contact by phone: ${redactPhone(phoneNumber)}`);
 
     const existing = await this.findByPhone(phoneNumber);
 

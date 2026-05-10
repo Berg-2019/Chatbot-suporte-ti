@@ -57,7 +57,7 @@ CREATE TABLE "sla_timers" (
   CONSTRAINT "sla_timers_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "sla_timers_ticketId_key" UNIQUE ("ticketId"),
   CONSTRAINT "sla_timers_ticketId_fkey"
-    FOREIGN KEY ("ticketId") REFERENCES "ticket"("id") ON DELETE CASCADE
+    FOREIGN KEY ("ticketId") REFERENCES "tickets"("id") ON DELETE CASCADE
 );
 
 CREATE INDEX "sla_timers_responseDueAt_responseMetAt_idx" ON "sla_timers"("responseDueAt", "responseMetAt");
