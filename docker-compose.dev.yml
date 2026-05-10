@@ -148,6 +148,8 @@ services:
       dockerfile: Dockerfile
     container_name: helpdesk_hermes
     restart: unless-stopped
+    command: ["gateway", "run"]
+    entrypoint: ["/opt/hermes/.venv/bin/hermes"]
     ports:
       - "3004:3000"  # Gateway API port
     environment:
@@ -164,6 +166,7 @@ services:
       WHATSAPP_MODE: bot
       WHATSAPP_ALLOWED_USERS: "*"
       WHATSAPP_BRIDGE_PORT: "3001"
+      GATEWAY_ALLOW_ALL_USERS: "true"
       # Model Configuration
       HERMES_MODEL_PROVIDER: openai-compatible
       HERMES_MODEL_BASE_URL: https://api.minimax.io/v1
@@ -193,12 +196,27 @@ services:
     environment:
       NODE_ENV: development
       BACKEND_URL: http://backend:3000
+      BACKEND_ORIGIN: http://backend:3000
+      WHATSAPP_BRIDGE_URL: http://hermes-tools:3001
+      RABBITMQ_URL: amqp://helpdesk:${RABBITMQ_PASSWORD:-37b87676ed3d28ca08e2d5f2e95cfc79}@rabbitmq:5672
       HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
       TOOLS_PORT: 3003
+      MEDIA_TEMP_DIR: /app/media
+    volumes:
+      - ./backend/uploads:/app/uploads:ro
+      - media_temp:/app/media
     networks:
       - helpdesk_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - backend
+    command: >
+      sh -c "node proxy.cjs &
+              sleep 2 &&
+              node server.js &
+              sleep 3 &&
+              node outgoing-consumer.js"
 
 # ==============================================================================
 # Volumes
@@ -220,6 +238,8 @@ volumes:
     name: helpdesk_hermes_skills
   hermes_whatsapp_session:
     name: helpdesk_hermes_whatsapp_session
+  media_temp:
+    name: helpdesk_media_temp
 
 # ==============================================================================
 # Networks

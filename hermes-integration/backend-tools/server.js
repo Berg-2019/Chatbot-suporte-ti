@@ -331,80 +331,6 @@ app.post('/api/tools/execute', async (req, res) => {
 });
 
 // ============================================
-// AUTO-RESOLVE (Captain as tool)
-// ============================================
-
-// Tool: auto_resolve_attempt
-const autoResolveTool = {
-  name: 'auto_resolve_attempt',
-  description: 'Tenta resolver automaticamente um problema usando IA (Captain). Se confiança >= 0.85, responde diretamente. Caso contrário, indica que precisa de intervenção humana.',
-  parameters: {
-    type: 'object',
-    properties: {
-      message: { type: 'string', description: 'Mensagem do usuário descrevendo o problema' },
-      phone: { type: 'string', description: 'Telefone do usuário (formato: 5511999999999)' },
-      intent: { type: 'string', description: 'Intenção detectada (opcional)' },
-    },
-    required: ['message', 'phone'],
-  },
-};
-
-tools.push(autoResolveTool);
-
-toolImplementations.auto_resolve_attempt = async ({ message, phone, intent }) => {
-  return safeBackendRequest({
-    method: 'post',
-    url: '/api/captain/assist',
-    data: { message, phoneNumber: phone, intent: intent || 'unknown' },
-  });
-};
-
-// Endpoint: POST /tools/auto-resolve-attempt
-app.post('/api/tools/auto-resolve-attempt', async (req, res) => {
-  const { message, phone, intent } = req.body;
-
-  if (!message || !phone) {
-    return res.status(400).json({ error: 'message e phone são obrigatórios' });
-  }
-
-  if (backendCircuit.status.name === 'open') {
-    return res.json({
-      success: false,
-      resolved: false,
-      confidence: 0,
-      message: 'Serviço temporariamente indisponível. Por favor, abra um ticket pelo portal.',
-      fallback: true,
-    });
-  }
-
-  try {
-    const result = await toolImplementations.auto_resolve_attempt({ message, phone, intent });
-    res.json({
-      success: true,
-      resolved: result.data?.resolved || false,
-      confidence: result.data?.confidence || 0,
-      message: result.data?.message || result.data?.answer || 'Não foi possível resolver automaticamente.',
-      requires_escalation: (result.data?.confidence || 0) < 0.85,
-    });
-  } catch (error) {
-    console.error('❌ Erro no auto-resolve:', error.message);
-    if (error.message === 'CIRCUIT_OPEN') {
-      return res.json({
-        success: false,
-        resolved: false,
-        confidence: 0,
-        message: 'Serviço temporariamente indisponível. Tente novamente ou abra um ticket.',
-        fallback: true,
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: error.response?.data?.message || error.message,
-    });
-  }
-});
-
-// ============================================
 // CIRCUIT BREAKER STATUS
 // ============================================
 
@@ -435,7 +361,6 @@ app.listen(PORT, () => {
   console.log('   GET  /health                  - Health check');
   console.log('   GET  /api/tools               - Listar tools');
   console.log('   POST /api/tools/execute       - Executar tool');
-  console.log('   POST /api/tools/auto-resolve  - Auto-resolve via Captain');
   console.log('   GET  /api/circuit-status     - Status do circuit breaker');
   console.log('');
 });

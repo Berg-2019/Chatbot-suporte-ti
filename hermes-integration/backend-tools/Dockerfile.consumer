@@ -1,0 +1,13 @@
+# WhatsApp Media Consumer
+# Consome message.created do RabbitMQ e envia mídia via WhatsApp bridge HTTP
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+RUN npm install --production
+
+COPY outgoing-consumer.js ./
+
+CMD ["node", "outgoing-consumer.js"]

@@ -1,44 +1,33 @@
-/**
- * Stock Service - Business Logic for Stock Management
- */
-
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
     CreateStockItemDto,
     UpdateStockItemDto,
     StockQueryDto,
     StockMovementDto,
+    StockEntryDto,
+    StockExitDto,
+    MovementQueryDto,
 } from './stock.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class StockService {
+    private readonly logger = new Logger(StockService.name);
+
     constructor(private readonly prisma: PrismaService) { }
 
-    /**
-     * Lista todos os itens de estoque com filtros
-     */
     async findAll(query: StockQueryDto) {
         const page = query.page || 1;
         const limit = query.limit || 20;
         const skip = (page - 1) * limit;
 
-        const where: Prisma.StockItemWhereInput = {
-            active: true,
-        };
+        const where: Prisma.StockItemWhereInput = { active: true };
 
-        if (query.stockType) {
-            where.stockType = query.stockType;
-        }
-
-        if (query.category) {
-            where.category = query.category;
-        }
-
-        if (query.assetStatus) {
-            where.assetStatus = query.assetStatus;
-        }
+        if (query.stockType) where.stockType = query.stockType;
+        if (query.category) where.category = query.category;
+        if (query.assetStatus) where.assetStatus = query.assetStatus;
+        if (query.reservable) where.isReservable = true;
 
         if (query.search) {
             where.OR = [
@@ -48,11 +37,11 @@ export class StockService {
             ];
         }
 
-        if (query.reservable) {
-            where.isReservable = true;
+        if (query.lowStock) {
+            where.category = { not: 'ASSET' };
+            where.quantity = { lte: this.prisma.stockItem.fields.minQuantity as any };
         }
 
-        // Buscar com paginação
         const [items, total] = await Promise.all([
             this.prisma.stockItem.findMany({
                 where,
@@ -60,71 +49,46 @@ export class StockService {
                 take: limit,
                 orderBy: { name: 'asc' },
                 include: {
-                    _count: {
-                        select: { reservations: true },
-                    },
+                    _count: { select: { reservations: true, movements: true } },
                 },
             }),
             this.prisma.stockItem.count({ where }),
         ]);
 
-        // Filtrar lowStock comparando quantity <= minQuantity (pós-processamento)
-        let filteredItems = items;
-        let filteredTotal = total;
-
-        if (query.lowStock) {
-            filteredItems = items.filter(item =>
-                Number(item.quantity) <= Number(item.minQuantity)
-            );
-            filteredTotal = filteredItems.length;
-        }
-
         return {
-            items: filteredItems,
-            total: filteredTotal,
+            items,
+            total,
             page,
             limit,
-            pages: Math.ceil(filteredTotal / limit),
+            pages: Math.ceil(total / limit),
         };
     }
 
-    /**
-     * Busca um item por ID
-     */
     async findOne(id: string) {
         const item = await this.prisma.stockItem.findUnique({
             where: { id },
             include: {
-                reservations: {
-                    orderBy: { createdAt: 'desc' },
-                    take: 10,
-                },
+                reservations: { orderBy: { createdAt: 'desc' }, take: 10 },
+                movements: { orderBy: { createdAt: 'desc' }, take: 20 },
             },
         });
 
         if (!item) {
-            throw new NotFoundException(`Item de estoque ${id} não encontrado`);
+            throw new NotFoundException(`Item de estoque ${id} nao encontrado`);
         }
 
         return item;
     }
 
-    /**
-     * Cria um novo item de estoque
-     */
     async create(dto: CreateStockItemDto) {
-        // Verificar código duplicado se fornecido
         if (dto.code) {
             const existing = await this.prisma.stockItem.findUnique({
                 where: { code: dto.code },
             });
             if (existing) {
-                throw new BadRequestException(`Código ${dto.code} já existe`);
+                throw new BadRequestException(`Codigo ${dto.code} ja existe`);
             }
         }
-
-        // Nota: A unicidade é validada pelo índice composto (assetTag + location)
-        // O Prisma retornará erro P2002 automaticamente se já existir patrimônio no mesmo local
 
         try {
             return await this.prisma.stockItem.create({
@@ -147,56 +111,57 @@ export class StockService {
                 },
             });
         } catch (error) {
-            console.error('Erro ao criar item de estoque:', error);
+            this.logger.error('Erro ao criar item de estoque', error);
             if (error.code === 'P2002') {
                 const target = error.meta?.target;
-                throw new BadRequestException(`Já existe um item com este ${target}`);
+                throw new BadRequestException(`Ja existe um item com este ${target}`);
             }
             throw new BadRequestException('Erro ao criar item. Verifique os dados.');
         }
     }
 
-    /**
-     * Atualiza um item de estoque
-     */
     async update(id: string, dto: UpdateStockItemDto) {
-        await this.findOne(id); // Verifica se existe
+        await this.findOne(id);
+
+        const data: any = { ...dto };
+        delete data.quantity;
 
         return this.prisma.stockItem.update({
             where: { id },
-            data: dto,
+            data,
         });
     }
 
-    /**
-     * Registra movimento de estoque (entrada/saída) com log
-     */
-    async registerMovement(id: string, dto: StockMovementDto) {
+    async registerMovement(id: string, dto: StockMovementDto, performedBy?: string) {
         const item = await this.findOne(id);
 
         const newQuantity = Number(item.quantity) + dto.quantity;
 
         if (newQuantity < 0) {
             throw new BadRequestException(
-                `Quantidade insuficiente. Disponível: ${item.quantity}`,
+                `Quantidade insuficiente. Disponivel: ${item.quantity}`,
             );
         }
 
-        // Transaction: atualizar quantidade + criar log de movimentação
+        if (dto.ticketId) {
+            const ticket = await this.prisma.ticket.findUnique({ where: { id: dto.ticketId } });
+            if (!ticket) {
+                throw new BadRequestException(`Ticket ${dto.ticketId} nao encontrado`);
+            }
+        }
+
         const [updatedItem] = await this.prisma.$transaction([
             this.prisma.stockItem.update({
                 where: { id },
-                data: {
-                    quantity: newQuantity,
-                },
+                data: { quantity: newQuantity },
             }),
             this.prisma.stockMovement.create({
                 data: {
                     stockItemId: id,
                     type: dto.quantity > 0 ? 'IN' : 'OUT',
                     quantity: Math.abs(dto.quantity),
-                    reason: dto.reason || (dto.quantity > 0 ? 'Entrada de estoque' : 'Saída de estoque'),
-                    performedBy: dto.ticketId ? `Ticket #${dto.ticketId}` : undefined,
+                    reason: dto.reason || (dto.quantity > 0 ? 'Entrada de estoque' : 'Saida de estoque'),
+                    performedBy: performedBy || (dto.ticketId ? `Ticket #${dto.ticketId}` : undefined),
                 },
             }),
         ]);
@@ -204,9 +169,100 @@ export class StockService {
         return updatedItem;
     }
 
-    /**
-     * Soft delete de um item
-     */
+    async registerEntry(id: string, dto: StockEntryDto, performedBy: string) {
+        const item = await this.findOne(id);
+
+        const newQuantity = Number(item.quantity) + dto.quantity;
+
+        const [updatedItem] = await this.prisma.$transaction([
+            this.prisma.stockItem.update({
+                where: { id },
+                data: { quantity: newQuantity },
+            }),
+            this.prisma.stockMovement.create({
+                data: {
+                    stockItemId: id,
+                    type: 'IN',
+                    quantity: dto.quantity,
+                    reason: dto.reason || 'Entrada de estoque',
+                    performedBy,
+                },
+            }),
+        ]);
+
+        return updatedItem;
+    }
+
+    async registerExit(id: string, dto: StockExitDto, performedBy: string) {
+        const item = await this.findOne(id);
+
+        if (Number(item.quantity) < dto.quantity) {
+            throw new BadRequestException(
+                `Quantidade insuficiente. Disponivel: ${item.quantity}, solicitado: ${dto.quantity}`,
+            );
+        }
+
+        if (dto.ticketId) {
+            const ticket = await this.prisma.ticket.findUnique({ where: { id: dto.ticketId } });
+            if (!ticket) {
+                throw new BadRequestException(`Ticket ${dto.ticketId} nao encontrado`);
+            }
+        }
+
+        const newQuantity = Number(item.quantity) - dto.quantity;
+
+        let reason = dto.reason || 'Saida de estoque';
+        if (dto.ticketId) reason += ` (Ticket #${dto.ticketId})`;
+        if (dto.destination) reason += ` — Destino: ${dto.destination}`;
+
+        const [updatedItem] = await this.prisma.$transaction([
+            this.prisma.stockItem.update({
+                where: { id },
+                data: { quantity: newQuantity },
+            }),
+            this.prisma.stockMovement.create({
+                data: {
+                    stockItemId: id,
+                    type: 'OUT',
+                    quantity: dto.quantity,
+                    reason,
+                    performedBy: dto.technicianId
+                        ? `${performedBy} (tecnico: ${dto.technicianId})`
+                        : performedBy,
+                },
+            }),
+        ]);
+
+        return updatedItem;
+    }
+
+    async getMovements(query: MovementQueryDto) {
+        const page = query.page || 1;
+        const limit = query.limit || 20;
+        const skip = (page - 1) * limit;
+
+        const where: Prisma.StockMovementWhereInput = {};
+
+        if (query.type) where.type = query.type;
+        if (query.stockItemId) where.stockItemId = query.stockItemId;
+        if (query.performedBy) where.performedBy = { contains: query.performedBy, mode: 'insensitive' };
+
+        const [items, total] = await Promise.all([
+            this.prisma.stockMovement.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    stockItem: { select: { id: true, name: true, code: true, unit: true } },
+                },
+            }),
+            this.prisma.stockMovement.count({ where }),
+        ]);
+
+        return { items, total, page, limit, pages: Math.ceil(total / limit) };
+    }
+
     async remove(id: string) {
         await this.findOne(id);
 
@@ -216,56 +272,29 @@ export class StockService {
         });
     }
 
-    /**
-     * Estatísticas do estoque
-     */
     async getStats(stockType?: string) {
         const where: Prisma.StockItemWhereInput = { active: true };
-        if (stockType) {
-            where.stockType = stockType as any;
-        }
+        if (stockType) where.stockType = stockType as any;
 
         try {
-            // Buscar total e assets normalmente
-            const [total, assets] = await Promise.all([
+            const [total, assets, lowStock] = await Promise.all([
                 this.prisma.stockItem.count({ where }),
                 this.prisma.stockItem.count({
-                    where: {
-                        ...where,
-                        category: 'ASSET',
-                    },
+                    where: { ...where, category: 'ASSET' },
                 }),
+                this.prisma.$queryRaw`
+                    SELECT COUNT(*) as count FROM stock_items
+                    WHERE active = true
+                    AND category != 'ASSET'
+                    ${stockType ? Prisma.sql`AND stock_type = ${stockType}` : Prisma.empty}
+                    AND quantity <= min_quantity
+                `.then((r: any) => Number(r[0]?.count || 0)),
             ]);
 
-            // Contar lowStock buscando todos itens EXCETO patrimônios (ASSET)
-            // Patrimônios são itens únicos e não devem gerar alertas de estoque baixo
-            const allItems = await this.prisma.stockItem.findMany({
-                where: {
-                    ...where,
-                    category: { not: 'ASSET' },
-                },
-                select: { quantity: true, minQuantity: true },
-            });
-
-            const lowStock = allItems.filter(
-                item => Number(item.quantity) <= Number(item.minQuantity)
-            ).length;
-
-            return {
-                total,
-                lowStock,
-                assets,
-                supplies: total - assets,
-            };
+            return { total, lowStock, assets, supplies: total - assets };
         } catch (error) {
-            console.error('Erro ao buscar estatísticas de estoque:', error);
-            // Retorna valores padrão em caso de erro
-            return {
-                total: 0,
-                lowStock: 0,
-                assets: 0,
-                supplies: 0,
-            };
+            this.logger.error('Erro ao buscar estatisticas de estoque', error);
+            return { total: 0, lowStock: 0, assets: 0, supplies: 0 };
         }
     }
 }

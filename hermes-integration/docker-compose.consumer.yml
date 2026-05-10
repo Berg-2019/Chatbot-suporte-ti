@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  whatsapp-media-consumer:
+    build:
+      context: ./backend-tools
+      dockerfile: Dockerfile.consumer
+    container_name: helpdesk_whatsapp_consumer
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://helpdesk:helpdesk123@rabbitmq:5672
+      WHATSAPP_BRIDGE_URL: http://hermes:3000
+      BACKEND_ORIGIN: http://backend:3000
+      HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
+    networks:
+      - helpdesk_network
+    depends_on:
+      - backend
+      - hermes
+
+networks:
+  helpdesk_network:
+    name: helpdesk_network
+    external: true

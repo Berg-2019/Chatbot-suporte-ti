@@ -10,6 +10,11 @@ RUN npm install --production
 
 COPY . .
 
+# Instalar amqplib para o consumer
+RUN npm install --production amqplib axios
+
 EXPOSE 3003
 
-CMD ["node", "server.js"]
+# Server principal + consumer de outgoing messages
+CMD ["node", "server.js"] & \
+    node outgoing-consumer.js

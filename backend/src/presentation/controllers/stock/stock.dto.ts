@@ -1,7 +1,3 @@
-/**
- * Stock DTOs - Data Transfer Objects
- */
-
 import {
     IsString,
     IsOptional,
@@ -10,10 +6,10 @@ import {
     IsBoolean,
     Min,
     Max,
+    IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// Enums matching Prisma schema
 export enum StockType {
     TI = 'TI',
     ELECTRIC = 'ELECTRIC',
@@ -49,7 +45,6 @@ export enum AssetStatus {
     MAINTENANCE = 'MAINTENANCE',
 }
 
-// Create DTO
 export class CreateStockItemDto {
     @IsString()
     name: string;
@@ -93,7 +88,6 @@ export class CreateStockItemDto {
     @IsString()
     location?: string;
 
-    // Ink specific
     @IsOptional()
     @IsString()
     printerModel?: string;
@@ -102,7 +96,6 @@ export class CreateStockItemDto {
     @IsEnum(InkColor)
     inkColor?: InkColor;
 
-    // Asset specific
     @IsOptional()
     @IsString()
     assetTag?: string;
@@ -116,7 +109,6 @@ export class CreateStockItemDto {
     isReservable?: boolean;
 }
 
-// Update DTO
 export class UpdateStockItemDto {
     @IsOptional()
     @IsString()
@@ -129,12 +121,6 @@ export class UpdateStockItemDto {
     @IsOptional()
     @IsString()
     description?: string;
-
-    @IsOptional()
-    @Type(() => Number)
-    @IsNumber()
-    @Min(0)
-    quantity?: number;
 
     @IsOptional()
     @Type(() => Number)
@@ -177,7 +163,6 @@ export class UpdateStockItemDto {
     active?: boolean;
 }
 
-// Query DTO
 export class StockQueryDto {
     @IsOptional()
     @IsEnum(StockType)
@@ -219,17 +204,92 @@ export class StockQueryDto {
     limit?: number = 20;
 }
 
-// Movement DTO (entrada/saída)
 export class StockMovementDto {
     @Type(() => Number)
     @IsNumber()
-    quantity: number; // Positive = entrada, Negative = saída
+    @Min(0.01)
+    quantity: number;
 
     @IsOptional()
     @IsString()
     reason?: string;
 
     @IsOptional()
-    @IsString()
+    @IsUUID()
     ticketId?: string;
+}
+
+export class StockEntryDto {
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0.01)
+    quantity: number;
+
+    @IsOptional()
+    @IsString()
+    reason?: string;
+
+    @IsOptional()
+    @IsUUID()
+    supplierId?: string;
+
+    @IsOptional()
+    @IsString()
+    invoiceNumber?: string;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0)
+    cost?: number;
+}
+
+export class StockExitDto {
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0.01)
+    quantity: number;
+
+    @IsOptional()
+    @IsString()
+    reason?: string;
+
+    @IsOptional()
+    @IsUUID()
+    ticketId?: string;
+
+    @IsOptional()
+    @IsUUID()
+    technicianId?: string;
+
+    @IsOptional()
+    @IsString()
+    destination?: string;
+}
+
+export class MovementQueryDto {
+    @IsOptional()
+    @IsString()
+    type?: 'IN' | 'OUT';
+
+    @IsOptional()
+    @IsUUID()
+    stockItemId?: string;
+
+    @IsOptional()
+    @IsString()
+    performedBy?: string;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(1)
+    page?: number = 1;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(1)
+    @Max(100)
+    limit?: number = 20;
 }
