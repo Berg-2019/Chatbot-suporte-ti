@@ -3,10 +3,12 @@
  */
 
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { redactEmail, redactName } from '../../../infrastructure/logger/redact';
 
 
 interface LoginDto {
@@ -23,6 +25,8 @@ interface RegisterDto {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -32,13 +36,23 @@ export class AuthService {
   }
 
   private async ensureAdminExists() {
-    const adminEmail = this.config.get<string>('ADMIN_EMAIL') || 'admin@empresa.com';
+    const isDev = this.config.get<string>('NODE_ENV') !== 'production';
+    const adminEmail = this.config.get<string>('ADMIN_EMAIL') || 'admin@helpdesk.com';
     const exists = await this.prisma.user.findUnique({ where: { email: adminEmail } });
 
     if (!exists) {
-      const adminPassword = this.config.get<string>('ADMIN_PASSWORD') || 'admin123';
+      const adminPassword = this.config.get<string>('ADMIN_PASSWORD');
+      if (!adminPassword) {
+        if (!isDev) {
+          throw new Error(
+            `❌ ADMIN_PASSWORD não está configurado. ` +
+            `Defina a variável ADMIN_PASSWORD no ambiente de produção.`
+          );
+        }
+        this.logger.warn(`⚠️ ADMIN_PASSWORD não configurado — usando senha temporária em dev`);
+      }
       const adminName = this.config.get<string>('ADMIN_NAME') || 'Administrador';
-      const hashedPassword = await bcrypt.hash(adminPassword, 12);
+      const hashedPassword = await bcrypt.hash(adminPassword || `dev_temp_${Date.now()}`, 12);
 
       await this.prisma.user.create({
         data: {
@@ -49,7 +63,7 @@ export class AuthService {
           sector: 'TI',
         },
       });
-      console.log(`✅ Admin criado: ${adminEmail}`);
+      this.logger.log(`✅ Admin criado: ${redactEmail(adminEmail)}`);
     }
   }
 
@@ -57,38 +71,35 @@ export class AuthService {
    * Login tradicional (usuário local) - SIMPLIFICADO
    */
   async login(dto: LoginDto) {
-    console.log(`🔐 Login attempt for: ${dto.email}`);
+    const redactedEmail = dto.email.replace(/(.{2}).*(@.*)/, '$1***$2');
+    this.logger.debug(`🔐 Login attempt for: ${redactedEmail}`);
 
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
 
     if (!user) {
-      console.log(`❌ User not found: ${dto.email}`);
+      this.logger.debug(`❌ User not found: ${redactedEmail}`);
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
-    console.log(`✅ User found: ${user.name}`);
+    this.logger.debug(`✅ User found: ${redactName(user.name)}`);
 
     const validPassword = await bcrypt.compare(dto.password, user.password);
     if (!validPassword) {
-      console.log(`❌ Invalid password for: ${dto.email}`);
+      this.logger.debug(`❌ Invalid password for: ${redactedEmail}`);
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
-    console.log(`✅ Password valid`);
-
     if (!user.active) {
-      console.log(`❌ User inactive: ${dto.email}`);
+      this.logger.debug(`❌ User inactive: ${redactedEmail}`);
       throw new UnauthorizedException('Usuário desativado');
     }
 
-    console.log(`✅ User active, generating token...`);
+    this.logger.debug(`✅ User active, generating token...`);
 
-    // Permissões baseadas no campo user.permissions
     let permissions: string[] = [];
 
-    // Determinar perfil para o frontend
     const profile = user.role === 'ADMIN' ? 'admin' :
       user.sector === 'ELECTRIC' ? 'tech_elect' : 'tech_ti';
 
@@ -99,7 +110,7 @@ export class AuthService {
       sector: user.sector,
     });
 
-    console.log(`✅ Token generated successfully for ${user.name}`);
+    this.logger.debug(`✅ Token generated successfully for uid:${user.id.slice(0, 8)}`);
 
     return {
       token,
@@ -166,6 +177,78 @@ export class AuthService {
       permissions: [],
       sector: user.sector,
     };
+  }
+
+  /**
+   * C5 — LGPD Art. 18 II: direito de acesso (exportação de dados)
+   */
+  async dataExport(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('Usuário não encontrado');
+
+    const [tickets, messages, csatResponses, pushSubscriptions] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where: { assignedToId: userId },
+        orderBy: { createdAt: 'desc' },
+        take: 1000,
+      }),
+      this.prisma.message.findMany({
+        where: { senderId: userId },
+        orderBy: { createdAt: 'desc' },
+        take: 1000,
+      }),
+      this.prisma.csatResponse.findMany({
+        where: { assignedToId: userId },
+        orderBy: { respondedAt: 'desc' },
+      }),
+      this.prisma.pushSubscription.findMany({
+        where: { userId },
+      }),
+    ]);
+
+    return {
+      exportedAt: new Date().toISOString(),
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        sector: user.sector,
+        createdAt: user.createdAt,
+      },
+      tickets,
+      messages,
+      csatResponses,
+      pushSubscriptions,
+    };
+  }
+
+  /**
+   * C6 — LGPD Art. 18 IX: direito ao esquecimento (pseudonimização).
+   * Preserva integridade referencial das mensagens (senderId continua válido
+   * mas não identifica mais a pessoa).
+   */
+  async eraseAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('Usuário não encontrado');
+
+    const anonId = `anon_${userId.replace(/-/g, '')}`;
+    const erasedEmail = `deleted_${anonId}@anon.local`;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: `[ANONIMIZADO-${anonId}]`,
+        email: erasedEmail,
+        phoneNumber: null,
+        password: '[ERASED]',
+        active: false,
+      },
+    });
+
+    await this.prisma.pushSubscription.deleteMany({ where: { userId } });
+
+    return { success: true, message: 'Conta pseudonimizada com sucesso' };
   }
 }
 

@@ -17,7 +17,7 @@ import { ExternalModule } from '../../../infrastructure/external/external.module
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'secret',
+        secret: config.get<string>('JWT_SECRET')!,
         signOptions: { expiresIn: '7d' },
       }),
     }),

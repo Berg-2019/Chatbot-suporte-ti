@@ -2,7 +2,7 @@
  * Auth Controller
  */
 
-import { Controller, Post, Get, Body, UseGuards, Request, Res, Req, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, UseGuards, Request, Res, Req, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { IsEmail, IsString, IsOptional, MinLength } from 'class-validator';
 import { Response, Request as ExpressRequest } from 'express';
@@ -47,18 +47,18 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto);
 
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN') || '.helpdeskmsm.com.br';
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     const cookieSecure = this.config.get<string>('COOKIE_SECURE') !== 'false';
 
     res.cookie(COOKIE_NAME, result.token, {
-      domain: cookieDomain,
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
       httpOnly: true,
       secure: cookieSecure,
       sameSite: 'lax',
       maxAge: 8 * 60 * 60 * 1000,
     });
 
-    const { token: _token, ...user } = result;
+    const { token: _token, user } = result;
     return { user };
   }
 
@@ -66,7 +66,7 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   async register(@Body() dto: RegisterDto, @Request() req: any) {
     if (req.user.role !== 'ADMIN') {
-      throw new Error('Apenas admins podem criar usuários');
+      throw new ForbiddenException('Apenas admins podem criar usuários');
     }
     return this.authService.register(dto, req.user.id);
   }
@@ -77,14 +77,27 @@ export class AuthController {
     return { user: req.user };
   }
 
+  @Get('me/data-export')
+  @UseGuards(AuthGuard('jwt'))
+  async dataExport(@Request() req: any) {
+    return this.authService.dataExport(req.user.id);
+  }
+
+  @Delete('me')
+  @UseGuards(AuthGuard('jwt'))
+  async eraseAccount(@Request() req: any) {
+    return this.authService.eraseAccount(req.user.id);
+  }
+
   @Post('logout')
   @UseGuards(AuthGuard('jwt'))
   async logout(@Res({ passthrough: true }) res: Response) {
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN') || '.helpdeskmsm.com.br';
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
+    const cookieSecure = this.config.get<string>('COOKIE_SECURE') !== 'false';
     res.clearCookie(COOKIE_NAME, {
-      domain: cookieDomain,
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
       httpOnly: true,
-      secure: true,
+      secure: cookieSecure,
       sameSite: 'lax',
     });
     return { message: 'Logout realizado' };
