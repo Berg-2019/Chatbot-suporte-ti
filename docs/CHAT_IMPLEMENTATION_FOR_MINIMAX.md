@@ -20,6 +20,7 @@
 | **D** | Frontend | Trocar `blob:` URLs por upload real; `chatService.sendMessage` aceita `File` | 3h |
 | **E** | Frontend | Limpeza: remover demos reintroduzidos, restaurar tipo `'bot'`, integrar `usePushNotifications` | 2h |
 | **F** (opcional) | Hermes | Propagar mídia pra WhatsApp via Baileys | 4h |
+| **G** ⚠️ LGPD | Backend | Privatizar `/uploads/` — endpoint autenticado com checagem de pertencimento | 4h |
 
 **Total mínimo (sem WhatsApp):** ~12h. **Com Hermes/WhatsApp:** ~16h.
 
@@ -822,6 +823,159 @@ async setWaId(
 
 ---
 
+## 🛠️ Etapa G — Controle de acesso aos uploads (LGPD crítico, +4h)
+
+> **Bloqueador LGPD (item C1 de [`LGPD_COMPLIANCE_AUDIT.md`](LGPD_COMPLIANCE_AUDIT.md)):** hoje `/uploads/messages/*` é servido por `useStaticAssets` **sem autenticação**. Qualquer pessoa com a URL baixa fotos/áudios privados → vazamento de dados → incidente reportável à ANPD em 72h.
+
+### G.1 Remover serve estático
+
+`backend/src/main.ts` — **deletar**:
+```ts
+app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
+```
+
+### G.2 Endpoint autenticado com checagem de pertencimento
+
+`backend/src/presentation/controllers/chat/chat.controller.ts`:
+```ts
+import { Res, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Response } from 'express';
+import { join } from 'path';
+import { existsSync, statSync, createReadStream } from 'fs';
+
+@Get('media/:messageId')
+async getMedia(
+  @Param('messageId') messageId: string,
+  @Req() req: any,
+  @Res() res: Response,
+) {
+  const m = await this.prisma.message.findUnique({
+    where: { id: messageId },
+    include: { ticket: { select: { sector: true, assignedToId: true, customerName: true } } },
+  });
+  if (!m || !m.mediaUrl) throw new NotFoundException();
+
+  // Autorização:
+  // 1. Mesmo setor do user OU
+  // 2. Admin global OU
+  // 3. Sender da mensagem (se ainda existir)
+  const u = req.user;
+  const sameSector = m.ticket.sector === u.sector;
+  const isAdmin = u.role === 'ADMIN';
+  const isSender = m.senderId === u.id;
+  if (!sameSector && !isAdmin && !isSender) throw new ForbiddenException();
+
+  const filename = m.mediaUrl.replace('/uploads/messages/', '');
+  const path = join(process.cwd(), 'uploads', 'messages', filename);
+  if (!existsSync(path)) throw new NotFoundException();
+
+  // Audit log (Item C3 do LGPD audit)
+  await this.audit.log(u.id, 'media.download', m.id, req);
+
+  res.setHeader('Content-Type', this.mimeFromExt(filename));
+  res.setHeader('Content-Length', String(statSync(path).size));
+  if (m.fileName) {
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(m.fileName)}"`);
+  }
+  res.setHeader('Cache-Control', 'private, max-age=300');  // cliente pode cachear 5min
+  createReadStream(path).pipe(res);
+}
+
+private mimeFromExt(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+    mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+    mp3: 'audio/mpeg', ogg: 'audio/ogg',
+    pdf: 'application/pdf',
+  };
+  return map[ext] ?? 'application/octet-stream';
+}
+```
+
+### G.3 Atualizar `mediaUrl` retornado pelo service
+
+Em vez de `/uploads/messages/<uuid>.ext`, o `normalize()` deve retornar `/api/chat/media/<messageId>`:
+```ts
+private normalize(m: any) {
+  return {
+    // ... campos existentes
+    mediaUrl: m.mediaUrl ? `/chat/media/${m.id}` : null,  // ← MUDA
+    // ...
+  };
+}
+```
+
+> **Não esquecer:** o frontend hoje já constrói `${API_BASE_URL}${mediaUrl}` — agora vai virar `${API_BASE_URL}/chat/media/<msgId>` que cai no endpoint autenticado.
+
+### G.4 Hermes precisa de token interno
+
+A Etapa F faz Hermes baixar via HTTP. Como `/uploads/` foi privatizado, Hermes precisa autenticar. Opções:
+
+**Opção A (recomendada):** endpoint de service-to-service:
+```ts
+@Get('media-internal/:messageId')
+@UseGuards(HermesApiKeyGuard)  // já existe em hermes/guards
+async getMediaInternal(@Param('messageId') id: string, @Res() res: Response) {
+  // mesma lógica de G.2 mas autenticando via X-Hermes-API-Key em vez de JWT
+}
+```
+
+E no `outgoing-consumer.js`:
+```js
+const buf = await axios.get(`${BACKEND}/chat/media-internal/${messageId}`, {
+  headers: { 'X-Hermes-API-Key': process.env.HERMES_API_KEY },
+  responseType: 'arraybuffer',
+});
+```
+
+**Opção B:** signed URL com TTL — mais complexo, vale só se Hermes ficar fora da rede interna.
+
+### G.5 Critério de aceite (Etapa G)
+
+```bash
+# Setup
+TICKET=$(curl -s -b /tmp/cj.txt http://localhost:3000/api/tickets | jq -r '.tickets[0].id')
+MSG_ID=$(curl -s -b /tmp/cj.txt -X POST http://localhost:3000/api/chat/messages/$TICKET \
+  -F 'kind=image' -F 'file=@/tmp/test.png' | jq -r .id)
+
+# 1. ✓ User autenticado e do setor certo: 200
+curl -s -b /tmp/cj.txt -o /tmp/dl.png -w "HTTP %{http_code}\n" \
+  http://localhost:3000/api/chat/media/$MSG_ID
+
+# 2. ✗ Sem cookie: 401
+curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+  http://localhost:3000/api/chat/media/$MSG_ID
+# esperado: 401
+
+# 3. ✗ User de OUTRO setor: 403
+# (login como tecnico.compras, msg é de ticket TI)
+curl -s -c /tmp/cj2.txt -X POST http://localhost:3000/api/auth/login \
+  -d '{"email":"agente.compras@helpdesk.com","password":"compras123"}' \
+  -H 'Content-Type: application/json' > /dev/null
+curl -s -b /tmp/cj2.txt -o /dev/null -w "HTTP %{http_code}\n" \
+  http://localhost:3000/api/chat/media/$MSG_ID
+# esperado: 403
+
+# 4. ✗ URL antiga /uploads/messages/<uuid>.png: 404
+curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+  http://localhost:3000/uploads/messages/abc.png
+# esperado: 404 (rota não existe mais)
+
+# 5. ✓ Hermes via X-Hermes-API-Key: 200
+curl -s -H "X-Hermes-API-Key: $HERMES_API_KEY" -o /tmp/dl.png -w "HTTP %{http_code}\n" \
+  http://localhost:3000/api/chat/media-internal/$MSG_ID
+```
+
+- [ ] G.1 — Static serve removido
+- [ ] G.2 — Endpoint `/chat/media/:id` com 3 níveis de autorização
+- [ ] G.3 — `normalize()` retorna URL nova
+- [ ] G.4 — Hermes via API key (Etapa F atualizada)
+- [ ] G.5 — 5 testes curl passando (200/401/403/404/200)
+- [ ] AuditLog registrando todo download (depende de C3 do LGPD audit)
+
+---
+
 ## 🧪 Smoke test E2E (após todas as etapas)
 
 ```bash
@@ -961,6 +1115,31 @@ Etapa F (Hermes) pode ser PR separado.
 - `/uploads/messages` criado com owner root (pelo container)
 - `Dockerfile.dev` ajustado para criar com `chown -R node:node /app/uploads`
 - Em prod considerar mapear UID 1000 ou usar volume named
+
+### Etapa F — Hermes propagação WhatsApp ✅ (HTTP-only, zero volume)
+- [x] `outgoing-consumer.js` refatorado: download HTTP como Buffer → converte base64 → POST `/send-media-buffer`
+- [x] `/send-media-buffer` adicionado no WhatsApp bridge (`bridge.js`) — aceita `{chatId, base64, mediaType, caption, fileName, mimeType}`
+- [x] `Dockerfile.consumer` criado (node:20-alpine, só instala deps necessários)
+- [x] `docker-compose.consumer.yml` simplificado: zero volumes, só rede `helpdesk_network`
+- [x] Idempotência: verifica `waMessageId` existente antes de re-enviar
+- [x] Pronto pra migrar S3/R2: só muda `BACKEND_ORIGIN` → URL assinada
+
+**Arquitetura final (HTTP-only):**
+```
+Backend (uploads/) → HTTP GET → Consumer (Buffer) → base64 → POST /send-media-buffer → Bridge (Baileys) → WhatsApp
+```
+
+**Como subir o consumer:**
+```bash
+docker compose -f docker-compose.dev.yml -f hermes-integration/docker-compose.consumer.yml up -d
+```
+
+**Smoke test E2E:**
+1. Técnico envia foto pelo chat web → POST /chat/messages/:ticketId (multipart)
+2. Backend persiste Message com mediaUrl
+3. RabbitMQ publica message.created
+4. Consumer baixa HTTP, envia base64 pro bridge
+5. Cliente recebe foto no WhatsApp pareado
 
 ### Testes
 ```bash
