@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { MessageType, Direction } from '@prisma/client';
 
 const KIND_TO_TYPE: Record<string, MessageType> = {
@@ -23,7 +24,10 @@ interface SendMessageInput {
 
 @Injectable()
 export class ChatService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private rabbitmq: RabbitMQService,
+    ) { }
 
     async getConversations(sector?: string) {
         const tickets = await this.prisma.ticket.findMany({
@@ -110,6 +114,31 @@ export class ChatService {
 
         const msg = m as any;
 
+        if (direction === 'OUTGOING' && !input.isInternal) {
+            const ticket = await this.prisma.ticket.findUnique({
+                where: { id: input.ticketId },
+                select: { phoneNumber: true },
+            });
+
+            if (ticket?.phoneNumber) {
+                const mediaTypeMap: Record<string, 'image' | 'audio' | 'video' | 'document'> = {
+                    IMAGE: 'image', AUDIO: 'audio', VIDEO: 'video', DOCUMENT: 'document',
+                };
+
+                await this.rabbitmq.publishOutgoingMessage({
+                    to: ticket.phoneNumber,
+                    text: input.content,
+                    ticketId: input.ticketId,
+                    messageId: msg.id,
+                    direction,
+                    content: input.content,
+                    mediaUrl: msg.mediaUrl || undefined,
+                    mediaType: mediaTypeMap[type] || 'document',
+                    filename: msg.fileName || undefined,
+                });
+            }
+        }
+
         return this.normalize(msg);
     }
 
@@ -135,7 +164,7 @@ export class ChatService {
             id: m.id,
             content: m.content,
             kind: m.type?.toLowerCase() as 'text' | 'image' | 'video' | 'audio' | 'file',
-            mediaUrl: m.mediaUrl,
+            mediaUrl: m.mediaUrl ? `/chat/media/${m.id}` : null,
             fileName: m.fileName,
             fileSize: m.fileSize,
             duration: m.duration,

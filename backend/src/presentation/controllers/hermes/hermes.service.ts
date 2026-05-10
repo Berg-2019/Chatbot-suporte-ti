@@ -8,6 +8,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { AlertService } from '../../../infrastructure/services/alert.service';
+import { redactPhone } from '../../../infrastructure/logger/redact';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
 import {
   CreateHermesTicketDto,
@@ -33,7 +34,7 @@ export class HermesService {
    * Cria um ticket originado pelo Hermes Agent.
    */
   async createTicket(dto: CreateHermesTicketDto) {
-    this.logger.log(`🤖 Hermes criando ticket: "${dto.title}" | Telefone: ${dto.phone}`);
+    this.logger.log(`🤖 Hermes criando ticket: "${dto.title}" | Telefone: ${redactPhone(dto.phone)}`);
 
     const ticket = await this.prisma.ticket.create({
       data: {
@@ -130,7 +131,7 @@ export class HermesService {
    */
   async getTicketsByPhone(phone: string) {
     const cleanPhone = phone.replace(/\D/g, '');
-    this.logger.log(`🔍 Hermes buscando tickets do telefone: ${cleanPhone}`);
+    this.logger.log(`🔍 Hermes buscando tickets do telefone: ${redactPhone(cleanPhone)}`);
 
     const tickets = await this.prisma.ticket.findMany({
       where: { phoneNumber: { contains: cleanPhone } },
@@ -384,7 +385,7 @@ export class HermesService {
    * Escala uma conversa para atendimento humano.
    */
   async escalateToAgent(dto: EscalateDto) {
-    this.logger.log(`📞 Hermes escalando conversa: ${dto.phone} | Urgência: ${dto.urgency}`);
+    this.logger.log(`📞 Hermes escalando conversa: ${redactPhone(dto.phone)} | Urgência: ${dto.urgency}`);
 
     // Determinar nível de escalação
     const level = dto.urgency === 'CRITICAL' ? 'N3' : dto.urgency === 'HIGH' ? 'N2' : 'N1';
@@ -473,11 +474,11 @@ export class HermesService {
 
     switch (event) {
       case 'conversation.started':
-        this.logger.log(`💬 Nova conversa Hermes: ${payload.phone}`);
+        this.logger.log(`💬 Nova conversa Hermes: ${redactPhone(payload.phone)}`);
         break;
 
       case 'conversation.ended':
-        this.logger.log(`✅ Conversa Hermes encerrada: ${payload.phone}`);
+        this.logger.log(`✅ Conversa Hermes encerrada: ${redactPhone(payload.phone)}`);
         break;
 
       case 'ticket.resolved_by_ai':
@@ -522,7 +523,7 @@ export class HermesService {
    * Process incoming WhatsApp message through Captain for auto-resolution.
    */
   private async handleWhatsAppMessage(payload: { text: string; phone: string; name?: string }) {
-    this.logger.log(`💬 Mensagem WhatsApp de ${payload.phone}: "${payload.text?.substring(0, 50)}..."`);
+    this.logger.log(`💬 Mensagem WhatsApp de ${redactPhone(payload.phone)}`);
 
     // This is handled by the Captain service which is called separately
     // The webhook just acknowledges receipt

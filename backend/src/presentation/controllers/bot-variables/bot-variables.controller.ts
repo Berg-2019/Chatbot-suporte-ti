@@ -6,7 +6,8 @@
 import { Controller, Post, Put, Delete, Get, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { BotVariablesService } from './bot-variables.service';
 import { AuthGuard } from '@nestjs/passport';
-import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 
 class CreateVariableDto {
   key: string;
@@ -27,7 +28,7 @@ class InterpolateDto {
 }
 
 @Controller('bot-variables')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class BotVariablesController {
   constructor(private readonly botVariablesService: BotVariablesService) {}
 
@@ -36,7 +37,7 @@ export class BotVariablesController {
    * POST /bot-variables
    */
   @Post()
-  @RequirePermissions('admin:settings', 'bot:config')
+  @Roles('ADMIN_TI')
   async create(@Body() dto: CreateVariableDto) {
     return this.botVariablesService.create(dto);
   }
@@ -46,7 +47,7 @@ export class BotVariablesController {
    * PUT /bot-variables/:key
    */
   @Put(':key')
-  @RequirePermissions('admin:settings', 'bot:config')
+  @Roles('ADMIN_TI')
   async update(@Param('key') key: string, @Body() dto: UpdateVariableDto) {
     return this.botVariablesService.update(key, dto);
   }
@@ -56,7 +57,7 @@ export class BotVariablesController {
    * DELETE /bot-variables/:key
    */
   @Delete(':key')
-  @RequirePermissions('admin:settings')
+  @Roles('ADMIN_TI')
   async delete(@Param('key') key: string) {
     return this.botVariablesService.delete(key);
   }
@@ -66,7 +67,7 @@ export class BotVariablesController {
    * GET /bot-variables?category=general
    */
   @Get()
-  @RequirePermissions('bot:config', 'admin:settings')
+  @Roles('ADMIN_TI')
   async findAll(@Query('category') category?: string) {
     return this.botVariablesService.findAll(category);
   }
@@ -76,7 +77,7 @@ export class BotVariablesController {
    * GET /bot-variables/:key
    */
   @Get(':key')
-  @RequirePermissions('bot:config', 'admin:settings')
+  @Roles('ADMIN_TI')
   async findOne(@Param('key') key: string) {
     return this.botVariablesService.findOne(key);
   }
@@ -86,6 +87,7 @@ export class BotVariablesController {
    * POST /bot-variables/interpolate
    */
   @Post('action/interpolate')
+  @Roles('ADMIN_TI')
   async interpolate(@Body() dto: InterpolateDto) {
     return {
       original: dto.template,
@@ -98,7 +100,7 @@ export class BotVariablesController {
    * POST /bot-variables/action/seed
    */
   @Post('action/seed')
-  @RequirePermissions('admin:settings')
+  @Roles('ADMIN_TI')
   async seed() {
     return this.botVariablesService.seedDefaultVariables();
   }
@@ -108,7 +110,7 @@ export class BotVariablesController {
    * GET /bot-variables/action/categories
    */
   @Get('action/categories')
-  @RequirePermissions('bot:config', 'admin:settings')
+  @Roles('ADMIN_TI')
   async getCategories() {
     return this.botVariablesService.getCategories();
   }

@@ -12,6 +12,7 @@ import { TicketsService } from './tickets.service';
 import { AutomationModule } from '../automation/automation.module';
 import { SlaModule } from '../sla/sla.module';
 import { PushModule } from '../push/push.module';
+import { StockModule } from '../stock/stock.module';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
 @Module({
@@ -19,6 +20,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
     AutomationModule,
     SlaModule,
     PushModule,
+    StockModule,
     MulterModule.register({
       storage: diskStorage({
         destination: './uploads/attachments',

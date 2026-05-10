@@ -6,7 +6,6 @@
 import { Controller, Get, Post, Patch, Body, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 
 @Controller('auto-assignment')
 @UseGuards(AuthGuard('jwt'))
@@ -14,7 +13,6 @@ export class AutoAssignmentController {
   constructor(private prisma: PrismaService) {}
 
   @Get('config')
-  @RequirePermissions('admin:settings', 'automation:read')
   async getConfig() {
     let config = await this.prisma.autoAssignmentConfig.findFirst();
 
@@ -34,7 +32,6 @@ export class AutoAssignmentController {
   }
 
   @Patch('config')
-  @RequirePermissions('admin:settings')
   async updateConfig(@Body() data: {
     enabled?: boolean;
     strategy?: string;
@@ -79,7 +76,6 @@ export class AutoAssignmentController {
   }
 
   @Get('stats')
-  @RequirePermissions('reports:read', 'admin:settings')
   async getStats() {
     // Estatísticas de técnicos e distribuição de tickets
     const technicians = await this.prisma.user.findMany({
@@ -136,7 +132,6 @@ export class AutoAssignmentController {
   }
 
   @Post('toggle')
-  @RequirePermissions('admin:settings')
   async toggle() {
     let config = await this.prisma.autoAssignmentConfig.findFirst();
 

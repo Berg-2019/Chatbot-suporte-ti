@@ -6,7 +6,8 @@
 import { Controller, Get, Param, Query, UseGuards, Post } from '@nestjs/common';
 import { AgentMetricsService } from './agent-metrics.service';
 import { AuthGuard } from '@nestjs/passport';
-import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 
 class GetMetricsQueryDto {
   startDate: string; // ISO date
@@ -14,7 +15,7 @@ class GetMetricsQueryDto {
 }
 
 @Controller('agent-metrics')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class AgentMetricsController {
   constructor(private readonly agentMetricsService: AgentMetricsService) {}
 
@@ -23,7 +24,7 @@ export class AgentMetricsController {
    * GET /agent-metrics/:agentId?startDate=...&endDate=...
    */
   @Get(':agentId')
-  @RequirePermissions('reports:read', 'admin:settings')
+  @Roles('ADMIN', 'ADMIN_TI')
   async getAgentMetrics(@Param('agentId') agentId: string, @Query() query: GetMetricsQueryDto) {
     const startDate = new Date(query.startDate);
     const endDate = new Date(query.endDate);
@@ -36,7 +37,7 @@ export class AgentMetricsController {
    * GET /agent-metrics?startDate=...&endDate=...
    */
   @Get()
-  @RequirePermissions('reports:read', 'admin:settings')
+  @Roles('ADMIN', 'ADMIN_TI')
   async getAllMetrics(@Query() query: GetMetricsQueryDto) {
     const startDate = new Date(query.startDate);
     const endDate = new Date(query.endDate);
@@ -51,7 +52,7 @@ export class AgentMetricsController {
    * GET /agent-metrics/ranking/response_time?startDate=...&endDate=...
    */
   @Get('ranking/:metric')
-  @RequirePermissions('reports:read', 'admin:settings')
+  @Roles('ADMIN', 'ADMIN_TI')
   async getRanking(@Param('metric') metric: 'resolved' | 'csat' | 'response_time', @Query() query: GetMetricsQueryDto) {
     const startDate = new Date(query.startDate);
     const endDate = new Date(query.endDate);
@@ -64,7 +65,7 @@ export class AgentMetricsController {
    * POST /agent-metrics/:agentId/update
    */
   @Post(':agentId/update')
-  @RequirePermissions('admin:settings')
+  @Roles('ADMIN')
   async forceUpdate(@Param('agentId') agentId: string) {
     return this.agentMetricsService.updateAgentMetrics(agentId);
   }

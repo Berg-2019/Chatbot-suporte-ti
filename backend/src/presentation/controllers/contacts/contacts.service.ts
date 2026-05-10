@@ -2,7 +2,7 @@
  * Contacts Service - Gerenciamento de contatos por setor
  */
 
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { Sector } from '@prisma/client';
 
@@ -25,6 +25,8 @@ interface UpdateContactDto {
 
 @Injectable()
 export class ContactsService {
+    private readonly logger = new Logger(ContactsService.name);
+
     constructor(private prisma: PrismaService) { }
 
     async findAll(sector?: Sector) {
@@ -315,84 +317,5 @@ export class ContactsService {
             blockRate: totalContacts > 0 ? (blockedContacts / totalContacts) * 100 : 0,
             averageSpamScore: avgSpamScore._avg.spamScore || 0,
         };
-    }
-
-    // =====================================================
-    // Profile Picture Management
-    // =====================================================
-
-    /**
-     * Fetch profile picture from bot service and update contact
-     */
-    async fetchProfilePicture(contactId: string): Promise<{ profilePicUrl: string | null }> {
-        const contact = await this.prisma.contact.findUnique({
-            where: { id: contactId },
-        });
-
-        if (!contact) {
-            throw new NotFoundException('Contato não encontrado');
-        }
-
-        try {
-            // Call bot service to fetch profile picture
-            const botUrl = process.env.BOT_URL || 'http://localhost:3002';
-            const response = await fetch(`${botUrl}/api/profile-picture/${encodeURIComponent(contact.jid)}`);
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch profile picture from bot');
-            }
-
-            const data = await response.json();
-
-            // Update contact with profile picture URL
-            await this.prisma.contact.update({
-                where: { id: contactId },
-                data: {
-                    profilePicUrl: data.profilePicUrl,
-                    profilePicUpdatedAt: new Date(),
-                },
-            });
-
-            return { profilePicUrl: data.profilePicUrl };
-        } catch (error) {
-            console.error(`Error fetching profile picture for ${contact.jid}:`, error);
-            return { profilePicUrl: null };
-        }
-    }
-
-    /**
-     * Fetch profile picture by JID
-     */
-    async fetchProfilePictureByJid(jid: string): Promise<{ profilePicUrl: string | null }> {
-        const contact = await this.prisma.contact.findUnique({
-            where: { jid },
-        });
-
-        if (!contact) {
-            throw new NotFoundException('Contato não encontrado');
-        }
-
-        return this.fetchProfilePicture(contact.id);
-    }
-
-    /**
-     * Update profile picture URL manually
-     */
-    async updateProfilePicture(contactId: string, profilePicUrl: string | null) {
-        const contact = await this.prisma.contact.findUnique({
-            where: { id: contactId },
-        });
-
-        if (!contact) {
-            throw new NotFoundException('Contato não encontrado');
-        }
-
-        return this.prisma.contact.update({
-            where: { id: contactId },
-            data: {
-                profilePicUrl,
-                profilePicUpdatedAt: new Date(),
-            },
-        });
     }
 }

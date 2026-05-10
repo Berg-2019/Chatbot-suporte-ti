@@ -6,7 +6,8 @@
 import { Controller, Post, Delete, Get, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { LabelsService } from './labels.service';
 import { AuthGuard } from '@nestjs/passport';
-import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 
 class AddLabelDto {
   ticketId: string;
@@ -20,7 +21,7 @@ class AddMultipleLabelsDto {
 }
 
 @Controller('labels')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class LabelsController {
   constructor(private readonly labelsService: LabelsService) {}
 
@@ -29,7 +30,7 @@ export class LabelsController {
    * POST /labels
    */
   @Post()
-  @RequirePermissions('tickets:write', 'admin:settings')
+  @Roles('ADMIN', 'ADMIN_TI', 'AGENT')
   async addLabel(@Body() dto: AddLabelDto) {
     return this.labelsService.addLabel(dto);
   }
@@ -39,7 +40,7 @@ export class LabelsController {
    * POST /labels/bulk
    */
   @Post('bulk')
-  @RequirePermissions('tickets:write', 'admin:settings')
+  @Roles('ADMIN', 'ADMIN_TI', 'AGENT')
   async addMultipleLabels(@Body() dto: AddMultipleLabelsDto) {
     return this.labelsService.addMultipleLabels(dto.ticketId, dto.labels);
   }
@@ -49,7 +50,7 @@ export class LabelsController {
    * DELETE /labels/:ticketId/:label
    */
   @Delete(':ticketId/:label')
-  @RequirePermissions('tickets:write', 'admin:settings')
+  @Roles('ADMIN', 'ADMIN_TI', 'AGENT')
   async removeLabel(@Param('ticketId') ticketId: string, @Param('label') label: string) {
     return this.labelsService.removeLabel(ticketId, label);
   }
@@ -59,7 +60,7 @@ export class LabelsController {
    * GET /labels/ticket/:ticketId
    */
   @Get('ticket/:ticketId')
-  @RequirePermissions('tickets:read')
+  @Roles('ADMIN', 'ADMIN_TI', 'AGENT')
   async getTicketLabels(@Param('ticketId') ticketId: string) {
     return this.labelsService.getTicketLabels(ticketId);
   }
@@ -69,7 +70,7 @@ export class LabelsController {
    * GET /labels/unique
    */
   @Get('unique')
-  @RequirePermissions('tickets:read')
+  @Roles('ADMIN', 'ADMIN_TI', 'AGENT')
   async getAllUniqueLabels() {
     return this.labelsService.getAllUniqueLabels();
   }
@@ -79,7 +80,7 @@ export class LabelsController {
    * GET /labels/search?label=urgente
    */
   @Get('search')
-  @RequirePermissions('tickets:read')
+  @Roles('ADMIN', 'ADMIN_TI', 'AGENT')
   async searchByLabel(@Query('label') label: string) {
     return this.labelsService.getTicketsByLabel(label);
   }
@@ -89,7 +90,7 @@ export class LabelsController {
    * GET /labels/statistics
    */
   @Get('statistics')
-  @RequirePermissions('reports:read', 'admin:settings')
+  @Roles('ADMIN', 'ADMIN_TI')
   async getStatistics() {
     return this.labelsService.getStatistics();
   }

@@ -15,14 +15,12 @@ import {
 } from '@nestjs/common';
 import { CsatService } from '../../../infrastructure/services/csat.service';
 import { AuthGuard } from '@nestjs/passport';
-import {
-  RequirePermissions,
-  RequireAnyPermission,
-} from '../../../common/decorators/require-permissions.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { SendCsatDto, SubmitCsatDto, CsatReportQueryDto, ReviewNoteDto } from './csat.dto';
 
 @Controller('csat')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class CsatController {
   constructor(private readonly csatService: CsatService) { }
 
@@ -32,7 +30,7 @@ export class CsatController {
    * Usado pelo sistema ao fechar ticket
    */
   @Post('send')
-  @RequirePermissions('tickets:write')
+  @Roles('ADMIN', 'AGENT')
   async sendCsat(@Body() dto: SendCsatDto) {
     return this.csatService.sendCsat(dto);
   }
@@ -52,7 +50,7 @@ export class CsatController {
    * Buscar CSAT de um ticket específico
    */
   @Get('ticket/:ticketId')
-  @RequirePermissions('tickets:read')
+  @Roles('ADMIN', 'AGENT')
   async findByTicket(@Param('ticketId') ticketId: string) {
     return this.csatService.findByTicket(ticketId);
   }
@@ -62,7 +60,7 @@ export class CsatController {
    * Listar todas as respostas CSAT com filtros
    */
   @Get()
-  @RequirePermissions('reports:read')
+  @Roles('ADMIN', 'AGENT')
   async findAll(@Query() query: CsatReportQueryDto) {
     const filters = {
       assignedToId: query.assignedToId,
@@ -79,7 +77,7 @@ export class CsatController {
    * Estatísticas gerais de CSAT
    */
   @Get('stats')
-  @RequirePermissions('reports:read')
+  @Roles('ADMIN', 'AGENT')
   async getStats(@Query() query: CsatReportQueryDto) {
     const filters = {
       assignedToId: query.assignedToId,
@@ -95,7 +93,7 @@ export class CsatController {
    * Estatísticas por técnico
    */
   @Get('stats/by-technician')
-  @RequireAnyPermission('reports:read', 'users:read')
+  @Roles('ADMIN', 'AGENT')
   async getStatsByTechnician(@Query() query: CsatReportQueryDto) {
     const startDate = query.startDate ? new Date(query.startDate) : undefined;
     const endDate = query.endDate ? new Date(query.endDate) : undefined;
@@ -108,7 +106,7 @@ export class CsatController {
    * Adicionar nota de revisão (admin/supervisor)
    */
   @Patch('ticket/:ticketId/review')
-  @RequireAnyPermission('admin:settings', 'reports:write')
+  @Roles('ADMIN')
   async addReviewNote(
     @Param('ticketId') ticketId: string,
     @Body() dto: ReviewNoteDto

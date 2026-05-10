@@ -14,10 +14,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { PartsService } from './parts.service';
 
 @Controller('parts')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class PartsController {
   constructor(private partsService: PartsService) {}
 
@@ -37,6 +39,7 @@ export class PartsController {
   }
 
   @Post()
+  @Roles('ADMIN', 'ADMIN_TI', 'STOCK_MANAGER')
   async create(
     @Body()
     dto: {
@@ -52,6 +55,7 @@ export class PartsController {
   }
 
   @Put(':id')
+  @Roles('ADMIN', 'ADMIN_TI', 'STOCK_MANAGER')
   async update(
     @Param('id') id: string,
     @Body()
@@ -68,6 +72,7 @@ export class PartsController {
   }
 
   @Post(':id/add-stock')
+  @Roles('ADMIN', 'ADMIN_TI', 'STOCK_MANAGER')
   async addStock(
     @Param('id') id: string,
     @Body('quantity') quantity: number,
@@ -76,6 +81,7 @@ export class PartsController {
   }
 
   @Post(':id/remove-stock')
+  @Roles('ADMIN', 'ADMIN_TI', 'STOCK_MANAGER')
   async removeStock(
     @Param('id') id: string,
     @Body('quantity') quantity: number,
@@ -84,6 +90,7 @@ export class PartsController {
   }
 
   @Delete(':id')
+  @Roles('ADMIN', 'ADMIN_TI', 'STOCK_MANAGER')
   async deactivate(@Param('id') id: string) {
     return this.partsService.deactivate(id);
   }

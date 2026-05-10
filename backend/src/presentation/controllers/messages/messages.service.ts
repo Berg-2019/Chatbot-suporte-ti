@@ -2,12 +2,13 @@
  * Messages Service
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { SlaService } from '../sla/sla.service';
 import { Direction, MessageType } from '@prisma/client';
+import { redactName } from '../../../infrastructure/logger/redact';
 
 interface CreateMessageDto {
   ticketId: string;
@@ -22,6 +23,8 @@ interface CreateMessageDto {
 
 @Injectable()
 export class MessagesService {
+  private readonly logger = new Logger(MessagesService.name);
+
   constructor(
     private prisma: PrismaService,
     private rabbitmq: RabbitMQService,
@@ -180,7 +183,7 @@ export class MessagesService {
           ticketId,
         });
 
-        console.log(`💬 Notificação de @mention enviada para ${user.name}`);
+        this.logger.debug(`💬 Notificação de @mention enviada para uid:${user.id.slice(0, 8)}`);
       }
 
       // Notificar via Socket.IO também (para notificações no painel)
@@ -195,7 +198,7 @@ export class MessagesService {
         },
       });
     } catch (error: any) {
-      console.error('⚠️ Erro ao notificar usuários mencionados:', error.message);
+      this.logger.error('⚠️ Erro ao notificar usuários mencionados', error.message);
       // Não bloqueia a criação da mensagem se notificação falhar
     }
   }
@@ -213,7 +216,7 @@ export class MessagesService {
       });
 
       if (existing) {
-        console.log(`⚠️ Mensagem duplicada ignorada: ${waMessageId}`);
+        this.logger.debug(`⚠️ Mensagem duplicada ignorada: ${waMessageId}`);
         return { message: existing, isNew: false };
       }
     }

@@ -15,6 +15,8 @@ import {
   Request,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
 import { PurchasesService } from './purchases.service';
 import { SuppliersService } from './suppliers.service';
 
@@ -22,7 +24,8 @@ import { SuppliersService } from './suppliers.service';
 type EquipmentCategory = 'COMPUTER' | 'PRINTER' | 'MONITOR' | 'PERIPHERAL' | 'NETWORK' | 'SOFTWARE' | 'OTHER';
 
 @Controller('purchases')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'ADMIN_COMPRAS')
 export class PurchasesController {
   constructor(
     private purchasesService: PurchasesService,

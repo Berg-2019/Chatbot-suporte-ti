@@ -5,10 +5,8 @@
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { AdaptiveLearningService } from '../../../infrastructure/ai/adaptive-learning.service';
-import { RAGService } from '../../../infrastructure/ai/rag.service';
-import { KnowledgeBaseService } from '../../../infrastructure/ai/knowledge-base.service';
 import axios from 'axios';
+import { redactPII } from '../../../infrastructure/logger/redact';
 
 // Intenções suportadas
 export enum Intent {
@@ -38,20 +36,10 @@ export class IntentService implements OnModuleInit {
   private minimaxApiKey: string; // Provider cloud principal
   private glmApiKey: string; // Provider cloud alternativo (quando disponível)
   private enabled: boolean = false;
-  private adaptiveLearning?: AdaptiveLearningService;
-  private ragService?: RAGService;
-  private knowledgeBase?: KnowledgeBaseService;
 
   constructor(
     private prisma: PrismaService,
-    adaptiveLearning?: AdaptiveLearningService,
-    ragService?: RAGService,
-    knowledgeBase?: KnowledgeBaseService,
   ) {
-    this.adaptiveLearning = adaptiveLearning;
-    this.ragService = ragService;
-    this.knowledgeBase = knowledgeBase;
-    // Configuração Ollama (local ou remoto)
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
     this.ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5:3b'; // ou 'chatglm3:6b', 'llama3.2:3b'
 
@@ -104,41 +92,6 @@ export class IntentService implements OnModuleInit {
     const startTime = Date.now();
 
     try {
-      // 🧠 ADAPTIVE AI: Verificar se existe sugestão de padrão aprendido
-      let suggestedIntent: string | null = null;
-      if (this.adaptiveLearning) {
-        suggestedIntent = await this.adaptiveLearning.suggestIntentFromPatterns(userMessage);
-        if (suggestedIntent) {
-          this.logger.log(`🎯 Padrão detectado sugere intent: ${suggestedIntent}`);
-        }
-      }
-
-      // 🔍 RAG: Buscar contexto de conversas similares
-      let ragContext = '';
-      if (this.ragService) {
-        try {
-          ragContext = await this.ragService.generateContext(userMessage);
-        } catch (error: any) {
-          this.logger.warn(`⚠️ Erro ao gerar contexto RAG: ${error.message}`);
-        }
-      }
-
-      // 📚 Knowledge Base: Buscar conhecimento técnico relevante
-      let knowledgeContext = '';
-      if (this.knowledgeBase) {
-        try {
-          knowledgeContext = await this.knowledgeBase.generateEnrichedContext(userMessage);
-          if (knowledgeContext) {
-            this.logger.log(`📚 Contexto enriquecido com base de conhecimento`);
-          }
-        } catch (error: any) {
-          this.logger.warn(`⚠️ Erro ao buscar base de conhecimento: ${error.message}`);
-        }
-      }
-
-      // Combinar RAG + Knowledge Base
-      const fullContext = [ragContext, knowledgeContext].filter(c => c.length > 0).join('\n\n');
-
       let result;
       let usedProvider = 'minimax';
       let usedModel = 'MiniMax-M2.5';
@@ -147,20 +100,20 @@ export class IntentService implements OnModuleInit {
       if (this.minimaxApiKey) {
         try {
           this.logger.log(`🤖 Usando MiniMax (MiniMax-M2.5) como provider primário...`);
-          result = await this.classifyWithMiniMax(userMessage, fullContext, suggestedIntent);
+          result = await this.classifyWithMiniMax(userMessage);
         } catch (error) {
           this.logger.warn(`MiniMax falhou, tentando Ollama como fallback...`);
 
           // Fallback para Ollama se disponível
           if (this.enabled) {
             try {
-              result = await this.classifyWithOllama(userMessage, fullContext, suggestedIntent);
+              result = await this.classifyWithOllama(userMessage);
               usedProvider = 'ollama';
               usedModel = this.ollamaModel;
             } catch (ollamaError) {
               this.logger.warn(`Ollama falhou, tentando GLM-4...`);
               if (this.glmApiKey) {
-                result = await this.classifyWithGLM(userMessage, fullContext, suggestedIntent);
+                result = await this.classifyWithGLM(userMessage);
                 usedProvider = 'glm';
                 usedModel = 'glm-4-flash';
               } else {
@@ -168,7 +121,7 @@ export class IntentService implements OnModuleInit {
               }
             }
           } else if (this.glmApiKey) {
-            result = await this.classifyWithGLM(userMessage, fullContext, suggestedIntent);
+            result = await this.classifyWithGLM(userMessage);
             usedProvider = 'glm';
             usedModel = 'glm-4-flash';
           } else {
@@ -178,12 +131,12 @@ export class IntentService implements OnModuleInit {
       } else if (this.enabled) {
         // Ollama como segunda opção se MiniMax não configurado
         try {
-          result = await this.classifyWithOllama(userMessage, fullContext, suggestedIntent);
+          result = await this.classifyWithOllama(userMessage);
           usedProvider = 'ollama';
           usedModel = this.ollamaModel;
         } catch (error) {
           if (this.glmApiKey) {
-            result = await this.classifyWithGLM(userMessage, fullContext, suggestedIntent);
+            result = await this.classifyWithGLM(userMessage);
             usedProvider = 'glm';
             usedModel = 'glm-4-flash';
           } else {
@@ -191,7 +144,7 @@ export class IntentService implements OnModuleInit {
           }
         }
       } else if (this.glmApiKey) {
-        result = await this.classifyWithGLM(userMessage, fullContext, suggestedIntent);
+        result = await this.classifyWithGLM(userMessage);
         usedProvider = 'glm';
         usedModel = 'glm-4-flash';
       } else {
@@ -231,26 +184,7 @@ export class IntentService implements OnModuleInit {
     }
   }
 
-  private getPrompt(userMessage: string, ragContext?: string, suggestedIntent?: string): string {
-    // Prompt otimizado: menos tokens, mais eficiente
-
-    // Se temos sugestão de padrão com alta confiança, usar prompt curto
-    if (suggestedIntent) {
-      return `Mensagem: "${userMessage}"
-Padrão aprendido sugere: ${suggestedIntent}
-Confirme ou corrija. JSON: {"intent":"...","confidence":0.95,"entities":{}}`;
-    }
-
-    // Se temos RAG context, usar versão compacta com exemplo
-    if (ragContext && ragContext.length > 0) {
-      return `${ragContext}
-
-Msg: "${userMessage}"
-Classifique usando padrões acima.
-JSON: {"intent":"...","confidence":0.95,"entities":{}}`;
-    }
-
-    // Prompt otimizado com exemplos ULTRA-ESPECÍFICOS
+  private getPrompt(userMessage: string): string {
     return `Classifique a mensagem:
 
 "${userMessage}"
@@ -280,8 +214,8 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
    * Classifica usando GLM-4 (Zhipu AI) via API
    * Modelo recomendado: glm-4-flash (rápido e barato) ou glm-4 (mais preciso)
    */
-  private async classifyWithGLM(userMessage: string, ragContext?: string, suggestedIntent?: string | null): Promise<Omit<ClassificationResult, 'processingTime'>> {
-    const prompt = this.getPrompt(userMessage, ragContext, suggestedIntent || undefined);
+  private async classifyWithGLM(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
+    const prompt = this.getPrompt(userMessage);
 
     try {
       const response = await axios.post(
@@ -344,7 +278,7 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
     } catch (error: any) {
       this.logger.error(`GLM-4 fallback failed: ${error.message}`);
       if (error.response?.data) {
-        this.logger.error(`GLM-4 error details: ${JSON.stringify(error.response.data)}`);
+        this.logger.error(`GLM-4 error details: ${redactPII(JSON.stringify(error.response.data))}`);
       }
       throw error;
     }
@@ -354,8 +288,8 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
    * Classifica usando MiniMax AI via API
    * Provider cloud principal (fallback quando Ollama offline)
    */
-  private async classifyWithMiniMax(userMessage: string, ragContext?: string, suggestedIntent?: string | null): Promise<Omit<ClassificationResult, 'processingTime'>> {
-    const prompt = this.getPrompt(userMessage, ragContext, suggestedIntent || undefined);
+  private async classifyWithMiniMax(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
+    const prompt = this.getPrompt(userMessage);
 
     try {
       // MiniMax agora usa formato OpenAI-compatible
@@ -423,14 +357,14 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
     } catch (error: any) {
       this.logger.error(`MiniMax fallback failed: ${error.message}`);
       if (error.response?.data) {
-        this.logger.error(`MiniMax error details: ${JSON.stringify(error.response.data)}`);
+        this.logger.error(`MiniMax error details: ${redactPII(JSON.stringify(error.response.data))}`);
       }
       throw error;
     }
   }
 
-  private async classifyWithOllama(userMessage: string, ragContext?: string, suggestedIntent?: string | null): Promise<Omit<ClassificationResult, 'processingTime'>> {
-    const prompt = this.getPrompt(userMessage, ragContext, suggestedIntent || undefined);
+  private async classifyWithOllama(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
+    const prompt = this.getPrompt(userMessage);
 
     try {
       // Chamar API do Ollama

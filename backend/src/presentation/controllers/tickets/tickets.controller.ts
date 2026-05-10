@@ -13,28 +13,74 @@ import {
   UseGuards,
   Request,
   Res,
-  NotFoundException,
   SetMetadata,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
-import { createReadStream, existsSync } from 'fs';
+import { IsString, IsOptional, IsEnum, IsUUID, MinLength } from 'class-validator';
 import { TicketsService } from './tickets.service';
-import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { TicketStatus, Priority, TicketType } from '@prisma/client';
+import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { AuthUser } from '../../../domain/auth-user';
+import { HermesApiKeyGuard } from '../hermes/guards/hermes-api-key.guard';
+
+class CreateTicketDto {
+  @IsString()
+  @MinLength(3)
+  title: string;
+
+  @IsString()
+  @MinLength(5)
+  description: string;
+
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  customerName?: string;
+
+  @IsOptional()
+  @IsEnum(Sector)
+  sector?: Sector;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsEnum(Priority)
+  priority?: Priority;
+
+  @IsOptional()
+  @IsEnum(TicketType)
+  type?: TicketType;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsUUID()
+  assignedToId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  affectedAssetId?: string;
+}
 
 @Controller('tickets')
 @UseGuards(AuthGuard('jwt'), SectorGuard, RolesGuard)
 export class TicketsController {
   constructor(
     private ticketsService: TicketsService,
-    private prisma: PrismaService,
   ) { }
 
   @Get()
@@ -48,6 +94,7 @@ export class TicketsController {
     @Query('limit') limit?: string,
     @Query('type') type?: TicketType,
   ) {
+    const user = req.user as AuthUser;
     return this.ticketsService.findAll({
       status,
       assignedToId,
@@ -55,8 +102,8 @@ export class TicketsController {
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
       type,
-      sector: req.user.sector,
-      isAdmin: req.user.role.startsWith('ADMIN_'),
+      sector: user.sector as Sector,
+      isAdmin: user.role.startsWith('ADMIN_'),
     });
   }
 
@@ -67,32 +114,17 @@ export class TicketsController {
 
   @Get(':id')
   async findById(@Param('id') id: string, @Request() req: any) {
-    return this.ticketsService.findById(id, req.user);
+    return this.ticketsService.findById(id, req.user as AuthUser);
   }
 
   @Post()
-  async create(
-    @Body()
-    dto: {
-      title: string;
-      description: string;
-      phoneNumber?: string;
-      customerName?: string;
-      sector?: string;
-      category?: string;
-      priority?: Priority;
-      type?: TicketType;
-      location?: string;
-      assignedToId?: string;
-      affectedAssetId?: string;
-    },
-  ) {
-    return this.ticketsService.create(dto as any);
+  async create(@Body() dto: CreateTicketDto) {
+    return this.ticketsService.create(dto);
   }
 
   @Post(':id/assign')
   async assign(@Param('id') id: string, @Request() req: any) {
-    return this.ticketsService.assign(id, { userId: req.user.id });
+    return this.ticketsService.assign(id, { userId: (req.user as AuthUser).id });
   }
 
   @Post(':id/transfer')
@@ -101,7 +133,7 @@ export class TicketsController {
     @Body('userId') newUserId: string,
     @Request() req: any,
   ) {
-    return this.ticketsService.transfer(id, newUserId, req.user.id);
+    return this.ticketsService.transfer(id, newUserId, (req.user as AuthUser).id);
   }
 
   @Put(':id/status')
@@ -130,7 +162,7 @@ export class TicketsController {
       }>;
     },
   ) {
-    return this.ticketsService.close(id, closeData, req.user?.id);
+    return this.ticketsService.close(id, closeData, (req.user as AuthUser)?.id);
   }
 
   // === Novos endpoints para bot ===
@@ -155,27 +187,23 @@ export class TicketsController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadAttachment(
     @Param('id') id: string,
-    @UploadedFile() file: any,
+    @UploadedFile() file: Express.Multer.File,
     @Request() req: any,
   ) {
-    if (!file) throw new Error('Arquivo não enviado');
-    return this.ticketsService.addAttachment(id, file, req.user?.id);
+    if (!file) throw new BadRequestException('Arquivo não enviado');
+    return this.ticketsService.addAttachment(id, file, (req.user as AuthUser)?.id);
   }
 
-  // Endpoint público (sem JWT) para o bot baixar o anexo
   @Get('attachments/:attachmentId/file')
-  @SetMetadata('isPublic', true)
+  @UseGuards(HermesApiKeyGuard)
   async serveAttachment(
     @Param('attachmentId') attachmentId: string,
     @Res() res: Response,
   ) {
-    const att = await this.prisma.attachment.findUnique({ where: { id: attachmentId } });
-    if (!att || !existsSync(att.path)) {
-      throw new NotFoundException('Anexo não encontrado');
-    }
-    res.setHeader('Content-Type', att.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${att.filename}"`);
-    createReadStream(att.path).pipe(res);
+    const { stream, mimeType, filename } = await this.ticketsService.getAttachmentStream(attachmentId);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    stream.pipe(res);
   }
 
   @Post(':id/auto-assign')

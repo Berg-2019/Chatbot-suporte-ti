@@ -2,7 +2,7 @@
  * Printer Service - Monitoramento de impressoras via SNMP
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
  
@@ -42,6 +42,8 @@ export interface PrinterStatus {
 
 @Injectable()
 export class PrinterService {
+  private readonly logger = new Logger(PrinterService.name);
+
   constructor(private prisma: PrismaService) { }
 
   async findAll() {
@@ -115,7 +117,7 @@ export class PrinterService {
 
       return status;
     } catch (error: any) {
-      console.error(`❌ Erro SNMP ${printer.ip}:`, error.message);
+      this.logger.error(`❌ Erro SNMP ${printer.ip}`, error.message);
 
       await this.prisma.printer.update({
         where: { id },
@@ -174,7 +176,7 @@ export class PrinterService {
 
       return results;
     } catch (error) {
-      console.error('Erro ao buscar status das impressoras:', error);
+      this.logger.error('Erro ao buscar status das impressoras', error);
       return [];
     }
   }

@@ -75,6 +75,30 @@ export class CreateContactDto {
   customAttributes?: any;
 }
 
+export class BlockContactDto {
+  @IsString()
+  blockedBy: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class DetectSpamDto {
+  @IsString()
+  message: string;
+}
+
+export class IncrementSpamScoreDto {
+  @IsOptional()
+  points?: number;
+}
+
+export class UpdateProfilePictureDto {
+  @IsOptional()
+  profilePicUrl?: string | null;
+}
+
 export class UpdateContactDto {
   @IsOptional()
   @IsString()

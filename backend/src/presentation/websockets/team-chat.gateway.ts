@@ -6,6 +6,7 @@ import {
     ConnectedSocket,
     OnGatewayConnection,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { TeamChatService } from '../controllers/team-chat.service';
 import { JwtService } from '@nestjs/jwt';
@@ -18,6 +19,8 @@ import { Sector } from '@prisma/client';
     namespace: '/team-chat',
 })
 export class TeamChatGateway implements OnGatewayConnection {
+    private readonly logger = new Logger(TeamChatGateway.name);
+
     @WebSocketServer()
     server: Server;
 
@@ -34,10 +37,10 @@ export class TeamChatGateway implements OnGatewayConnection {
                 const payload = this.jwt.verify(token);
                 const sector = (payload.sector || 'TI') as Sector;
                 client.join(`team-chat:${sector}`);
-                console.log(`Client ${client.id} joined room team-chat:${sector}`);
+                this.logger.debug(`Client ${client.id} joined room team-chat:${sector}`);
             }
         } catch (e) {
-            console.error('Invalid token in WebSocket connection', e);
+            this.logger.error('Invalid token in WebSocket connection', e);
         }
     }
 

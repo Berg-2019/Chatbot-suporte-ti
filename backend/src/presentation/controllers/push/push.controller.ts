@@ -14,6 +14,11 @@ class SubscribeDto {
   };
 }
 
+class UnsubscribeDto {
+  @IsString()
+  endpoint: string;
+}
+
 @Controller('push')
 export class PushController {
   constructor(private readonly pushService: PushService) {}
@@ -27,7 +32,7 @@ export class PushController {
 
   @Post('unsubscribe')
   @UseGuards(AuthGuard('jwt'))
-  async unsubscribe(@Body() body: { endpoint: string }) {
+  async unsubscribe(@Body() body: UnsubscribeDto) {
     return this.pushService.unsubscribe(body.endpoint);
   }
 }

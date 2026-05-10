@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { ContactsService } from './contacts.service';
-import { UpsertContactDto, CreateContactDto, UpdateContactDto } from './contacts.dto';
+import { UpsertContactDto, CreateContactDto, UpdateContactDto, BlockContactDto, DetectSpamDto, IncrementSpamScoreDto, UpdateProfilePictureDto } from './contacts.dto';
 
 @Controller('contacts')
 @UseGuards(JwtAuthGuard)
@@ -82,7 +82,7 @@ export class ContactsController {
     @Post(':id/block')
     async blockContact(
         @Param('id') id: string,
-        @Body() body: { blockedBy: string; reason?: string },
+        @Body() body: BlockContactDto,
     ) {
         return this.contactsService.blockContact(id, body.blockedBy, body.reason);
     }
@@ -101,7 +101,7 @@ export class ContactsController {
 
     @Post('spam/detect')
     @SetMetadata('isPublic', true) // Allow bot to use
-    async detectSpam(@Body() body: { message: string }) {
+    async detectSpam(@Body() body: DetectSpamDto) {
         return this.contactsService.detectSpamPatterns(body.message);
     }
 
@@ -109,7 +109,7 @@ export class ContactsController {
     @SetMetadata('isPublic', true) // Allow bot to increment
     async incrementSpamScore(
         @Param('jid') jid: string,
-        @Body() body: { points?: number },
+        @Body() body: IncrementSpamScoreDto,
     ) {
         return this.contactsService.incrementSpamScore(
             decodeURIComponent(jid),
@@ -117,35 +117,4 @@ export class ContactsController {
         );
     }
 
-    // =====================================================
-    // Profile Picture Endpoints
-    // =====================================================
-
-    /**
-     * Fetch profile picture from WhatsApp for a contact
-     */
-    @Post(':id/fetch-profile-picture')
-    async fetchProfilePicture(@Param('id') id: string) {
-        return this.contactsService.fetchProfilePicture(id);
-    }
-
-    /**
-     * Fetch profile picture by JID
-     */
-    @Post('jid/:jid/fetch-profile-picture')
-    @SetMetadata('isPublic', true) // Allow bot to fetch
-    async fetchProfilePictureByJid(@Param('jid') jid: string) {
-        return this.contactsService.fetchProfilePictureByJid(decodeURIComponent(jid));
-    }
-
-    /**
-     * Update profile picture URL manually
-     */
-    @Patch(':id/profile-picture')
-    async updateProfilePicture(
-        @Param('id') id: string,
-        @Body() body: { profilePicUrl: string | null },
-    ) {
-        return this.contactsService.updateProfilePicture(id, body.profilePicUrl);
-    }
 }

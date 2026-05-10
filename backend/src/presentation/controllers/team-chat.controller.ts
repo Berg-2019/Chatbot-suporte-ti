@@ -1,8 +1,15 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { SectorGuard } from '../../../common/guards/sector.guard';
+import { IsString, IsNotEmpty } from 'class-validator';
+import { SectorGuard } from '../../common/guards/sector.guard';
 import { TeamChatService } from './team-chat.service';
 import { TeamChatGateway } from '../websockets/team-chat.gateway';
+
+class SendTeamMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  content: string;
+}
 
 @Controller('team-chat')
 @UseGuards(AuthGuard('jwt'), SectorGuard)
@@ -25,7 +32,7 @@ export class TeamChatController {
     @Post('messages/:channelId')
     async sendMessage(
         @Param('channelId') channelId: string,
-        @Body() dto: { content: string },
+        @Body() dto: SendTeamMessageDto,
         @Req() req: any
     ) {
         const userId = req.user.id;
@@ -42,7 +49,7 @@ export class TeamChatController {
     }
 
     @Post()
-    async sendMessageBySector(@Body() dto: { content: string }, @Req() req: any) {
+    async sendMessageBySector(@Body() dto: SendTeamMessageDto, @Req() req: any) {
         const userId = req.user.id;
         const sector = req.user.sector || 'TI';
         const message = await this.service.saveMessage(userId, dto.content, sector);

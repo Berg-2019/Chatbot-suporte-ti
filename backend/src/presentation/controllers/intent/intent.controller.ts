@@ -6,7 +6,6 @@
 import { Controller, Post, Get, Body, Query, UseGuards } from '@nestjs/common';
 import { IntentService } from './intent.service';
 import { AuthGuard } from '@nestjs/passport';
-import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 
 class ClassifyIntentDto {
   userMessage: string;
@@ -28,7 +27,6 @@ export class IntentController {
    * POST /intent/classify
    */
   @Post('classify')
-  @RequirePermissions('admin:settings', 'reports:read')
   async classify(@Body() dto: ClassifyIntentDto) {
     return this.intentService.classify(dto.userMessage, dto.phoneNumber);
   }
@@ -38,7 +36,6 @@ export class IntentController {
    * GET /intent/statistics
    */
   @Get('statistics')
-  @RequirePermissions('reports:read', 'admin:settings')
   async getStatistics(@Query() query: GetStatisticsDto) {
     const startDate = query.startDate ? new Date(query.startDate) : undefined;
     const endDate = query.endDate ? new Date(query.endDate) : undefined;
@@ -51,7 +48,6 @@ export class IntentController {
    * GET /intent/recent?limit=50
    */
   @Get('recent')
-  @RequirePermissions('reports:read', 'admin:settings')
   async getRecent(@Query('limit') limit?: string) {
     const parsedLimit = limit ? parseInt(limit, 10) : 50;
     return this.intentService.getRecentClassifications(parsedLimit);
@@ -74,7 +70,6 @@ export class IntentController {
    * GET /intent/status
    */
   @Get('status')
-  @RequirePermissions('admin:settings')
   async getStatus() {
     return this.intentService.getStatus();
   }

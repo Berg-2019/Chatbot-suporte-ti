@@ -9,6 +9,7 @@ import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.serv
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { SlaService } from '../sla/sla.service';
 import { PushService } from '../push/push.service';
+import { StockService } from '../stock/stock.service';
 import { Sector } from '@prisma/client';
 
 describe('TicketsService', () => {
@@ -23,6 +24,23 @@ describe('TicketsService', () => {
       update: jest.fn(),
       count: jest.fn(),
     },
+    partUsage: {
+      create: jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    stockItem: {
+      findUnique: jest.fn(),
+    },
+    contact: {
+      upsert: jest.fn().mockResolvedValue({}),
+    },
+    attachment: {
+      findUnique: jest.fn(),
+    },
+    user: {
+      findMany: jest.fn(),
+    },
+    $transaction: jest.fn((ops: any[]) => Promise.resolve(ops)),
   };
 
   const mockRabbitMQService = {
@@ -43,6 +61,10 @@ describe('TicketsService', () => {
     sendToRole: jest.fn().mockResolvedValue({ sent: 0 }),
   };
 
+  const mockStockService = {
+    registerMovement: jest.fn().mockResolvedValue({}),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -52,6 +74,7 @@ describe('TicketsService', () => {
         { provide: AutomationEngineService, useValue: mockAutomationEngine },
         { provide: SlaService, useValue: mockSlaService },
         { provide: PushService, useValue: mockPushService },
+        { provide: StockService, useValue: mockStockService },
       ],
     }).compile();
 

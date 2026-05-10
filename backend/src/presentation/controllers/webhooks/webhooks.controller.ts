@@ -13,8 +13,8 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-// import { PermissionsGuard } from '../../../common/guards/permissions.guard';  // DISABLED - requires customRole model
-import { RequirePermissions, RequireAllPermissions } from '../../../common/decorators/require-permissions.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { WebhookService } from '../../../infrastructure/services/webhook.service';
 import {
   CreateWebhookDto,
@@ -23,7 +23,7 @@ import {
 } from '../../../domain/dtos/webhook';
 
 @Controller('webhooks')
-@UseGuards(AuthGuard('jwt'))  // PermissionsGuard DISABLED
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class WebhooksController {
   constructor(private readonly webhookService: WebhookService) {}
 
@@ -32,7 +32,7 @@ export class WebhooksController {
    * Listar todos os webhooks
    */
   @Get()
-  @RequirePermissions('webhooks:view')
+  @Roles('ADMIN')
   async findAll(@Query() query: QueryWebhookDto) {
     return this.webhookService.findAll(query);
   }
@@ -42,7 +42,7 @@ export class WebhooksController {
    * Buscar webhook por ID
    */
   @Get(':id')
-  @RequirePermissions('webhooks:view')
+  @Roles('ADMIN')
   async findOne(@Param('id') id: string) {
     return this.webhookService.findOne(id);
   }
@@ -52,7 +52,7 @@ export class WebhooksController {
    * Obter logs de execução (requer permissão de auditoria)
    */
   @Get(':id/logs')
-  @RequireAllPermissions('webhooks:view', 'audit:view')
+  @Roles('ADMIN')
   async getLogs(@Param('id') id: string, @Query('limit') limit?: string) {
     const parsedLimit = limit ? parseInt(limit, 10) : 50;
     return this.webhookService.getLogs(id, parsedLimit);
@@ -63,7 +63,7 @@ export class WebhooksController {
    * Obter estatísticas do webhook
    */
   @Get(':id/stats')
-  @RequirePermissions('webhooks:view')
+  @Roles('ADMIN')
   async getStats(@Param('id') id: string) {
     return this.webhookService.getStats(id);
   }
@@ -73,7 +73,7 @@ export class WebhooksController {
    * Criar novo webhook
    */
   @Post()
-  @RequirePermissions('webhooks:create')
+  @Roles('ADMIN')
   async create(@Body() dto: CreateWebhookDto, @Req() req: any) {
     return this.webhookService.create({
       ...dto,
@@ -86,7 +86,7 @@ export class WebhooksController {
    * Testar webhook manualmente (operação sensível)
    */
   @Post(':id/test')
-  @RequireAllPermissions('webhooks:test', 'webhooks:view')
+  @Roles('ADMIN')
   async test(@Param('id') id: string) {
     return this.webhookService.test(id);
   }
@@ -96,7 +96,7 @@ export class WebhooksController {
    * Atualizar webhook
    */
   @Patch(':id')
-  @RequirePermissions('webhooks:update')
+  @Roles('ADMIN')
   async update(@Param('id') id: string, @Body() dto: UpdateWebhookDto) {
     return this.webhookService.update(id, dto);
   }
@@ -106,7 +106,7 @@ export class WebhooksController {
    * Deletar webhook (operação sensível)
    */
   @Delete(':id')
-  @RequireAllPermissions('webhooks:delete', 'audit:view')
+  @Roles('ADMIN')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('id') id: string) {
     await this.webhookService.delete(id);

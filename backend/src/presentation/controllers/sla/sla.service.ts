@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { SlaCalculatorService } from '../../../infrastructure/sla/sla-calculator.service';
 import { AlertService } from '../../../infrastructure/services/alert.service';
 import { Priority, Sector } from '@prisma/client';
+import { CreateSlaPolicyDto, UpdateSlaPolicyDto } from './dto/sla-policy.dto';
 
 @Injectable()
 export class SlaService {
@@ -158,6 +159,46 @@ export class SlaService {
       this.prisma.slaTimer.count({ where: { resolutionBreached: false, resolutionMetAt: null, resolutionDueAt: { lt: warningThreshold } } }),
     ]);
     return { total, responseBreached, resolutionBreached, responseWarning, resolutionWarning };
+  }
+
+  async getPolicies(sector?: string, priority?: string) {
+    const where: any = {};
+    if (sector) where.sector = sector;
+    if (priority) where.priority = priority;
+    return this.prisma.slaPolicy.findMany({ where, include: { businessHours: true } });
+  }
+
+  async getPolicy(id: string) {
+    const policy = await this.prisma.slaPolicy.findUnique({
+      where: { id },
+      include: { businessHours: true },
+    });
+    if (!policy) throw new NotFoundException(`SlaPolicy ${id} not found`);
+    return policy;
+  }
+
+  async createPolicy(dto: CreateSlaPolicyDto) {
+    const existing = await this.prisma.slaPolicy.findUnique({
+      where: { sector_priority: { sector: dto.sector, priority: dto.priority } },
+    });
+    if (existing) {
+      throw new ConflictException(`SlaPolicy for sector=${dto.sector} priority=${dto.priority} already exists`);
+    }
+    return this.prisma.slaPolicy.create({ data: dto });
+  }
+
+  async updatePolicy(id: string, dto: UpdateSlaPolicyDto) {
+    const existing = await this.prisma.slaPolicy.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`SlaPolicy ${id} not found`);
+    if (dto.sector && dto.priority) {
+      const conflict = await this.prisma.slaPolicy.findFirst({
+        where: { sector: dto.sector, priority: dto.priority, id: { not: id } },
+      });
+      if (conflict) {
+        throw new ConflictException(`SlaPolicy for sector=${dto.sector} priority=${dto.priority} already exists`);
+      }
+    }
+    return this.prisma.slaPolicy.update({ where: { id }, data: dto });
   }
 
   /**

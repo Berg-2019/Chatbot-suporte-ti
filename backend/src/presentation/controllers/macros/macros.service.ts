@@ -5,6 +5,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { MacroActionType } from './macros.dto';
+import { redactName } from '../../../infrastructure/logger/redact';
 
 export interface BulkActionResult {
     success: number;
@@ -131,7 +132,7 @@ export class MacrosService {
             data: { assignedToId: agentId },
         });
 
-        this.logger.debug(`Assigned ticket ${ticketId} to agent ${agent.name}`);
+        this.logger.debug(`Assigned ticket ${ticketId} to agent uid:${agent.id.slice(0, 8)}`);
     }
 
     /**

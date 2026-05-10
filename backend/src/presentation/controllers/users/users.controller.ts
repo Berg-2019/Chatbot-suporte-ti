@@ -14,18 +14,24 @@ import {
   ForbiddenException,
   BadRequestException,
   Request,
+  Logger,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { UsersService } from './users.service';
 
 @Controller('users')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(
     private usersService: UsersService,
   ) { }
 
   @Get()
+  @Roles('ADMIN')
   async findAll(@Request() req: any) {
     if (req.user.role !== 'ADMIN') {
       throw new ForbiddenException('Apenas admins');
@@ -39,6 +45,7 @@ export class UsersController {
   }
 
   @Post()
+  @Roles('ADMIN')
   async createLocalUser(
     @Body() data: {
       name: string;
@@ -73,9 +80,9 @@ export class UsersController {
     @Param('id') id: string,
     @Body() data: { status: 'ONLINE' | 'BUSY' | 'IN_SERVICE' | 'IDLE' | 'OFFLINE' },
   ) {
-    console.log(`📊 Atualizando status do usuário ${id} para ${data.status}`);
+    this.logger.debug(`📊 Atualizando status do usuário ${id} para ${data.status}`);
     const result = await this.usersService.updateStatus(id, data.status);
-    console.log(`✅ Status atualizado com sucesso:`, result);
+    this.logger.debug(`✅ Status atualizado com sucesso`);
     return result;
   }
 
@@ -90,6 +97,7 @@ export class UsersController {
   }
 
   @Put(':id')
+  @Roles('ADMIN')
   async update(
     @Param('id') id: string,
     @Body() data: { name?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; email?: string; department?: string; permissions?: string[] },
@@ -102,6 +110,7 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @Roles('ADMIN')
   async delete(@Param('id') id: string, @Request() req: any) {
     if (req.user.role !== 'ADMIN') {
       throw new ForbiddenException('Apenas admins');

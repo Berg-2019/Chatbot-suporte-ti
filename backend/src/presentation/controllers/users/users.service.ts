@@ -2,11 +2,13 @@
  * Users Service
  */
 
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private prisma: PrismaService) { }
 
   async findAll() {
@@ -166,7 +168,7 @@ export class UsersService {
   // --- Agent Status Methods ---
 
   async updateStatus(userId: string, status: 'ONLINE' | 'BUSY' | 'IN_SERVICE' | 'IDLE' | 'OFFLINE') {
-    console.log(`🔄 UsersService.updateStatus - userId: ${userId}, status: ${status}`);
+    this.logger.debug(`🔄 UsersService.updateStatus - userId: ${userId}, status: ${status}`);
 
     const result = await this.prisma.user.update({
       where: { id: userId },
@@ -187,7 +189,7 @@ export class UsersService {
       },
     });
 
-    console.log(`✅ Status atualizado no banco:`, result);
+    this.logger.debug(`✅ Status atualizado no banco`);
     return result;
   }
 

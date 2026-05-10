@@ -2,7 +2,7 @@
  * Parts Service - Controle de Estoque de Peças
  */
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -104,7 +104,7 @@ export class PartsService {
     if (!part) throw new NotFoundException('Peça não encontrada');
     
     if (part.quantity < quantity) {
-      throw new Error('Estoque insuficiente');
+      throw new BadRequestException('Estoque insuficiente');
     }
 
     return this.prisma.part.update({

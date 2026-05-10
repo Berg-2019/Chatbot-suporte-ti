@@ -22,10 +22,12 @@ import {
 } from '@nestjs/common';
 import { HermesApiKeyGuard } from './guards/hermes-api-key.guard';
 import { HermesService } from './hermes.service';
+import { redactPhone } from '../../../infrastructure/logger/redact';
 import {
   CreateHermesTicketDto,
   EscalateDto,
   CreateHermesReservationDto,
+  MarkFaqHelpfulDto,
 } from './dto';
 
 @Controller('hermes')
@@ -109,7 +111,7 @@ export class HermesController {
   @HttpCode(HttpStatus.OK)
   async markFaqHelpful(
     @Param('id') id: string,
-    @Body() body: { helpful: boolean },
+    @Body() body: MarkFaqHelpfulDto,
   ) {
     return this.hermesService.markFaqHelpful(id, body.helpful);
   }
@@ -158,7 +160,7 @@ export class HermesController {
   @Post('escalate')
   @HttpCode(HttpStatus.OK)
   async escalateToAgent(@Body() dto: EscalateDto) {
-    this.logger.log(`📥 Hermes → Escalação: ${dto.phone} | ${dto.urgency}`);
+    this.logger.log(`📥 Hermes → Escalação: ${redactPhone(dto.phone)} | ${dto.urgency}`);
     return this.hermesService.escalateToAgent(dto);
   }
 

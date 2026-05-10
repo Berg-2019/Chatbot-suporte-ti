@@ -14,12 +14,34 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import { IsBoolean, IsOptional, IsString, IsNotEmpty, IsInt, Min, Max } from 'class-validator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 import { KnowledgeService } from './knowledge.service';
 import { KnowledgeSearchService } from './knowledge-search.service';
+
+class FeedbackDto {
+  @IsBoolean()
+  helpful: boolean;
+
+  @IsOptional()
+  @IsString()
+  comment?: string;
+}
+
+class SuggestArticlesDto {
+  @IsString()
+  @IsNotEmpty()
+  message: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
+}
 
 @Controller('knowledge')
 @UseGuards(JwtAuthGuard, SectorGuard, RolesGuard)
@@ -119,7 +141,7 @@ export class KnowledgeController {
   @Post('articles/:id/feedback')
   async markHelpful(
     @Param('id') id: string,
-    @Body() dto: { helpful: boolean; comment?: string },
+    @Body() dto: FeedbackDto,
     @Request() req: any,
   ) {
     return this.knowledgeService.markHelpful(
@@ -132,7 +154,7 @@ export class KnowledgeController {
 
   @Post('search/suggest')
   async suggestArticles(
-    @Body() dto: { message: string; limit?: number },
+    @Body() dto: SuggestArticlesDto,
   ) {
     return this.knowledgeSearchService.suggestArticles(
       dto.message,

@@ -14,34 +14,36 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { SetMetadata } from '@nestjs/common';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { FaqService } from './faq.service';
 
 @Controller('faq')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class FaqController {
   constructor(private faqService: FaqService) {}
 
   // Endpoint público para busca (usado pelo bot)
   @Get('search')
+  @SetMetadata('isPublic', true)
   async search(@Query('q') query: string) {
     if (!query) return [];
     return this.faqService.search(query);
   }
 
-  // Listar todas (requer auth)
   @Get()
-  @UseGuards(AuthGuard('jwt'))
   async findAll(@Query('includeInactive') includeInactive?: string) {
     return this.faqService.findAll(includeInactive === 'true');
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'))
   async findById(@Param('id') id: string) {
     return this.faqService.findById(id);
   }
 
   @Post()
-  @UseGuards(AuthGuard('jwt'))
+  @Roles('ADMIN', 'AGENT')
   async create(
     @Body()
     dto: {
@@ -55,7 +57,7 @@ export class FaqController {
   }
 
   @Put(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @Roles('ADMIN', 'AGENT')
   async update(
     @Param('id') id: string,
     @Body()
@@ -72,18 +74,20 @@ export class FaqController {
 
   // Incrementar views (público - chamado pelo bot)
   @Post(':id/view')
+  @SetMetadata('isPublic', true)
   async incrementViews(@Param('id') id: string) {
     return this.faqService.incrementViews(id);
   }
 
   // Marcar como útil (público - chamado pelo bot)
   @Post(':id/helpful')
+  @SetMetadata('isPublic', true)
   async markHelpful(@Param('id') id: string) {
     return this.faqService.markHelpful(id);
   }
 
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @Roles('ADMIN')
   async deactivate(@Param('id') id: string) {
     return this.faqService.deactivate(id);
   }

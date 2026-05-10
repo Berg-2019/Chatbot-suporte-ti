@@ -6,6 +6,8 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Re
 import { AuthGuard } from '@nestjs/passport';
 import { IsEmail, IsString, IsOptional, MinLength } from 'class-validator';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
 import * as bcrypt from 'bcryptjs';
 
 class CreateUserDto {
@@ -54,7 +56,8 @@ class UpdateUserDto {
 }
 
 @Controller('admin')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'ADMIN_COMPRAS')
 export class AdminController {
   constructor(private prisma: PrismaService) {}
 
