@@ -22,7 +22,6 @@ import { createReadStream } from 'fs';
 import { Sector } from '@prisma/client';
 
 import { TechnicalReportsService } from './technical-reports.service';
-import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import {
@@ -35,7 +34,7 @@ import {
 } from './dto';
 
 @Controller('technical-reports')
-@UseGuards(AuthGuard('jwt'), SectorGuard, RolesGuard)
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class TechnicalReportsController {
   constructor(private readonly service: TechnicalReportsService) {}
 

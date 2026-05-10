@@ -4,13 +4,12 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { LicensesService } from './licenses.service';
-import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { CreateLicenseDto, UpdateLicenseDto, AssignLicenseDto } from './dto';
 
 @Controller('licenses')
-@UseGuards(AuthGuard('jwt'), SectorGuard, RolesGuard)
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class LicensesController {
   constructor(private readonly licensesService: LicensesService) {}
 

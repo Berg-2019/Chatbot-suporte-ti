@@ -25,7 +25,6 @@ import { Response } from 'express';
 import { IsString, IsOptional, IsEnum, IsUUID, MinLength } from 'class-validator';
 import { TicketsService } from './tickets.service';
 import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
-import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { AuthUser } from '../../../domain/auth-user';
@@ -78,7 +77,7 @@ class CreateTicketDto {
 }
 
 @Controller('tickets')
-@UseGuards(AuthGuard('jwt'), SectorGuard, RolesGuard)
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class TicketsController {
   constructor(
     private ticketsService: TicketsService,

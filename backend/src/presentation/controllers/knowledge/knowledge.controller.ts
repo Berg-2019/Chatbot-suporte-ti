@@ -16,7 +16,6 @@ import {
 } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString, IsNotEmpty, IsInt, Min, Max } from 'class-validator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 import { KnowledgeService } from './knowledge.service';
@@ -44,7 +43,7 @@ class SuggestArticlesDto {
 }
 
 @Controller('knowledge')
-@UseGuards(JwtAuthGuard, SectorGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class KnowledgeController {
   constructor(
     private knowledgeService: KnowledgeService,

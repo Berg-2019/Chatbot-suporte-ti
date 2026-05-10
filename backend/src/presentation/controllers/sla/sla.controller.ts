@@ -3,13 +3,12 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SlaService } from './sla.service';
-import { SectorGuard } from '../../../common/guards/sector.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { CreateSlaPolicyDto, UpdateSlaPolicyDto } from './dto/sla-policy.dto';
 
 @Controller('sla')
-@UseGuards(AuthGuard('jwt'), SectorGuard, RolesGuard)
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class SlaController {
   constructor(private readonly slaService: SlaService) {}
 

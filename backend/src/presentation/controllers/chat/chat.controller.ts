@@ -7,7 +7,6 @@ import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { existsSync, statSync, createReadStream } from 'fs';
 import { join } from 'path';
-import { SectorGuard } from '../../../common/guards/sector.guard';
 import { HermesApiKeyGuard } from '../hermes/guards/hermes-api-key.guard';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './chat.dto';
@@ -21,20 +20,20 @@ export class ChatController {
     ) { }
 
     @Get('conversations')
-    @UseGuards(AuthGuard('jwt'), SectorGuard)
+    @UseGuards(AuthGuard('jwt'))
     async getConversations(@Req() req: any, @Query('sector') sector?: string) {
         const userSector = sector || req.user.sector || 'TI';
         return this.service.getConversations(userSector);
     }
 
     @Get('messages/:ticketId')
-    @UseGuards(AuthGuard('jwt'), SectorGuard)
+    @UseGuards(AuthGuard('jwt'))
     async getMessages(@Param('ticketId') ticketId: string, @Req() req: any) {
         return this.service.getMessages(ticketId, req.user.id);
     }
 
     @Post('messages/:ticketId')
-    @UseGuards(AuthGuard('jwt'), SectorGuard)
+    @UseGuards(AuthGuard('jwt'))
     @UseInterceptors(FileInterceptor('file'))
     async sendMessage(
         @Param('ticketId') ticketId: string,
@@ -64,7 +63,7 @@ export class ChatController {
     }
 
     @Post('messages/:messageId/read')
-    @UseGuards(AuthGuard('jwt'), SectorGuard)
+    @UseGuards(AuthGuard('jwt'))
     async markAsRead(@Param('messageId') messageId: string, @Req() req: any) {
         return this.service.markAsRead(messageId, req.user.id);
     }
@@ -76,7 +75,7 @@ export class ChatController {
     }
 
     @Get('media/:messageId')
-    @UseGuards(AuthGuard('jwt'), SectorGuard)
+    @UseGuards(AuthGuard('jwt'))
     async getMedia(@Param('messageId') messageId: string, @Req() req: any, @Res() res: Response) {
         const message = await this.service.getMessageWithTicket(messageId);
 
