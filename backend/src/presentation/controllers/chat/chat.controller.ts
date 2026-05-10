@@ -9,7 +9,6 @@ import { existsSync, statSync, createReadStream } from 'fs';
 import { join } from 'path';
 import { SectorGuard } from '../../../common/guards/sector.guard';
 import { HermesApiKeyGuard } from '../hermes/guards/hermes-api-key.guard';
-import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './chat.dto';
 
@@ -19,7 +18,6 @@ export class ChatController {
 
     constructor(
         private service: ChatService,
-        private prisma: PrismaService,
     ) { }
 
     @Get('conversations')
@@ -80,10 +78,7 @@ export class ChatController {
     @Get('media/:messageId')
     @UseGuards(AuthGuard('jwt'), SectorGuard)
     async getMedia(@Param('messageId') messageId: string, @Req() req: any, @Res() res: Response) {
-        const message = await this.prisma.message.findUnique({
-            where: { id: messageId },
-            include: { ticket: { select: { sector: true } } },
-        });
+        const message = await this.service.getMessageWithTicket(messageId);
 
         if (!message) {
             throw new NotFoundException('Mensagem não encontrada');
@@ -102,28 +97,14 @@ export class ChatController {
             throw new NotFoundException('Arquivo não encontrado');
         }
 
-        const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
-        const mimeMap: Record<string, string> = {
-            png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
-            mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
-            mp3: 'audio/mpeg', ogg: 'audio/ogg',
-            pdf: 'application/pdf',
-        };
-
-        res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
-        res.setHeader('Content-Length', String(statSync(filePath).size));
-        if (message.fileName) {
-            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(message.fileName)}"`);
-        }
-        res.setHeader('Cache-Control', 'private, max-age=300');
-        createReadStream(filePath).pipe(res);
+        this.streamFile(filePath, message.fileName, res);
     }
 
     @Get('media-internal/:messageId')
     @UseGuards(HermesApiKeyGuard)
     async getMediaInternal(@Param('messageId') messageId: string, @Res() res: Response) {
         this.logger.debug(`[getMediaInternal] called with messageId=${messageId}`);
-        const message = await this.prisma.message.findUnique({ where: { id: messageId } });
+        const message = await this.service.getMessageById(messageId);
 
         if (!message) {
             throw new NotFoundException('Mensagem não encontrada');
@@ -138,6 +119,10 @@ export class ChatController {
             throw new NotFoundException('Arquivo não encontrado');
         }
 
+        this.streamFile(filePath, message.fileName, res);
+    }
+
+    private streamFile(filePath: string, fileName: string | null, res: Response) {
         const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
         const mimeMap: Record<string, string> = {
             png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
@@ -148,8 +133,8 @@ export class ChatController {
 
         res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
         res.setHeader('Content-Length', String(statSync(filePath).size));
-        if (message.fileName) {
-            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(message.fileName)}"`);
+        if (fileName) {
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
         }
         res.setHeader('Cache-Control', 'private, max-age=300');
         createReadStream(filePath).pipe(res);

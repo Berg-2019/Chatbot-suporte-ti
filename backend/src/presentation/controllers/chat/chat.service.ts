@@ -182,4 +182,15 @@ export class ChatService {
         if (m.sender.role === 'BOT') return 'bot';
         return 'technician';
     }
+
+    async getMessageWithTicket(messageId: string) {
+        return this.prisma.message.findUnique({
+            where: { id: messageId },
+            include: { ticket: { select: { sector: true } } },
+        });
+    }
+
+    async getMessageById(messageId: string) {
+        return this.prisma.message.findUnique({ where: { id: messageId } });
+    }
 }
