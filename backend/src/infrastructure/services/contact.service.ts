@@ -510,4 +510,142 @@ export class ContactService {
     this.logger.log(`Contacts merged successfully`);
     return this.findOne(keepId);
   }
+
+  async blockContact(id: string, blockedBy: string, reason?: string) {
+    const contact = await this.prisma.contact.findUnique({ where: { id } });
+    if (!contact) throw new NotFoundException('Contato não encontrado');
+
+    return this.prisma.contact.update({
+      where: { id },
+      data: {
+        isBlocked: true,
+        blockedAt: new Date(),
+        blockedBy,
+        blockReason: reason || 'Bloqueio manual',
+      },
+    });
+  }
+
+  async unblockContact(id: string) {
+    const contact = await this.prisma.contact.findUnique({ where: { id } });
+    if (!contact) throw new NotFoundException('Contato não encontrado');
+
+    return this.prisma.contact.update({
+      where: { id },
+      data: {
+        isBlocked: false,
+        blockedAt: null,
+        blockedBy: null,
+        blockReason: null,
+        spamScore: 0,
+      },
+    });
+  }
+
+  async isBlocked(jid: string): Promise<boolean> {
+    const contact = await this.prisma.contact.findUnique({
+      where: { jid },
+      select: { isBlocked: true },
+    });
+    return contact?.isBlocked || false;
+  }
+
+  async getBlockedContacts() {
+    return this.prisma.contact.findMany({
+      where: { isBlocked: true },
+      orderBy: { blockedAt: 'desc' },
+    });
+  }
+
+  async incrementSpamScore(jid: string, points: number = 10) {
+    const contact = await this.prisma.contact.findUnique({ where: { jid } });
+    if (!contact) return null;
+
+    const newSpamScore = Math.min(contact.spamScore + points, 100);
+    const shouldAutoBlock = newSpamScore >= 80 && !contact.isBlocked;
+
+    return this.prisma.contact.update({
+      where: { jid },
+      data: {
+        spamScore: newSpamScore,
+        ...(shouldAutoBlock && {
+          isBlocked: true,
+          blockedAt: new Date(),
+          blockedBy: 'system',
+          blockReason: `Bloqueio automático - Score de spam: ${newSpamScore}`,
+        }),
+      },
+    });
+  }
+
+  detectSpamPatterns(message: string): { isSpam: boolean; score: number; reasons: string[] } {
+    let spamScore = 0;
+    const reasons: string[] = [];
+
+    const capsRatio = (message.match(/[A-Z]/g) || []).length / message.length;
+    if (capsRatio > 0.7 && message.length > 10) {
+      spamScore += 15;
+      reasons.push('Excesso de letras maiúsculas');
+    }
+
+    const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
+    const emojiCount = (message.match(emojiRegex) || []).length;
+    if (emojiCount > message.length * 0.3 && message.length > 5) {
+      spamScore += 15;
+      reasons.push('Excesso de emojis');
+    }
+
+    if (/(.)\1{5,}/.test(message)) {
+      spamScore += 20;
+      reasons.push('Caracteres repetidos em excesso');
+    }
+
+    if (/(https?:\/\/|www\.|bit\.ly|goo\.gl)/i.test(message)) {
+      spamScore += 25;
+      reasons.push('Contém links externos');
+    }
+
+    const phoneMatches = message.match(/\d{4,}/g) || [];
+    if (phoneMatches.length > 2) {
+      spamScore += 15;
+      reasons.push('Múltiplos números de telefone');
+    }
+
+    const promoWords = ['compre', 'grátis', 'desconto', 'promoção', 'ganhe', 'clique', 'urgente', 'oferta'];
+    if (promoWords.some(word => message.toLowerCase().includes(word))) {
+      spamScore += 20;
+      reasons.push('Palavras promocionais detectadas');
+    }
+
+    if (message.length > 1000) {
+      spamScore += 10;
+      reasons.push('Mensagem muito longa');
+    }
+
+    return {
+      isSpam: spamScore >= 40,
+      score: Math.min(spamScore, 100),
+      reasons,
+    };
+  }
+
+  async getSpamStats() {
+    const [totalContacts, blockedContacts, highRiskContacts] = await Promise.all([
+      this.prisma.contact.count(),
+      this.prisma.contact.count({ where: { isBlocked: true } }),
+      this.prisma.contact.count({ where: { spamScore: { gte: 60 }, isBlocked: false } }),
+    ]);
+
+    const avgSpamScore = await this.prisma.contact.aggregate({
+      _avg: { spamScore: true },
+    });
+
+    return {
+      totalContacts,
+      blockedContacts,
+      highRiskContacts,
+      blockRate: totalContacts > 0 ? (blockedContacts / totalContacts) * 100 : 0,
+      averageSpamScore: avgSpamScore._avg.spamScore || 0,
+    };
+  }
 }

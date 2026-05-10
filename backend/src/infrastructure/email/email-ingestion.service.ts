@@ -9,7 +9,7 @@ import { Sector } from '@prisma/client';
 import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { TicketsService } from '../../presentation/controllers/tickets/tickets.service';
-import { ContactsService } from '../../presentation/controllers/contacts/contacts.service';
+import { ContactService } from '../services/contact.service';
 
 interface EmailConfig {
   id: string;
@@ -49,7 +49,7 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private prisma: PrismaService,
     private ticketsService: TicketsService,
-    private contactsService: ContactsService,
+    private contactService: ContactService,
   ) {}
 
   async onModuleInit() {
@@ -423,7 +423,7 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!contact) {
-      contact = await this.contactsService.create({
+      contact = await this.contactService.create({
         jid: `email-${fromEmail}`,
         phoneNumber: 'email-only',
         name: fromName,
