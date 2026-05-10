@@ -2,13 +2,16 @@
  * Tickets Service
  */
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { SlaService } from '../sla/sla.service';
 import { PushService } from '../push/push.service';
+import { StockService } from '../stock/stock.service';
 import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
+import { createReadStream, existsSync } from 'fs';
+import { redactPhone, redactName } from '../../../infrastructure/logger/redact';
 
 interface CreateTicketDto {
   title: string;
@@ -30,12 +33,15 @@ interface AssignTicketDto {
 
 @Injectable()
 export class TicketsService {
+  private readonly logger = new Logger(TicketsService.name);
+
   constructor(
     private prisma: PrismaService,
     private rabbitmq: RabbitMQService,
     private automationEngine: AutomationEngineService,
     private slaService: SlaService,
     private pushService: PushService,
+    private stockService: StockService,
   ) { }
 
   async findAll(filters?: {
@@ -198,14 +204,14 @@ export class TicketsService {
             (config.applyToCategories.length === 0 || !ticket.category || config.applyToCategories.includes(ticket.category));
 
           if (shouldApply) {
-            console.log(`🤖 Auto-assignment enabled for ticket ${ticket.id}`);
+            this.logger.debug(`🤖 Auto-assignment enabled for ticket ${ticket.id}`);
             await this.autoAssignAgent(ticket.id, {
               sector: config.respectSector && ticket.sector ? ticket.sector : undefined,
             });
           }
         }
       } catch (error: any) {
-        console.error(`⚠️ Auto-assignment failed for ticket ${ticket.id}:`, error.message);
+        this.logger.error(`⚠️ Auto-assignment failed for ticket ${ticket.id}`, error.message);
         // Não bloqueia a criação do ticket se auto-assignment falhar
       }
     }
@@ -290,12 +296,12 @@ export class TicketsService {
     });
 
     if (technician?.name) {
-      await this.pushService.sendToUser(
-        dto.userId,
-        '🎫 Ticket Atribuído',
-        `Ticket #${ticket.id.slice(-6)}: ${ticket.title}`,
-        { ticketId: ticket.id, type: 'ticket_assigned' },
-      );
+      await this.pushService.sendToUser(dto.userId, {
+        title: '🎫 Ticket Atribuído',
+        body: `Ticket #${ticket.id.slice(-6)}: ${ticket.title}`,
+        url: `/tickets/${ticket.id}`,
+        data: { ticketId: ticket.id, type: 'ticket_assigned' },
+      });
     }
 
     return ticket;
@@ -474,7 +480,6 @@ export class TicketsService {
     // Registrar peças usadas
     if (closeData?.parts && closeData.parts.length > 0) {
       for (const part of closeData.parts) {
-        // Criar registro de uso
         await this.prisma.partUsage.create({
           data: {
             ticketId: id,
@@ -486,14 +491,16 @@ export class TicketsService {
           },
         });
 
-        // Baixar do estoque se vier do inventário
         if (part.partId) {
-          await this.prisma.part.update({
-            where: { id: part.partId },
-            data: {
-              quantity: { decrement: part.quantity },
-            },
-          });
+          try {
+            await this.stockService.registerMovement(part.partId, {
+              quantity: -part.quantity,
+              reason: `Uso no ticket #${id}`,
+              ticketId: id,
+            }, 'Sistema');
+          } catch (err) {
+            this.logger.warn(`Falha ao baixar estoque do item ${part.partId}: ${err.message}`);
+          }
         }
       }
     }
@@ -523,9 +530,9 @@ export class TicketsService {
             ramal: closeData.contactRamal,
           },
         });
-        console.log(`📇 Contato salvo: ${ticket.phoneNumber} -> ${ticket.sector}`);
-      } catch (error: any) {
-        console.warn('⚠️ Erro ao salvar contato:', error.message);
+        this.logger.debug(`📇 Contato salvo: ${redactPhone(ticket.phoneNumber)} -> ${ticket.sector}`);
+      } catch (error) {
+        this.logger.warn('⚠️ Erro ao salvar contato', error.message);
       }
     }
 
@@ -612,7 +619,7 @@ export class TicketsService {
       },
     });
 
-    console.log(`⭐ Ticket ${id} avaliado com nota ${rating}`);
+    this.logger.debug(`⭐ Ticket ${id} avaliado com nota ${rating}`);
     return ticket;
   }
 
@@ -642,7 +649,7 @@ export class TicketsService {
       },
     });
 
-    console.log(`📎 Anexo adicionado ao ticket ${ticketId}: ${file.originalname} (${file.mimetype})`);
+    this.logger.debug(`📎 Anexo adicionado ao ticket ${ticketId}: ${file.originalname} (${file.mimetype})`);
 
     // Inferir tipo de mídia a partir do mimetype
     const mt = (file.mimetype || '').toLowerCase();
@@ -681,7 +688,7 @@ export class TicketsService {
         mimeType: file.mimetype,
         filename: file.originalname,
       });
-      console.log(`📤 Mídia enfileirada para ${ticket.phoneNumber} (${mediaType})`);
+      this.logger.debug(`📤 Mídia enfileirada para ${redactPhone(ticket.phoneNumber)} (${mediaType})`);
     }
 
     // Notificar dashboard via socket
@@ -758,7 +765,7 @@ export class TicketsService {
     });
 
     if (technicians.length === 0) {
-      console.warn(`⚠️ Nenhum técnico disponível para auto-atribuição (setor: ${options?.sector || ticket.sector})`);
+      this.logger.warn(`⚠️ Nenhum técnico disponível para auto-atribuição (setor: ${options?.sector || ticket.sector})`);
       return null;
     }
 
@@ -768,7 +775,7 @@ export class TicketsService {
     // Selecionar técnico com menos tickets
     const selectedTechnician = technicians[0];
 
-    console.log(`🤖 Auto-atribuindo ticket ${ticketId} para ${selectedTechnician.name} (${selectedTechnician._count.tickets} tickets ativos)`);
+    this.logger.debug(`🤖 Auto-atribuindo ticket ${ticketId} para uid:${selectedTechnician.id.slice(0, 8)} (${selectedTechnician._count.tickets} tickets ativos)`);
 
     // Atribuir ticket
     const updatedTicket = await this.assign(ticketId, {
@@ -783,6 +790,18 @@ export class TicketsService {
         activeTickets: selectedTechnician._count.tickets,
         technicianLevel: selectedTechnician.technicianLevel,
       },
+    };
+  }
+
+  async getAttachmentStream(attachmentId: string) {
+    const att = await this.prisma.attachment.findUnique({ where: { id: attachmentId } });
+    if (!att || !existsSync(att.path)) {
+      throw new NotFoundException('Anexo não encontrado');
+    }
+    return {
+      stream: createReadStream(att.path),
+      mimeType: att.mimeType || 'application/octet-stream',
+      filename: att.filename,
     };
   }
 }

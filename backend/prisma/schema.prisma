@@ -48,6 +48,8 @@ model User {
   soundEnabled      Boolean @default(true)
   soundVolume       Int     @default(80) // 0-100
 
+  deletedAt DateTime?
+
   tickets           Ticket[]
   messages          Message[]
   alerts            TechnicianAlert[]
@@ -55,16 +57,24 @@ model User {
   csatResponses     CsatResponse[]
   cannedResponses   CannedResponse[]
   knowledgeArticles KnowledgeArticle[]
-  agentMetrics      AgentMetric[]
-  articleFeedback   ArticleFeedback[]
-  messageReads      MessageRead[]
 
-  assetsOwned      Asset[]           @relation("AssetCurrentOwner")
-  assetAssignments AssetAssignment[]
+  agentMetrics    AgentMetric[]
+  articleFeedback ArticleFeedback[]
+  messageReads    MessageRead[]
+
+  assetsOwned       Asset[]            @relation("AssetCurrentOwner")
+  assetAssignments  AssetAssignment[]
   pushSubscriptions PushSubscription[]
+
+  technicalReportsAsEngineer   TechnicalReport[]           @relation("ReportEngineer")
+  technicalReportsAsTechnician TechnicalReport[]           @relation("ReportTechnician")
+  technicalReportsCreated      TechnicalReport[]           @relation("ReportCreator")
+  technicalReportAnnotations   TechnicalReportAnnotation[]
+  technicalReportSignatures    TechnicalReportSignature[]
 
   @@index([role, active])
   @@index([email])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -134,6 +144,7 @@ model Ticket {
   updatedAt   DateTime  @updatedAt
   closedAt    DateTime?
   escalatedAt DateTime? // Timestamp do último escalonamento
+  deletedAt   DateTime?
 
   messages     Message[]
   partUsages   PartUsage[]
@@ -146,6 +157,8 @@ model Ticket {
   affectedAsset   Asset?  @relation("AssetTickets", fields: [affectedAssetId], references: [id])
 
   slaTimer SlaTimer?
+
+  technicalReports TechnicalReport[]
 
   @@index([phoneNumber])
   @@index([status])
@@ -205,8 +218,9 @@ model Message {
   duration     Int?
   thumbnailUrl String?
 
-  reads      MessageRead[]
-  createdAt  DateTime      @default(now())
+  reads     MessageRead[]
+  createdAt DateTime      @default(now())
+  deletedAt DateTime?
 
   @@index([ticketId])
   @@index([ticketId, createdAt(sort: Desc)])
@@ -269,6 +283,7 @@ model Queue {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
+  @@index([active])
   @@map("queues")
 }
 
@@ -290,6 +305,8 @@ model Part {
 
   usages PartUsage[]
 
+  @@index([active])
+  @@index([name])
   @@map("parts")
 }
 
@@ -425,8 +442,9 @@ model Contact {
   blockReason String? // Motivo do bloqueio
   spamScore   Int       @default(0) // Score de spam (0-100)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([jid])
   @@index([phoneNumber])
@@ -434,12 +452,9 @@ model Contact {
   @@index([email])
   @@index([isBlocked])
   @@index([spamScore])
+  @@index([deletedAt])
   @@map("contacts")
 }
-
-// ===========================================================================
-// Printers - Impressoras de rede para monitoramento
-// ===========================================================================
 
 model Printer {
   id String @id @default(uuid())
@@ -503,6 +518,7 @@ model Supplier {
 
   purchases Purchase[]
 
+  @@index([active])
   @@map("suppliers")
 }
 
@@ -637,6 +653,7 @@ model ReportRecipient {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
+  @@index([active])
   @@map("report_recipients")
 }
 
@@ -1077,6 +1094,7 @@ model AutoAssignmentConfig {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([enabled])
   @@map("auto_assignment_config")
 }
 
@@ -1442,6 +1460,7 @@ model EmailConfig {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([enabled])
   @@map("email_configs")
 }
 
@@ -1588,6 +1607,10 @@ model LicenseAssignment {
   assignedAt DateTime  @default(now())
   returnedAt DateTime?
 
+  @@index([licenseId])
+  @@index([assetId])
+  @@index([userId])
+  @@index([returnedAt])
   @@map("license_assignments")
 }
 
@@ -1607,6 +1630,8 @@ model SlaPolicy {
   active             Boolean        @default(true)
 
   @@unique([sector, priority])
+  @@index([active])
+  @@index([sector])
   @@map("sla_policies")
 }
 
@@ -1619,6 +1644,7 @@ model BusinessHours {
 
   policies SlaPolicy[]
 
+  @@index([timezone])
   @@map("business_hours")
 }
 
@@ -1651,6 +1677,9 @@ model EscalationRule {
   action           Json // { type:"NOTIFY_MANAGER" } | { type:"REASSIGN", level:"L2" }
   active           Boolean           @default(true)
 
+  @@index([sector])
+  @@index([active])
+  @@index([triggerOn, active])
   @@map("escalation_rules")
 }
 
@@ -1701,4 +1730,135 @@ model PushSubscription {
   @@unique([endpoint])
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+// ===========================================================================
+// AuditLog — LGPD Art. 37 (registro de operações)
+// ===========================================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  userEmail  String? // denormalized for readability when user is deleted
+  action     String // GET, POST, PUT, PATCH, DELETE
+  resource   String // e.g. "tickets", "messages", "users"
+  resourceId String? // ID do recurso acessado (quando aplicável)
+  method     String // nome do método do controller
+  path       String // URL completa
+  ipAddress  String?
+  userAgent  String?
+  statusCode Int? // resposta HTTP
+  metadata   String?  @db.Text // JSON com detalhes adicionais
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource])
+  @@index([action])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ===========================================================================
+// Technical Reports — Laudos de serviço (NR-10/NR-35), com mídia + assinatura
+// ===========================================================================
+
+enum TechnicalReportStatus {
+  DRAFT
+  SUBMITTED
+  REWORK
+  APPROVED
+}
+
+enum SignerRole {
+  ENGINEER
+  TECHNICIAN
+  CLIENT
+}
+
+model TechnicalReport {
+  id           String                @id @default(uuid())
+  number       String                @unique // RT-YYYY-NNNN
+  sector       Sector
+  title        String
+  site         String
+  serviceDate  DateTime
+  engineerId   String?
+  technicianId String?
+  assistants   String[] // nomes livres dos auxiliares
+  summary      String                @db.Text
+  execution    String                @db.Text
+  materials    String                @db.Text
+  observations String                @db.Text
+  status       TechnicalReportStatus @default(DRAFT)
+  ticketId     String?
+  createdById  String
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  deletedAt    DateTime?
+
+  engineer    User?                       @relation("ReportEngineer", fields: [engineerId], references: [id])
+  technician  User?                       @relation("ReportTechnician", fields: [technicianId], references: [id])
+  createdBy   User                        @relation("ReportCreator", fields: [createdById], references: [id])
+  ticket      Ticket?                     @relation(fields: [ticketId], references: [id])
+  media       TechnicalReportMedia[]
+  annotations TechnicalReportAnnotation[]
+  signatures  TechnicalReportSignature[]
+
+  @@index([sector, status])
+  @@index([serviceDate])
+  @@index([createdById])
+  @@index([deletedAt])
+  @@map("technical_reports")
+}
+
+model TechnicalReportMedia {
+  id         String   @id @default(uuid())
+  reportId   String
+  filename   String
+  path       String // path local /uploads/reports/
+  mimeType   String
+  size       Int
+  uploadedBy String
+  createdAt  DateTime @default(now())
+
+  report TechnicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("technical_report_media")
+}
+
+model TechnicalReportAnnotation {
+  id         String     @id @default(uuid())
+  reportId   String
+  authorId   String
+  authorRole SignerRole
+  field      String // qual campo da ficha (summary, execution, materials, etc)
+  comment    String     @db.Text
+  resolved   Boolean    @default(false)
+  resolvedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  report TechnicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  author User            @relation(fields: [authorId], references: [id])
+
+  @@index([reportId, resolved])
+  @@map("technical_report_annotations")
+}
+
+model TechnicalReportSignature {
+  id         String     @id @default(uuid())
+  reportId   String
+  signerId   String? // null se for cliente externo
+  signerName String
+  role       SignerRole
+  imagePath  String // PNG salvo em /uploads/reports/signatures/
+  ip         String?
+  signedAt   DateTime   @default(now())
+
+  report TechnicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  signer User?           @relation(fields: [signerId], references: [id])
+
+  @@index([reportId])
+  @@map("technical_report_signatures")
 }

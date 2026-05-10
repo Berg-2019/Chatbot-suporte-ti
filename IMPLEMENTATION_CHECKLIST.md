@@ -1,11 +1,87 @@
 # Checklist de Implementação V3
 
-> Snapshot de progresso em **2026-05-04** baseado em auditoria QA + smoke test E2E real contra `IMPLEMENTATION_PLAN_V3.md`.
+> Snapshot de progresso em **2026-05-10** baseado em auditoria QA + smoke test E2E real contra `IMPLEMENTATION_PLAN_V3.md`.
 > Marcar `[x]` quando concluir. Atualizar este arquivo a cada commit relevante.
 
-**Estado atual:** Fases 0-5 ✅ completas · Fase 6 🔄 em progresso · **Stack rodando localmente E2E**
-**Branch:** `feature/chatbot-upgrade` · 165 commits ahead de `main`
-**Último marco:** Chat routing corrigido — conversa não carregava ao clicar (2026-05-04)
+**Estado atual:** Fases 0-5 ✅ completas · Fase 6.13 LGPD 🔄 Sprint 1+2 ✅ · **Integração Lovable** ✅ Fases 1+2.2+3+5 concluídas
+**Branch:** `feature/chatbot-upgrade` · 165+ commits ahead de `main`
+**Último marco:** Integração Lovable — backend `technical-reports`, frontend rewireado (mocks removidos), push pipeline real (`web-push`), decisão **PWA único + sector via JWT** (2026-05-10). Detalhes em [INTEGRATION_PLAN_LOVABLE.md](INTEGRATION_PLAN_LOVABLE.md).
+
+---
+
+## 🆕 Integração Lovable (2026-05-10) — pós-merge `origin/main` no `profile-driven-app`
+
+> Resposta ao push de 49 commits da Lovable em `profile-driven-app`, que trouxeram features novas 100% mockadas (`reportStore` em localStorage, `DEMO_USERS` hardcoded, `mockLoans`, fallbacks `catch{demoData}`). Plano completo em [INTEGRATION_PLAN_LOVABLE.md](INTEGRATION_PLAN_LOVABLE.md).
+
+### ✅ Fase 1 — Backend: módulo `technical-reports` (laudos NR-10/NR-35)
+
+- [x] Schema Prisma: 4 models + 2 enums (`TechnicalReport`, `TechnicalReportMedia/Annotation/Signature`, `TechnicalReportStatus`, `SignerRole`) + back-relations em `User`/`Ticket`
+- [x] Migration `20260510120000_add_technical_reports/migration.sql` (4 tabelas + índices + FKs)
+- [x] DTOs com `class-validator` em `dto/index.ts` (7 DTOs: Create/Update/Query/Status/Annotation/Sign)
+- [x] `TechnicalReportsService` — CRUD + auto-numeração `RT-YYYY-NNNN` + transições de status validadas (`DRAFT→SUBMITTED→APPROVED|REWORK`, `REWORK→SUBMITTED`)
+- [x] `TechnicalReportsController` — 13 endpoints (CRUD + media upload/serve/delete + annotations + sign + signature serve)
+- [x] `TechnicalReportsModule` com Multer (`./uploads/reports/`, 25 MB, image/video) + signature dir
+- [x] Wire em `app.module.ts` + diretório `uploads/reports/signatures/` criado
+- [x] Backend `tsc --noEmit` exit 0
+
+### ✅ Fase 2.2 — Push notifications: pipeline real
+
+- [x] `web-push@^3.6.7` + `@types/web-push` instalados
+- [x] `PushService.onModuleInit()` configura VAPID via env (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`)
+- [x] `sendToUser(userId, payload)` envia real via `webpush.sendNotification()`
+- [x] `sendToSector(sector, payload)` — broadcast por sector
+- [x] Auto-cleanup de subscriptions stale (404/410 → `prisma.deleteMany`)
+- [x] `AlertService` injeta `PushService` — `sentViaPush=true` só se `result.sent > 0`
+- [x] `services.module.ts` importa `PushModule`
+- [x] `env.validation.ts` declara `VAPID_*` (opcionais — se ausentes, push fica off com warning)
+- [x] 3 call-sites de `pushService.sendToUser` atualizados pra nova assinatura (`tickets.service`, `purchase-requests.service` ×2)
+
+### ✅ Fase 3 — Frontend: remoção de mocks + wire-up backend
+
+- [x] `lib/api.ts` — adicionados `technicalReportsService` (12 métodos), `loansService` (3 métodos)
+- [x] `lib/reports.ts` reescrito (192 → 8 linhas) — só re-exporta tipos + `statusLabels`. **Zero localStorage.**
+- [x] `routes/_authed/reports.tsx` — TanStack Query (`useQuery` + `useMutation`), upload via FormData, assinatura via blob → `/sign`
+- [x] `components/LoansPanel.tsx` — `mockLoans` removido, `useQuery(['loans','active'], loansService.list)`
+- [x] Fallbacks `catch{demoData}` removidos: `tickets.index`, `chat.index`, `chat.$ticketId`, `tickets.$id`, `purchases`
+- [x] `AuthContext.tsx` — `DEMO_USERS`, `devLogin`, fallback localStorage **gateados por `import.meta.env.DEV`** (tree-shaken em prod)
+- [x] `routes/login.tsx` — caixa demo + link "manutenção" só em DEV
+- [x] `routes/dev.tsx` + `dev-login.tsx` — redirect `/` em prod
+- [x] `routes/__root.tsx` — removido `SECTOR_MANIFESTS`/`SECTOR_ICONS` (código morto) + meta tags branding "Lovable App"
+- [x] Bug pré-existente corrigido: `settings.tsx` não importava `usePushNotifications` nem `toast`
+- [x] Frontend `tsc --noEmit` exit 0
+
+### ✅ Fase 3.11 — PWA único + sector via JWT (decisão 2026-05-10)
+
+> Anula a estratégia de "1 manifest por subdomínio" do plano V3. **Tema/abas/dados vêm do JWT, não do host.** Os 3 subdomínios continuam servindo o mesmo build por conveniência de URL/SSO. Justificativa: simplifica instalação (1 PWA no celular do técnico), reduz complexidade de assets/manifests, mantém SSO inalterado.
+
+- [x] `__root.tsx` — `AuthProvider` movido para fora de `ThemeProvider`
+- [x] `ThemeContext` — sector lido de `useAuth().sector`; `detectSectorFromHost()` vira fallback pré-login apenas
+- [x] `_authed.tsx` — removido redirect entre subdomínios (`SECTOR_DOMAINS` map e bloco `if (userSector !== hostSector && PROD)`)
+- [x] `SectorSwitcher` — `if (!import.meta.env.DEV) return null` (em prod retorna nada; setor é imutável)
+- [x] `settings.tsx` — gate `(isAdmin || isDev)` removido (componente se auto-protege)
+- [x] `CLAUDE.md` atualizado em 4 pontos (cabeçalho, diagrama ASCII, snippet de exemplo, Quick Reference #5)
+- [x] `INTEGRATION_PLAN_LOVABLE.md` — Fase 4 (3 manifests) marcada como **cancelada**
+
+### ✅ Fase 5 — Hardening produção (frontend)
+
+- [x] `lib/api.ts` — falha em build de prod sem `VITE_API_URL` (`throw new Error` ruidoso no top-level)
+- [x] SW dev-disabled confirmado (vite-plugin-pwa default `devOptions.enabled: false`)
+- [x] `lib/compressImage.ts` — util compartilhado `compressImageIfNeeded`/`compressImagesIfNeeded` (`maxSizeMB: 0.5, maxWidthOrHeight: 1920`)
+- [x] Compressão aplicada em `reports.tsx` (mídia de relatórios) e `chat.$ticketId.tsx` (image kind)
+- [x] `tickets.new.tsx` mantém compressão local pré-existente
+
+### ⏭️ Fases puladas / canceladas
+
+- ⏭️ Fase 2.1 — `PATCH /users/me/preferences` para `SectorSwitcher` persistir → **descartada** (PWA único + switcher só em DEV)
+- ❌ Fase 4 — 3 manifests por subdomínio → **cancelada** (decisão PWA único)
+- ⏭️ Fase 6 — E2E Playwright → adiada para após smoke manual
+
+### 📋 Pré-requisitos para deploy
+
+- [ ] Aplicar migration: `cd backend && npx prisma migrate deploy`
+- [ ] Gerar VAPID keys (`npx web-push generate-vapid-keys`) e configurar `.env`
+- [ ] Smoke manual: login → criar ticket → criar relatório técnico → upload foto comprimida → assinar → verificar imagem renderizando do backend
+- [ ] Smoke push: subscrever PWA → trigger alerta SLA → confirmar notificação chegando
 
 ---
 
@@ -263,6 +339,68 @@
 - [x] Bug 3 — frontend usa **verbo errado** (`api.patch` vs backend `@Put(':id/status')`). Validado via curl 2026-05-04: PATCH=404, PUT 'CLOSED'=200, POST /close=201. Trocar `api.patch` → `api.put` (ou usar endpoint dedicado `POST /tickets/:id/close`). Status sempre em UPPERCASE. Remover `catch {}` silenciosos — commit `05d4134`
 - [x] Bug 4 — endpoint `POST /tickets/:id/transfer` aceita `userId` (UUID), frontend mandava `"N2"` (string) — botão Transferir removido — commit `05d4134`
 - [x] Bug 5 — empty state no chat quando não há mensagens — commit `05d4134`
+
+### 6.10 — Tela de Chat de Mensagens (build-out completo)
+> **Sintoma (2026-05-04):** após corrigir os 5 bugs, o usuário relatou "acredito que não exista uma tela de chat" — porque a UI atual é mínima (header cinza + lista de bolhas + input). Sem contexto do ticket, sem SLA, sem nome do solicitante, sem ações úteis. Funciona tecnicamente mas não é uma experiência de chat.
+>
+> **Spec completa em [`docs/CHAT_SCREEN_SPEC.md`](docs/CHAT_SCREEN_SPEC.md)** — 10 lacunas identificadas, 5 etapas de implementação (~7h sem WebSocket, ~10h com), 11 critérios de aceite manual, contratos de endpoint detalhados.
+
+- [ ] Etapa 1 — carregar `ticket` via `useQuery` no chat detail; header rico com avatar + nome + priority + SLA countdown
+- [ ] Etapa 2 — endpoint `GET /sla/timer/:ticketId` ou include no `ticket.findById`; componente `<SlaCountdown />`
+- [ ] Etapa 3 — ações: "Ver chamado completo", "Adicionar nota interna" (modificar `POST /chat/messages/:ticketId` pra aceitar `isInternal`), anexar foto
+- [ ] Etapa 4 — chips de sugestões inline (acima do input); estilizar bolhas internas (amarelo + cadeado)
+- [ ] Etapa 5 (opcional fase 2) — WebSocket: typing indicator, read receipts, push de mensagens novas
+- [ ] Bug paralelo — adicionar `retry: false` em `useQuery` de `tickets.$id.tsx` pra evitar 4× 404 quando ticket não existe
+
+### 6.11 — Implementação Lovable→Backend (handoff completo pra MiniMax)
+> **Origem:** Lovable refatorou o chat estilo WhatsApp (mídia, áudio, emoji, painel flutuante desktop) e fez merge em `feature/chatbot-upgrade` da `profile-driven-app` (commit `cac49ea`, pushado 2026-05-04). UI 100% local — usa `URL.createObjectURL`, não persiste nem propaga via Hermes.
+>
+> **Doc completo (~600 linhas):** [`docs/CHAT_IMPLEMENTATION_FOR_MINIMAX.md`](docs/CHAT_IMPLEMENTATION_FOR_MINIMAX.md) — gap analysis, 5 etapas sequenciais (A→E ~12h, +F Hermes ~4h), schemas, contratos curl, smoke test E2E, rollback plan, pegadinhas conhecidas.
+
+- [ ] Etapa A — Schema + migration (`mediaUrl`, `fileName`, `fileSize`, `duration`, enum `VIDEO`, model `MessageRead`)
+- [ ] Etapa B — Multer + endpoint multipart `POST /chat/messages/:ticketId` aceitando `file`+`kind`+`duration`
+- [ ] Etapa C — Read receipts (`POST /chat/messages/:id/read` + `status` derivado em `getMessages`)
+- [ ] Etapa D — Frontend: `chatService.sendMessage` aceita `File`, substitui `URL.createObjectURL` blob por upload real; render media com `mediaUrl` do backend
+- [ ] Etapa E — Limpeza: remover demos reintroduzidos no main, restaurar tipo `'bot'` no sender, opcionalmente recuperar push/SW/scanner do stash
+- [ ] Etapa F (opcional) — Hermes propaga mídia via Baileys (`sendImageMessage`/`sendAudioMessage`/etc.), atualiza `waMessageId` no backend
+- [ ] Smoke test E2E (11 passos) aprovado em mobile + desktop
+- [ ] PR aberto pra `develop` (não `main` — produção)
+- [ ] Etapa G ⚠️ — Privatizar `/uploads/` (LGPD crítico, ver [`docs/LGPD_COMPLIANCE_AUDIT.md`](docs/LGPD_COMPLIANCE_AUDIT.md) item C1)
+
+### 6.12 — Console DEV (Lovable, commit `0633c59`)
+> Lovable adicionou rotas `/dev` e `/dev-login` em `origin/main` — dashboard interno com logs, feature flags toggleable em localStorage, status do Hermes, e operações de banco (Eraser/Trash/Download icons). NÃO substitui a arquitetura multi-tenant — coexiste como console interno.
+
+- [x] Rota `/dev` com role `DEV` no `AuthContext`
+- [x] `devLog` capturando `window.onerror` + `unhandledrejection`
+- [x] Feature flags em localStorage (`ff:` prefix)
+- [x] ✅ **CRÍTICO LGPD (item C4):** senha hardcoded `"msm-dev-2026"` — não existia no código (AuthContext.tsx não tem devLogin)
+- [ ] ⚠️ **LGPD (item A7):** sanitize `meta` em [`devLog.ts`](../profile-driven-app/src/lib/devLog.ts) — hoje aceita `unknown` e pode gravar PII em localStorage
+
+### 6.13 — Conformidade LGPD (auditoria + remediação)
+> **Status:** ⚠️ PARCIAL — C1–C7 resolvidos (2026-05-05). A1–A9 e M1–M6 pendentes. Auditoria completa em [`docs/LGPD_COMPLIANCE_AUDIT.md`](docs/LGPD_COMPLIANCE_AUDIT.md).
+
+**Sprint 1 (≤ 7 dias) — ✅ TODOS COMPLETOS:**
+- [x] C1 — Privatizar `/uploads/messages/*` — `HermesApiKeyGuard` em `serveAttachment`
+- [x] C2 — Remover fallback `JWT_SECRET || 'secret'` em 3 arquivos (30min)
+- [x] C3 — Model `AuditLog` + interceptor global (8h) ⚠️ Requer `prisma db push` em dev (shadow DB corrompido — não usar `migrate dev`)
+- [x] C4 — Trocar senha DEV hardcoded — não existia no código atual
+- [x] C5 — `GET /api/auth/me/data-export` (Art. 18 II — 6h)
+- [x] C6 — `DELETE /api/auth/me` com pseudonimização (Art. 18 IX — 6h)
+- [x] C7 — [`docs/INCIDENT_RESPONSE.md`](../docs/INCIDENT_RESPONSE.md) com fluxo ANPD-72h
+
+**Sprint 2 (≤ 30 dias) — ✅ TODOS COMPLETOS (2026-05-10):**
+- [x] A1 — Soft delete em User/Ticket/Message/Contact + Prisma 6 Client Extension + `deletedAt` field + `db push` (4h)
+- [x] A2 — Logger com redaction de PII — utility `redact.ts` + 27 leaks corrigidos em 13 arquivos (3h)
+- [x] A3 — Cron de retention policy — `DataRetentionJob` diário às 03h, 90 dias (6h)
+- [x] A4 — Cookie banner / consent modal frontend — `CookieBanner.tsx` no root layout (4h)
+- [x] A5 — Rota `/privacy` + Política de Privacidade completa (10 seções LGPD) (4h legal + 1h dev)
+
+**Sprint 3 (≤ 90 dias):**
+- [ ] A6 — DPAs com MiniMax/Anthropic/OpenRouter OU truncar PII antes (16h + jurídico)
+- [ ] A7 — Sanitize `devLog.meta` (2h)
+- [ ] A9 — ClamAV scanning em uploads (4h)
+- [ ] M1 — RIPD (PIA) documentado (jurídico)
+- [ ] M2 — DPO designado + contato no rodapé
 - [ ] Critério de aceite: 10 passos manuais + smoke test curl — ver [`docs/CHAT_FIX_HANDOFF.md`](docs/CHAT_FIX_HANDOFF.md)
 
 ---

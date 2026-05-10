@@ -9,6 +9,7 @@ import { PrismaModule } from '../database/prisma.module';
 import { RabbitMQModule } from '../messaging/rabbitmq.module';
 import { ExternalModule } from '../external/external.module';
 import { MessagesModule } from '../../presentation/controllers/messages/messages.module';
+import { PushModule } from '../../presentation/controllers/push/push.module';
 
 @Module({
     imports: [
@@ -17,6 +18,7 @@ import { MessagesModule } from '../../presentation/controllers/messages/messages
         forwardRef(() => RabbitMQModule),
         ExternalModule,
         MessagesModule,
+        PushModule,
     ],
     providers: [AlertService],
     exports: [AlertService],

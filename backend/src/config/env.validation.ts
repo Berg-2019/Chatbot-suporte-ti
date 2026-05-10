@@ -38,6 +38,18 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  ADMIN_PASSWORD: string;
+
+  @IsString()
+  @IsOptional()
+  ADMIN_EMAIL: string = 'admin@helpdesk.com';
+
+  @IsString()
+  @IsOptional()
+  ADMIN_NAME: string = 'Administrador';
+
+  @IsString()
+  @IsOptional()
   JWT_EXPIRES_IN: string = '7d';
 
   // WhatsApp
@@ -59,6 +71,19 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   BOT_PHONE: string;
+
+  // Push notifications (VAPID) — opcional; se ausentes, push fica desligado
+  @IsString()
+  @IsOptional()
+  VAPID_PUBLIC_KEY: string;
+
+  @IsString()
+  @IsOptional()
+  VAPID_PRIVATE_KEY: string;
+
+  @IsString()
+  @IsOptional()
+  VAPID_SUBJECT: string = 'mailto:dev@helpdeskmsm.com.br';
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -26,7 +26,9 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
 - `compras.helpdeskmsm.com.br` — Setor de compras / requisições (tema verde)
 - `api.helpdeskmsm.com.br` — Backend NestJS (compartilhado)
 
-**Mesmo build do frontend, 3 vhosts no nginx.** Tema, manifest e ícone vêm do **host** (não do JWT) — cada subdomínio instala como **PWA distinta** no celular do técnico.
+**Mesmo build do frontend, 3 vhosts no nginx.**
+
+> **Decisão 2026-05-10 — PWA único.** Tema/abas/dados vêm do **JWT (`user.sector`)**, não do host. Manifest é um só (`/public/manifest.webmanifest`). Os 3 subdomínios continuam servindo o mesmo app por conveniência de URL/SSO, mas o usuário instala apenas **1 PWA** no celular. Sem redirect entre subdomínios após login. `SectorSwitcher` existe apenas em build DEV (`import.meta.env.DEV`) para previewar temas — em produção retorna `null`.
 
 **WhatsApp** como canal alternativo de atendimento, com **Hermes Agent** como brain conversacional. **Bot legado (`bot/`) será removido** na Fase 1 — não usar.
 
@@ -50,8 +52,8 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
                   │  FRONTEND (1 build, mesmo    │   │ BACKEND  │
                   │  container, 3 vhosts no nginx)│   │ NestJS   │
                   │                              │   │  Clean   │
-                  │  Tema/manifest/ícone por     │   │  Arch v2 │
-                  │  HOST (não por JWT)          │   │          │
+                  │  Tema vem do JWT             │   │  Arch v2 │
+                  │  PWA único (1 manifest)      │   │          │
                   │  PWA mobile-first            │   │          │
                   └──────────────────────────────┘   └────┬─────┘
                               ▲                            │
@@ -232,17 +234,15 @@ export const Route = createFileRoute('/_authed/tickets/')({
 });
 ```
 
-Tema vem do host, não do JWT:
+Tema vem do **JWT** (`user.sector`). `detectSectorFromHost()` permanece em [src/lib/sector.ts](../profile-driven-app/src/lib/sector.ts) apenas como **fallback pré-login** (tela de `/login` antes do `useAuth().sector` estar disponível):
 
 ```typescript
-// src/lib/sector.ts
-export function detectSectorFromHost(): Sector {
-  const host = window.location.hostname;
-  if (host.startsWith('ti.')) return 'TI';
-  if (host.startsWith('eletrica.')) return 'ELECTRIC';
-  if (host.startsWith('compras.')) return 'COMPRAS';
-  return (import.meta.env.VITE_DEV_SECTOR as Sector) || 'TI';
-}
+// src/contexts/ThemeContext.tsx
+const { sector: userSector } = useAuth();
+useEffect(() => {
+  const next = userSector ?? detectSectorFromHost();
+  document.documentElement.setAttribute("data-sector", next);
+}, [userSector]);
 ```
 
 ---
@@ -465,7 +465,7 @@ VAPID_SUBJECT=mailto:dev@helpdeskmsm.com.br
 2. **Filtro por sector é server-side** sempre — nunca confiar em query param do cliente.
 3. **Hermes Agent** é o único brain do WhatsApp — bot legado será deletado.
 4. **GLPI é legado** — não criar dependência nova; remover na Fase 1.
-5. **Frontend é 1 código, 3 subdomínios** — tema vem do host.
+5. **Frontend é 1 código, 1 PWA, 3 subdomínios servem o mesmo build** — tema vem do **JWT** (`user.sector`), não do host (decisão 2026-05-10).
 6. **PWA mobile-first** — câmera, QR, push, offline real são requisitos da Fase 6, não nice-to-have.
 7. **SSO** via cookie em `.helpdeskmsm.com.br` — backend e os 3 frontends compartilham auth.
 8. **Sector é enum**, não String. **Roles** são `ADMIN_TI`/`ADMIN_ELECTRIC`/`ADMIN_COMPRAS`/`AGENT`/`ADMIN`.

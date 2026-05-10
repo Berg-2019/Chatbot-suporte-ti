@@ -94,12 +94,12 @@ export class PurchaseRequestsService {
     });
 
     if (updated.requestedById) {
-      await this.pushService.sendToUser(
-        updated.requestedById,
-        '✅ Requisição Aprovada',
-        `PR #${id.slice(-6)}: ${updated.title} foi aprovada`,
-        { prId: id, type: 'pr_approved' },
-      );
+      await this.pushService.sendToUser(updated.requestedById, {
+        title: '✅ Requisição Aprovada',
+        body: `PR #${id.slice(-6)}: ${updated.title} foi aprovada`,
+        url: `/purchases/${id}`,
+        data: { prId: id, type: 'pr_approved' },
+      });
     }
 
     return updated;
@@ -130,12 +130,12 @@ export class PurchaseRequestsService {
     });
 
     if (updated.requestedById) {
-      await this.pushService.sendToUser(
-        updated.requestedById,
-        '❌ Requisição Rejeitada',
-        `PR #${id.slice(-6)}: ${updated.title} foi rejeitada - ${updated.rejectionReason}`,
-        { prId: id, type: 'pr_rejected' },
-      );
+      await this.pushService.sendToUser(updated.requestedById, {
+        title: '❌ Requisição Rejeitada',
+        body: `PR #${id.slice(-6)}: ${updated.title} foi rejeitada - ${updated.rejectionReason ?? ''}`,
+        url: `/purchases/${id}`,
+        data: { prId: id, type: 'pr_rejected' },
+      });
     }
 
     return updated;

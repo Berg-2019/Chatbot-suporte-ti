@@ -3,10 +3,12 @@
  * Envia notificações via WhatsApp e Socket.IO
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { RabbitMQService } from '../messaging/rabbitmq.service';
+import { PushService } from '../../presentation/controllers/push/push.service';
 import { AlertType } from '@prisma/client';
+import { redactName, redactPhone } from '../logger/redact';
 
 export interface AlertPayload {
     ticketId?: string;
@@ -19,9 +21,11 @@ export interface AlertPayload {
 
 @Injectable()
 export class AlertService {
+  private readonly logger = new Logger(AlertService.name);
     constructor(
         private prisma: PrismaService,
         private rabbitmq: RabbitMQService,
+        private push: PushService,
     ) { }
 
     /**
@@ -40,7 +44,7 @@ export class AlertService {
         });
 
         if (!user) {
-            console.warn(`⚠️ Usuário ${userId} não encontrado para enviar alerta`);
+            this.logger.warn(`⚠️ Usuário ${userId} não encontrado para enviar alerta`);
             return;
         }
 
@@ -65,13 +69,29 @@ export class AlertService {
             },
         });
 
-        // Atualizar flag
-        await this.prisma.technicianAlert.update({
-            where: { id: alert.id },
-            data: { sentViaPush: true },
+        this.logger.debug(`📢 Alerta Socket.IO enviado para uid:${user.id.slice(0, 8)}`);
+
+        // Enviar Web Push (PWA) — só marca sentViaPush se realmente chegou em alguma subscription
+        const pushResult = await this.push.sendToUser(userId, {
+            title: payload.title,
+            body: payload.message,
+            url: payload.ticketId ? `/tickets/${payload.ticketId}` : '/',
+            data: {
+                alertId: alert.id,
+                type: payload.type,
+                ticketId: payload.ticketId ?? '',
+            },
         });
 
-        console.log(`📢 Alerta Socket.IO enviado para ${user.name}`);
+        if (pushResult.sent > 0) {
+            await this.prisma.technicianAlert.update({
+                where: { id: alert.id },
+                data: { sentViaPush: true },
+            });
+            this.logger.debug(
+                `🔔 Push enviado para uid:${user.id.slice(0, 8)} (sent=${pushResult.sent}, failed=${pushResult.failed})`,
+            );
+        }
 
         // Enviar via WhatsApp (se configurado)
         if (user.phoneNumber && user.receiveAlerts) {
@@ -89,7 +109,7 @@ export class AlertService {
                 data: { sentViaWa: true },
             });
 
-            console.log(`📱 Alerta WhatsApp enviado para ${user.name} (${user.phoneNumber})`);
+            this.logger.debug(`📱 Alerta WhatsApp enviado para uid:${user.id.slice(0, 8)}`);
         }
     }
 
@@ -106,7 +126,7 @@ export class AlertService {
             select: { id: true },
         });
 
-        console.log(`📢 Enviando alerta para ${technicians.length} técnicos ${level}`);
+        this.logger.debug(`📢 Enviando alerta para ${technicians.length} técnicos ${level}`);
 
         // Otimização: Enviar em paralelo para não bloquear o bot por muito tempo
         await Promise.all(technicians.map(tech => this.sendAlertToUser(tech.id, payload)));

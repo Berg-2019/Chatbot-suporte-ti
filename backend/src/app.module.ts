@@ -6,8 +6,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { validate } from './config/env.validation';
+import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+import { AuditModule } from './common/audit/audit.module';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 // Infrastructure
 import { PrismaModule } from './infrastructure/database/prisma.module';
@@ -50,17 +53,19 @@ import { MacrosModule } from './presentation/controllers/macros/macros.module';
 import { LiveViewModule } from './presentation/controllers/live-view/live-view.module';
 import { NotificationPreferencesModule } from './presentation/controllers/notification-preferences/notification-preferences.module';
 import { SettingsModule } from './presentation/controllers/settings/settings.module';
-import { AdaptiveAIModule } from './presentation/controllers/adaptive-ai/adaptive-ai.module';
-import { CaptainModule } from './presentation/controllers/captain/captain.module';
 import { HermesModule } from './presentation/controllers/hermes/hermes.module';
 import { ToolsModule } from './presentation/controllers/tools/tools.module';
 import { AssetsModule } from './presentation/controllers/assets/assets.module';
 import { LicensesModule } from './presentation/controllers/licenses/licenses.module';
 import { SlaModule } from './presentation/controllers/sla/sla.module';
 import { PushModule } from './presentation/controllers/push/push.module';
+import { TechnicalReportsModule } from './presentation/controllers/technical-reports/technical-reports.module';
 
 // Admin
 import { AdminModule } from './presentation/controllers/admin/admin.module';
+
+// Jobs
+import { DataRetentionJob } from './infrastructure/jobs/data-retention.job';
 
 // Health check
 import { HealthController } from './presentation/controllers/health.controller';
@@ -83,6 +88,9 @@ import { HealthController } from './presentation/controllers/health.controller';
     // Cron Jobs (for Agent Metrics)
     ScheduleModule.forRoot(),
 
+    // AuditLog (LGPD Art. 37)
+    AuditModule,
+
     // Infrastructure
     PrismaModule,
     RedisModule,
@@ -95,8 +103,6 @@ import { HealthController } from './presentation/controllers/health.controller';
     TicketsModule,
     MessagesModule,
     UsersModule,
-    AdaptiveAIModule, // 🧠 Sistema de IA Adaptativo
-    CaptainModule, // 🤖 Captain AI Assistant
     PartsModule,
     FaqModule,
     MetricsModule,
@@ -132,14 +138,23 @@ import { HealthController } from './presentation/controllers/health.controller';
     LicensesModule,
     SlaModule,
     PushModule,
+    TechnicalReportsModule,
     AdminModule,
   ],
   controllers: [HealthController],
   providers: [
-    // Apply rate limiting globally
+    DataRetentionJob,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: IdempotencyInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
   ],
 })
