@@ -48,7 +48,7 @@ export class AssetsController {
     return this.assetsService.findById(id);
   }
 
-  @Get('tag/:tag')
+  @Get('scan/:tag')
   @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'AGENT')
   async findByTag(@Param('tag') tag: string) {
     return this.assetsService.findByTag(tag);

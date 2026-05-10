@@ -7,6 +7,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Param,
   Body,
   Query,
@@ -136,7 +137,7 @@ export class TicketsController {
     return this.ticketsService.transfer(id, newUserId, (req.user as AuthUser).id);
   }
 
-  @Put(':id/status')
+  @Patch(':id/status')
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: TicketStatus,

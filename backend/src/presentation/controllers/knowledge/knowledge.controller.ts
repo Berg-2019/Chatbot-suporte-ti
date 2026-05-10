@@ -162,6 +162,18 @@ export class KnowledgeController {
     );
   }
 
+  @Get('faq/search')
+  async searchFaq(
+    @Query('q') query: string,
+    @Query('category') category?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.knowledgeSearchService.searchSimilar(
+      query,
+      limit ? parseInt(limit) : 10,
+    );
+  }
+
   @Get('search')
   async searchSimilar(
     @Query('q') query: string,
