@@ -16,7 +16,6 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { PrismaModule } from './infrastructure/database/prisma.module';
 import { RedisModule } from './infrastructure/cache/redis.module';
 import { RabbitMQModule } from './infrastructure/messaging/rabbitmq.module';
-import { ExternalModule } from './infrastructure/external/external.module';
 import { ServicesModule } from './infrastructure/services/services.module';
 
 // Presentation
@@ -39,7 +38,6 @@ import { PrinterModule } from './presentation/controllers/printers/printer.modul
 import { WebsocketModule } from './presentation/websockets/websocket.module';
 import { CannedResponsesModule } from './presentation/controllers/canned-responses/canned-responses.module';
 import { WebhooksModule } from './presentation/controllers/webhooks/webhooks.module';
-// import { RolesModule } from './presentation/controllers/roles/roles.module'; // DISABLED - requires customRole model
 import { CsatModule } from './presentation/controllers/csat/csat.module';
 import { AutomationModule } from './presentation/controllers/automation/automation.module';
 import { AutoAssignmentModule } from './presentation/controllers/auto-assignment/auto-assignment.module';
@@ -60,6 +58,7 @@ import { LicensesModule } from './presentation/controllers/licenses/licenses.mod
 import { SlaModule } from './presentation/controllers/sla/sla.module';
 import { PushModule } from './presentation/controllers/push/push.module';
 import { TechnicalReportsModule } from './presentation/controllers/technical-reports/technical-reports.module';
+import { AiModule } from './presentation/controllers/ai/ai.module';
 
 // Admin
 import { AdminModule } from './presentation/controllers/admin/admin.module';
@@ -95,7 +94,6 @@ import { HealthController } from './presentation/controllers/health.controller';
     PrismaModule,
     RedisModule,
     RabbitMQModule,
-    ExternalModule,
     ServicesModule,
 
     // Features
@@ -118,7 +116,6 @@ import { HealthController } from './presentation/controllers/health.controller';
     WebsocketModule,
     CannedResponsesModule,
     WebhooksModule,
-    // RolesModule, // DISABLED - requires customRole model
     CsatModule,
     AutomationModule,
     AutoAssignmentModule,
@@ -139,6 +136,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     SlaModule,
     PushModule,
     TechnicalReportsModule,
+    AiModule,
     AdminModule,
   ],
   controllers: [HealthController],
