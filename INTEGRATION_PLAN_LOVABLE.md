@@ -29,21 +29,33 @@ A Lovable empurrou 49 commits em `origin/main` do `profile-driven-app`, trazendo
 4. **`role: "DEV"` no JWT** (frontend-only) — backend não conhece esse role.
 5. **Branding "Lovable App"** ainda aparece em meta tags (`<title>`, OG tags).
 
-### Gaps backend ↔ frontend
+### Gaps backend ↔ frontend (atualizado 2026-05-10 após auditoria completa)
 
-| Frontend espera | Backend tem? | Ação |
+> Auditoria detalhada em [`docs/FRONTEND_BACKEND_AUDIT.md`](docs/FRONTEND_BACKEND_AUDIT.md).
+
+**Resolvidos (Fases 1-5):**
+
+| Frontend espera | Backend tem? | Status |
 |---|---|---|
-| `POST/GET/PATCH/DELETE /reports/technical/*` (CRUD relatórios técnicos) | ❌ Não existe | **Criar módulo** |
-| `POST /reports/technical/:id/sign` (assinatura PNG) | ❌ Não existe | **Criar** |
-| `POST /reports/technical/:id/media` (fotos/vídeos) | ❌ Não existe | **Criar** |
-| `POST/PATCH /reports/technical/:id/annotations` | ❌ Não existe | **Criar** |
-| `GET /tools/loans` (LoansPanel) | ✅ Existe | Apenas wire-up no front |
-| `POST /tools/:id/loan`, `POST /tools/:id/return` | ✅ Existe | Apenas wire-up |
-| `PATCH /users/me/preferences` (SectorSwitcher persist) | ❌ Não existe | **Criar (opcional)** |
-| `GET /auth/me` | ✅ Existe | Já usado |
-| `POST /push/subscribe` | ✅ Existe | Verificar pipeline de envio |
+| `POST/GET/PATCH/DELETE /technical-reports/*` | ✅ Criado (Fase 1) | Conectado |
+| `GET /tools/loans`, `POST /tools/:id/loan/return` | ✅ Já existia | Conectado (LoansPanel) |
+| `GET /auth/me` | ✅ Já existia | Já usado |
+| `POST /push/subscribe` | ✅ Pipeline real (Fase 2.2) | Conectado |
 
-> **Observação importante:** o backend já expõe `/reports/tickets` e `/reports/stock` — esses são **relatórios agregados** sobre tickets/estoque, **não** são os "Relatórios Técnicos" (laudos de serviço com assinatura) que a Lovable construiu. Vou nomear o módulo novo `technical-reports/` para evitar colisão.
+**Ainda quebrados (6 endpoints):**
+
+| Frontend chama | Backend tem | Problema |
+|---|---|---|
+| `GET /ai/reply-suggestions/{ticketId}` | ❌ Módulo AI deletado | 404 — recriar endpoint mínimo ou remover do frontend |
+| `GET /ai/analytics` | ❌ Módulo AI deletado | 404 — remover do frontend |
+| `POST /ai/feedback` | ❌ Módulo AI deletado | 404 — remover do frontend |
+| `GET /assets/scan/{tag}` | `GET /assets/tag/{tag}` | Path divergente — alinhar |
+| `GET /knowledge/faq/search` | `GET /knowledge/search` | Path divergente — alinhar |
+| `PATCH /tickets/{id}/status` | `PUT /tickets/{id}/status` | Método HTTP divergente — alinhar |
+
+**WebSocket desconectado:** `src/lib/socket.ts` definido mas nunca importado em nenhum componente. Sem real-time.
+
+> **Observação importante:** o backend já expõe `/reports/tickets` e `/reports/stock` — esses são **relatórios agregados** sobre tickets/estoque, **não** são os "Relatórios Técnicos" (laudos de serviço com assinatura) que a Lovable construiu. O módulo `technical-reports/` foi criado na Fase 1 para resolver isso.
 
 ---
 

@@ -3,9 +3,9 @@
 > Snapshot de progresso em **2026-05-10** baseado em auditoria QA + smoke test E2E real contra `IMPLEMENTATION_PLAN_V3.md`.
 > Marcar `[x]` quando concluir. Atualizar este arquivo a cada commit relevante.
 
-**Estado atual:** Fases 0-5 ✅ completas · Fase 6.13 LGPD 🔄 Sprint 1+2 ✅ · **Integração Lovable** ✅ Fases 1+2.2+3+5 concluídas
-**Branch:** `feature/chatbot-upgrade` · 165+ commits ahead de `main`
-**Último marco:** Integração Lovable — backend `technical-reports`, frontend rewireado (mocks removidos), push pipeline real (`web-push`), decisão **PWA único + sector via JWT** (2026-05-10). Detalhes em [INTEGRATION_PLAN_LOVABLE.md](INTEGRATION_PLAN_LOVABLE.md).
+**Estado atual:** Fases 0-5 ✅ completas · Fase 6.13 LGPD 🔄 Sprint 1+2 ✅ · **Integração Lovable** ✅ Fases 1+2.2+3+5 concluídas · **Auditoria cross-FE↔BE** realizada (2026-05-10)
+**Branch:** `feature/chatbot-upgrade` · 170+ commits ahead de `main`
+**Último marco:** Auditoria completa frontend↔backend — 6 endpoints quebrados identificados, ~150 endpoints sem frontend, código morto mapeado. Ver [`docs/FRONTEND_BACKEND_AUDIT.md`](docs/FRONTEND_BACKEND_AUDIT.md).
 
 ---
 
@@ -443,11 +443,11 @@ Stack completa subida e validada localmente. Detalhes em [logs](docs/SMOKE_TEST_
 
 ---
 
-## 📊 Indicadores de qualidade (atualizado 2026-05-04)
+## 📊 Indicadores de qualidade (atualizado 2026-05-10)
 
 | Métrica | Alvo | Atual | Status |
 |---------|------|-------|--------|
-| Commits ahead de main | < 30 | **165** | 🔴 esperando janela 1-2 sem |
+| Commits ahead de main | < 30 | **170** | 🔴 esperando janela 1-2 sem |
 | Refs `glpi` em backend/src | 0 | **0** | ✅ |
 | Tests unitários (`.spec.ts`) | ≥ 20 | **7 suites / 69 testes** | ✅ |
 | Tests passando | 100% | **69/69 (100%)** | ✅ |
@@ -462,40 +462,62 @@ Stack completa subida e validada localmente. Detalhes em [logs](docs/SMOKE_TEST_
 | nginx 4 vhosts (`sites-enabled/helpdeskmsm.conf`) | sim | **✅ 208 linhas** | ✅ |
 | 6 colunas GLPI legacy no schema | 0 | **6** (User.glpiUserId, glpiGroupId, Ticket.glpiId+index, Message.glpiId, StockItem.glpiAssetId) | 🟡 dívida pós-merge |
 | Stack rodando E2E (8 containers) | sim | **✅ rodando** | ✅ |
+| Endpoints frontend↔backend alinhados | 54/54 | **48/54** (6 quebrados) | 🔴 ver [`docs/FRONTEND_BACKEND_AUDIT.md`](docs/FRONTEND_BACKEND_AUDIT.md) |
+| WebSocket conectado | sim | **❌ definido mas não importado** | 🔴 |
+| Arquivos mortos no backend | 0 | **10** | 🟡 ver auditoria §5 |
+| Controllers com Prisma direto | 0 | **5** | 🟡 violação de arquitetura |
 
 ---
 
-## 🎯 Próximas ações (prioridade — atualizado 2026-05-04)
+## 🎯 Próximas ações (prioridade — atualizado 2026-05-10)
+
+### 🔴 Criticidade ALTA (frontend quebrado hoje)
+
+1. **Corrigir path `/assets/scan/{tag}`** — frontend chama `/scan/`, backend tem `/tag/` ([FRONTEND_BACKEND_AUDIT.md](docs/FRONTEND_BACKEND_AUDIT.md) §1.4)
+2. **Corrigir path `/knowledge/faq/search`** — frontend chama `/faq/search`, backend tem `/knowledge/search` (§1.5)
+3. **Corrigir PATCH vs PUT em `/tickets/{id}/status`** — método HTTP divergente (§1.6)
+4. **Recriar endpoint `/ai/reply-suggestions/{ticketId}`** — módulo AI foi deletado, chat precisa (§1.1)
+5. **Conectar WebSocket no frontend** — `socket.ts` existe mas nunca é importado (§2)
+
+### 🟡 Criticidade MÉDIA (código morto)
+
+6. Deletar 10 arquivos sem uso: `cache.interceptor.ts`, `cpf.validator.ts`, `require-permissions.decorator.ts`, `trigger-webhook.decorator.ts`, `file-validation.pipe.ts`, `email-config.dto.ts`, `knowledge.dto.ts`, `auth.dto.ts`, `assign-asset.uc.ts`, `return-asset.uc.ts` (§5)
+7. Remover `report-recipients.module.ts` órfão
+8. Corrigir AuditInterceptor duplo (registrado em `audit.module.ts` E `app.module.ts`)
+9. Unificar `ContactsController` + `ContactsEnhancedController` (mesmo prefixo, rotas conflitantes)
+10. Remover diretório `health/` vazio e `external.module.ts` shell
+11. Remover import `IdempotencyInterceptor` de `main.ts`
+12. Corrigir `RolesModule` comentado em `app.module.ts:42` referenciando diretório inexistente
+
+### 🟢 Criticidade BAIXA (futuro / pós-merge)
+
+13. Implementar páginas frontend para ~20 módulos sem UI (Parts, Printers, Reservations, CSAT, Automation, Labels, etc.)
+14. Corrigir violações de arquitetura: 5 controllers injetam PrismaService direto (`auto-assignment`, `automation`, `admin`, `chat`, `team-chat`)
+15. Tornar SectorGuard funcional ou removê-lo (no-op em 9 controllers)
+16. Unificar auth guards (`JwtAuthGuard` vs `AuthGuard('jwt')` — 7 vs ~30 controllers)
+17. Implementar páginas placeholder: `purchases.$id.tsx`, `safety.tsx`, `manual-service.tsx`
+18. `LoansPanel.tsx` ainda usa `mockLoans` hardcoded
+19. `AssistantPanel.tsx` em demo mode (TODO: conectar Hermes)
 
 ### 🟡 Antes da janela de merge
 
-1. **Corrigir bugs de contrato chat (6.9)** — ✅ 5/5 bugs resolvidos (05d4134)
-2. **Forward-merge `git merge origin/main`** semanal para manter feature current
-3. Smoke test em device móvel real (instalar PWA, escanear QR, criar ticket com foto)
-
-### 🟢 Pre-flight checks (1 dia antes da janela)
-
-3. `cd backend && bun run build` exit 0
-4. `cd backend && bun run test` 100% green
-5. Playwright E2E suite verde
-6. **Backup PostgreSQL prod** (`pg_dump`) externo
-7. **Backup volume `hermes_whatsapp_session`**
-8. Plano de rollback escrito
+20. **Forward-merge `git merge origin/main`** semanal para manter feature current
+21. Smoke test em device móvel real (instalar PWA, escanear QR, criar ticket com foto)
 
 ### 🚀 Janela de merge (sequencial, ver §9 do plano)
 
-9. `git checkout develop && git merge --no-ff feature/chatbot-upgrade` → push → migrations → monitorar 24-48h
-10. Se OK, repetir para `main`
-11. Tag `v3.0.0`
+22. `git checkout develop && git merge --no-ff feature/chatbot-upgrade` → push → migrations → monitorar 24-48h
+23. Se OK, repetir para `main`
+24. Tag `v3.0.0`
 
 ### ⏳ Deferred (pós-merge)
 
-12. Drop 6 colunas GLPI legacy do schema (migration drop após confirmar zero queries)
-13. iOS push tutorial ("Add to Home Screen")
-14. Background sync offline ticket creation
-15. Refatoração Clean Arch v2 (extrair use cases dos 55 controllers que importam Prisma direto)
-16. Reduzir `: any` types (149 → < 30)
-17. Prisma 6 → 7 major upgrade
+25. Drop 6 colunas GLPI legacy do schema
+26. iOS push tutorial ("Add to Home Screen")
+27. Background sync offline ticket creation
+28. Refatoração Clean Arch v2 (extrair use cases dos controllers que importam Prisma direto)
+29. Reduzir `: any` types (149 → < 30)
+30. Prisma 6 → 7 major upgrade
 
 ---
 
@@ -505,6 +527,8 @@ Stack completa subida e validada localmente. Detalhes em [logs](docs/SMOKE_TEST_
 |---------|-----------|
 | [IMPLEMENTATION_PLAN_V3.md](IMPLEMENTATION_PLAN_V3.md) | Plano vigente — arquitetura, fases, deploy strategy |
 | [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) | Este arquivo — estado operacional |
+| [INTEGRATION_PLAN_LOVABLE.md](INTEGRATION_PLAN_LOVABLE.md) | Plano de integração frontend |
+| [docs/FRONTEND_BACKEND_AUDIT.md](docs/FRONTEND_BACKEND_AUDIT.md) | Auditoria cross-FE↔BE (gaps, código morto) |
 | [CLAUDE.md](CLAUDE.md) | Instruções para agentes — convenções, restrições, decisões irrevogáveis |
 | [AGENTS.md](AGENTS.md) | Armadilhas conhecidas + padrões do repo |
 | [IMPLEMENTATION_PLAN_V2.archived.md](IMPLEMENTATION_PLAN_V2.archived.md) | Plano anterior arquivado (referência histórica) |
