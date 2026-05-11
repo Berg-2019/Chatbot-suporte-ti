@@ -3,10 +3,10 @@
 > Snapshot de progresso em **2026-05-11** — pós-reset do frontend + nova integração.
 > Marcar `[x]` quando concluir. Atualizar este arquivo a cada commit relevante.
 
-**Estado atual:** Fases 0-5 ✅ completas · **Fase 6 A+B+C+D ✅**
-**Backend A ✅** (2026-05-11) · **Frontend B ✅** (2026-05-11) · **Frontend C ✅** (2026-05-11) · **Hardening D ✅** (2026-05-11)
+**Estado atual:** Fases 0-5 ✅ completas · **Fase 6 A+B+C+D ✅** · **Fase E ⏳ (artefatos prontos, deploy pendente)**
+**Backend A ✅** (2026-05-11) · **Frontend B ✅** (2026-05-11) · **Frontend C ✅** (2026-05-11) · **Hardening D ✅** (2026-05-11) · **Fase E ⏳**
 **Branch:** `feature/chatbot-upgrade` · 165+ commits ahead de `main`
-**Último marco:** Fase D (hardening + E2E) completa — trace-id interceptor + E2E suite.
+**Último marco:** Fase E — artefatos de deploy criados (Dockerfile frontend, script cert, doc produção).
 
 ---
 
