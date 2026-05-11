@@ -1,7 +1,3 @@
-/**
- * Events Gateway - Socket.IO para real-time
- */
-
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -12,13 +8,42 @@ import {
 } from '@nestjs/websockets';
 import { OnModuleInit, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import * as cookie from 'cookie';
+import * as jwt from 'jsonwebtoken';
 import { RabbitMQService } from '../../infrastructure/messaging/rabbitmq.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { redactName } from '../../infrastructure/logger/redact';
+
+interface WsUser {
+  id: string;
+  email: string;
+  role: string;
+  sector: string;
+}
+
+const ALLOWED_ORIGINS = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim().toLowerCase().replace(/\/$/, ''))
+  : [
+      'https://ti.helpdeskmsm.com.br',
+      'https://eletrica.helpdeskmsm.com.br',
+      'https://compras.helpdeskmsm.com.br',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5175',
+      'http://localhost:3001',
+    ];
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const normalized = origin.toLowerCase().replace(/\/$/, '');
+      if (ALLOWED_ORIGINS.includes(normalized)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
   },
 })
 export class EventsGateway
@@ -31,17 +56,36 @@ export class EventsGateway
   constructor(
     private rabbitmq: RabbitMQService,
     private prisma: PrismaService,
-  ) {
-    this.logger.log('🏗️ EventsGateway Constructor called');
+  ) {}
+
+  private verifyClient(client: Socket): WsUser | null {
+    const cookieHeader = client.handshake.headers.cookie;
+    if (!cookieHeader) return null;
+
+    const cookies = cookie.parse(cookieHeader);
+    const token = cookies['helpdesk_session'];
+    if (!token) return null;
+
+    try {
+      const payload = jwt.verify(token, process.env.JWT_SECRET!) as any;
+      return {
+        id: payload.sub,
+        email: payload.email,
+        role: payload.role,
+        sector: payload.sector,
+      };
+    } catch {
+      return null;
+    }
   }
 
   async onModuleInit() {
-    this.logger.log('✅ EventsGateway onModuleInit - Inicializando consumidor');
+    this.logger.log('EventsGateway onModuleInit — consumidor de notificacoes ativo');
 
     await this.rabbitmq.consume(
       RabbitMQService.QUEUES.NOTIFICATIONS,
       async (data) => {
-        this.logger.debug(`📨 WebSocket Evento Recebido: ${data.type} para ticket ${data.ticketId}`);
+        this.logger.debug(`WebSocket evento: ${data.type} ticket ${data.ticketId}`);
         switch (data.type) {
           case 'ticket_created':
             this.server.emit('ticket:created', data.payload);
@@ -53,7 +97,6 @@ export class EventsGateway
             this.server.emit('ticket:updated', data.payload);
             break;
           case 'new_message':
-            this.logger.debug(`📤 Emitindo message:new para sala ticket:${data.ticketId}`);
             this.server.to(`ticket:${data.ticketId}`).emit('message:new', data.payload);
             break;
           case 'human_requested':
@@ -65,70 +108,85 @@ export class EventsGateway
   }
 
   async handleConnection(client: Socket) {
-    this.logger.log(`📥 Cliente conectado: ${client.id}`);
+    const user = this.verifyClient(client);
+    if (!user) {
+      this.logger.warn(`conexao recusada (sem JWT valido): ${client.id}`);
+      client.emit('error', { message: 'Autenticacao necessaria' });
+      client.disconnect(true);
+      return;
+    }
+
+    (client as any).user = user;
+    this.logger.log(`cliente conectado: ${client.id} user=${user.id} sector=${user.sector}`);
   }
 
   async handleDisconnect(client: Socket) {
-    this.logger.log(`📤 Cliente desconectado: ${client.id}`);
-
-    // Se cliente tinha userId, marca como offline
-    const userId = (client as any).userId;
+    const userId = (client as any).user?.id;
+    this.logger.log(`cliente desconectado: ${client.id}`);
     if (userId) {
       await this.updateAgentStatus(userId, 'OFFLINE');
     }
   }
 
   @SubscribeMessage('ticket:subscribe')
-  handleSubscribe(client: Socket, ticketId: string) {
+  async handleSubscribe(client: Socket, ticketId: string) {
+    const user: WsUser | undefined = (client as any).user;
+    if (!user) {
+      client.emit('error', { message: 'Nao autenticado' });
+      return;
+    }
+
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { sector: true },
+    });
+
+    if (ticket && ticket.sector !== user.sector && !user.role.startsWith('ADMIN')) {
+      this.logger.warn(`acesso negado: user ${user.id} (${user.sector}) tentou ticket ${ticketId} (${ticket.sector})`);
+      client.emit('error', { message: 'Setor nao autorizado para este ticket' });
+      return;
+    }
+
     client.join(`ticket:${ticketId}`);
-    this.logger.debug(`👁️ Cliente ${client.id} inscrito no ticket ${ticketId}`);
+    this.logger.debug(`cliente ${client.id} inscrito no ticket ${ticketId}`);
   }
 
   @SubscribeMessage('ticket:unsubscribe')
   handleUnsubscribe(client: Socket, ticketId: string) {
     client.leave(`ticket:${ticketId}`);
-    this.logger.debug(`👁️ Cliente ${client.id} saiu do ticket ${ticketId}`);
   }
-
-  // --- Chat Interno da Equipe ---
 
   @SubscribeMessage('team:join')
   handleJoinTeamChat(client: Socket) {
-    client.join('team-chat');
-    this.logger.debug(`👥 Cliente ${client.id} entrou no chat da equipe`);
+    const user: WsUser | undefined = (client as any).user;
+    if (user) {
+      client.join(`team-chat:${user.sector}`);
+      this.logger.debug(`cliente ${client.id} entrou no team-chat:${user.sector}`);
+    }
   }
 
   @SubscribeMessage('team:message')
   async handleTeamMessage(client: Socket, payload: { content: string; senderId: string }) {
+    const user: WsUser | undefined = (client as any).user;
+    if (!user) return;
+
     try {
-      // Salvar no banco
       const message = await this.prisma.teamMessage.create({
         data: {
           content: payload.content,
-          senderId: payload.senderId,
+          senderId: user.id,
         },
         include: {
-          sender: {
-            select: {
-              id: true,
-              name: true,
-              role: true,
-            }
-          }
-        }
+          sender: { select: { id: true, name: true, role: true } },
+        },
       });
 
-      // Broadcast para sala 'team-chat'
-      this.server.to('team-chat').emit('team:message', message);
-
+      this.server.to(`team-chat:${user.sector}`).emit('team:message', message);
     } catch (error) {
       this.logger.error('Erro ao salvar mensagem do time', error);
     }
   }
 
-  // --- Fim Chat Interno ---
-
-  // Métodos para emitir eventos programaticamente
   emitTicketCreated(ticket: any) {
     this.server.emit('ticket:created', ticket);
   }
@@ -145,16 +203,13 @@ export class EventsGateway
     this.server.emit('bot:status', status);
   }
 
-  // --- Status do Agente ---
-
   @SubscribeMessage('agent:identify')
-  async handleAgentIdentify(client: Socket, userId: string) {
-    (client as any).userId = userId;
-    this.logger.debug(`🆔 Agente ${userId} identificado no socket ${client.id}`);
+  async handleAgentIdentify(client: Socket, _userId: string) {
+    const user: WsUser | undefined = (client as any).user;
+    if (!user) return;
 
-    // Atualizar lastSeenAt
     await this.prisma.user.update({
-      where: { id: userId },
+      where: { id: user.id },
       data: { lastSeenAt: new Date() },
     });
   }
@@ -164,9 +219,9 @@ export class EventsGateway
     client: Socket,
     payload: { userId: string; status: string },
   ) {
-    const { userId, status } = payload;
-
-    await this.updateAgentStatus(userId, status as any);
+    const user: WsUser | undefined = (client as any).user;
+    if (!user) return;
+    await this.updateAgentStatus(user.id, payload.status as any);
   }
 
   async updateAgentStatus(userId: string, status: string) {
@@ -189,15 +244,12 @@ export class EventsGateway
         },
       });
 
-      // Broadcast para todos os clientes
       this.server.emit('agent:status:changed', updatedUser);
-      this.logger.log(`📊 Status do agente uid:${updatedUser.id.slice(0, 8)} alterado para ${status}`);
     } catch (error) {
-      this.logger.error('❌ Erro ao atualizar status do agente', error);
+      this.logger.error('Erro ao atualizar status do agente', error);
     }
   }
 
-  // Método para emitir mudança de status programaticamente
   emitAgentStatusChanged(agent: any) {
     this.server.emit('agent:status:changed', agent);
   }

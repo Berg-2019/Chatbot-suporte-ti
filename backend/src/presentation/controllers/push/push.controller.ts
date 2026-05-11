@@ -1,4 +1,4 @@
-import { Controller, Post, Delete, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, UseGuards, Request } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { IsObject, IsString } from 'class-validator';
 import { PushService } from './push.service';
@@ -22,6 +22,13 @@ class UnsubscribeDto {
 @Controller('push')
 export class PushController {
   constructor(private readonly pushService: PushService) {}
+
+  @Get('vapid-public-key')
+  @UseGuards(AuthGuard('jwt'))
+  async getVapidPublicKey() {
+    const key = process.env.VAPID_PUBLIC_KEY || '';
+    return { key };
+  }
 
   @Post('subscribe')
   @UseGuards(AuthGuard('jwt'))

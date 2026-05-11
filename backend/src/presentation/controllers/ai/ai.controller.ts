@@ -6,6 +6,12 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 @Controller('ai')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class AiController {
+  @Get('suggestions/:ticketId')
+  @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'ADMIN_COMPRAS', 'AGENT')
+  async getSuggestions(@Param('ticketId') ticketId: string) {
+    return this.getReplySuggestions(ticketId);
+  }
+
   @Get('reply-suggestions/:ticketId')
   @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'ADMIN_COMPRAS', 'AGENT')
   async getReplySuggestions(@Param('ticketId') _ticketId: string) {

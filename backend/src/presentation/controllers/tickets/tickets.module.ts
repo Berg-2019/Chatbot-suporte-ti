@@ -13,6 +13,7 @@ import { AutomationModule } from '../automation/automation.module';
 import { SlaModule } from '../sla/sla.module';
 import { PushModule } from '../push/push.module';
 import { StockModule } from '../stock/stock.module';
+import { ChatModule } from '../chat/chat.module';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
 @Module({
@@ -21,6 +22,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
     SlaModule,
     PushModule,
     StockModule,
+    ChatModule,
     MulterModule.register({
       storage: diskStorage({
         destination: './uploads/attachments',

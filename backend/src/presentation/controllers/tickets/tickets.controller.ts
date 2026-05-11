@@ -107,9 +107,34 @@ export class TicketsController {
     });
   }
 
+  @Get('my')
+  @Roles('ADMIN', 'ADMIN_TI', 'ADMIN_ELECTRIC', 'ADMIN_COMPRAS', 'AGENT')
+  async findMy(
+    @Request() req: any,
+    @Query('status') status?: TicketStatus,
+    @Query('category') category?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const user = req.user as AuthUser;
+    return this.ticketsService.findAll({
+      status,
+      category,
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      sector: user.sector as Sector,
+      assignedToId: user.id,
+    });
+  }
+
   @Get('pending')
   async findPending() {
     return this.ticketsService.findPending();
+  }
+
+  @Get(':id/history')
+  async getHistory(@Param('id') id: string) {
+    return this.ticketsService.getTicketHistory(id);
   }
 
   @Get(':id')
@@ -120,6 +145,15 @@ export class TicketsController {
   @Post()
   async create(@Body() dto: CreateTicketDto) {
     return this.ticketsService.create(dto);
+  }
+
+  @Post(':id/notes')
+  async addNote(
+    @Param('id') id: string,
+    @Body('content') content: string,
+    @Request() req: any,
+  ) {
+    return this.ticketsService.addNote(id, content, (req.user as AuthUser).id);
   }
 
   @Post(':id/assign')

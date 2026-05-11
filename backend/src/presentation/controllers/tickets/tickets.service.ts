@@ -9,6 +9,7 @@ import { AutomationEngineService } from '../../../infrastructure/services/automa
 import { SlaService } from '../sla/sla.service';
 import { PushService } from '../push/push.service';
 import { StockService } from '../stock/stock.service';
+import { ChatService } from '../chat/chat.service';
 import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 import { createReadStream, existsSync } from 'fs';
 import { redactPhone, redactName } from '../../../infrastructure/logger/redact';
@@ -42,6 +43,7 @@ export class TicketsService {
     private slaService: SlaService,
     private pushService: PushService,
     private stockService: StockService,
+    private chatService: ChatService,
   ) { }
 
   async findAll(filters?: {
@@ -791,6 +793,69 @@ export class TicketsService {
         technicianLevel: selectedTechnician.technicianLevel,
       },
     };
+  }
+
+  async addNote(ticketId: string, content: string, senderId: string) {
+    const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException('Ticket não encontrado');
+
+    return this.chatService.sendMessage({
+      ticketId,
+      content,
+      kind: 'text',
+      isInternal: true,
+      senderId,
+      senderType: 'technician',
+    });
+  }
+
+  async getTicketHistory(ticketId: string) {
+    const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException('Ticket não encontrado');
+
+    const [messages, auditLogs] = await Promise.all([
+      this.prisma.message.findMany({
+        where: { ticketId },
+        select: {
+          id: true,
+          content: true,
+          type: true,
+          direction: true,
+          isInternal: true,
+          createdAt: true,
+          sender: { select: { id: true, name: true, role: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.auditLog.findMany({
+        where: { resource: 'tickets', resourceId: ticketId },
+        select: {
+          id: true,
+          action: true,
+          metadata: true,
+          createdAt: true,
+          userId: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    const history = [
+      ...messages.map((m) => ({
+        id: m.id,
+        type: 'message' as const,
+        data: m,
+        createdAt: m.createdAt,
+      })),
+      ...auditLogs.map((a) => ({
+        id: a.id,
+        type: 'audit' as const,
+        data: a,
+        createdAt: a.createdAt,
+      })),
+    ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    return history;
   }
 
   async getAttachmentStream(attachmentId: string) {

@@ -26,5 +26,6 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
   ],
   controllers: [ChatController],
   providers: [ChatService, PrismaService],
+  exports: [ChatService],
 })
 export class ChatModule {}

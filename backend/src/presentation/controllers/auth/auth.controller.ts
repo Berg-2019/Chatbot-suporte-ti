@@ -7,6 +7,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { IsEmail, IsString, IsOptional, MinLength } from 'class-validator';
 import { Response, Request as ExpressRequest } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 
 class LoginDto {
@@ -44,6 +45,7 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto);
 
