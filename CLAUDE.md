@@ -4,8 +4,7 @@
 > **Plano vigente:** [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) — toda decisão de arquitetura, fase e prioridade vem de lá.
 > **Estado operacional:** [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md) — checklist e indicadores atualizados.
 > **Armadilhas conhecidas:** [`AGENTS.md`](AGENTS.md).
-> Plano anterior arquivado: [`IMPLEMENTATION_PLAN_V2.archived.md`](IMPLEMENTATION_PLAN_V2.archived.md) (não usar como referência atual).
-> Última atualização: 2026-05-02
+> Última atualização: 2026-05-11
 
 ## 📌 Estado atual (snapshot 2026-05-04)
 
@@ -143,7 +142,6 @@ Chatbot-suporte-ti/                 ← este repo
 ├── .env.example
 │
 ├── IMPLEMENTATION_PLAN_V3.md        # ← plano vigente
-├── IMPLEMENTATION_PLAN_V2.archived.md  # plano antigo (referência)
 └── CLAUDE.md                        # ← este arquivo
 
 ~/Projetos/profile-driven-app/        ← frontend (repo sibling, NÃO neste repo)
@@ -452,7 +450,6 @@ VAPID_SUBJECT=mailto:dev@helpdeskmsm.com.br
 | Documento | Descrição |
 |-----------|-----------|
 | [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) | **Plano vigente** — ler antes de começar qualquer fase |
-| [`IMPLEMENTATION_PLAN_V2.archived.md`](IMPLEMENTATION_PLAN_V2.archived.md) | Plano antigo (referência histórica) |
 | `hermes-integration/README.md` | Guia da integração Hermes |
 | `hermes-integration/skills/helpdesk-conversation/SKILL.md` | Skill de conversa natural (a criar — Fase 5) |
 | `nginx/sites-enabled/helpdeskmsm.conf` | Config dos 4 vhosts (a criar — Fase 6) |

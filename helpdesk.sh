@@ -11,7 +11,6 @@
 #   logs        - Mostra logs (opcional: nome do serviço)
 #   status      - Status dos containers
 #   migrate     - Executa migrações do Prisma
-#   migrate-glpi - Migra GLPI do dev para produção
 #   shell       - Acessa shell de um container
 #   help        - Mostra esta ajuda
 # =============================================================================
@@ -67,7 +66,6 @@ show_help() {
     echo -e "  ${GREEN}logs${NC} [serviço]   Mostra logs (todos ou de um serviço específico)"
     echo -e "  ${GREEN}status${NC}           Mostra status dos containers"
     echo -e "  ${GREEN}migrate${NC}          Executa migrações do Prisma"
-    echo -e "  ${GREEN}migrate-glpi${NC}     Migra GLPI do dev para produção"
     echo -e "  ${GREEN}shell${NC} <serviço>  Acessa shell de um container"
     echo -e "  ${GREEN}help${NC}             Mostra esta mensagem"
     echo ""
@@ -97,24 +95,16 @@ check_env() {
 # Comandos
 # =============================================================================
 cmd_install() {
-    echo -e "${BLUE}📦 Instalando dependências...${NC}"
+    echo -e "${BLUE}📦 Instalando dependências do backend...${NC}"
     echo ""
-    
-    echo -e "${YELLOW}[1/3] Backend...${NC}"
+
     cd "$SCRIPT_DIR/backend" && npm install
     npx prisma generate
-    
-    echo ""
-    echo -e "${YELLOW}[2/3] Frontend...${NC}"
-    cd "$SCRIPT_DIR/frontend" && npm install
-    
-    echo ""
-    echo -e "${YELLOW}[3/3] Bot...${NC}"
-    cd "$SCRIPT_DIR/bot" && npm install
-    
+
     cd "$SCRIPT_DIR"
     echo ""
     echo -e "${GREEN}✅ Dependências instaladas!${NC}"
+    echo -e "${YELLOW}ℹ️  Frontend (profile-driven-app) é repo sibling — rode 'bun install' lá.${NC}"
 }
 
 cmd_build() {
@@ -144,11 +134,11 @@ cmd_dev() {
     echo ""
     echo -e "${GREEN}✅ Ambiente de desenvolvimento iniciado!${NC}"
     echo ""
-    echo -e "   Backend:  ${BLUE}http://localhost:3000${NC} (debug: 9229)"
-    echo -e "   Frontend: ${BLUE}http://localhost:5173${NC}"
-    echo -e "   Bot:      porta ${BLUE}3002${NC}"
-    echo -e "   RabbitMQ: ${BLUE}http://localhost:15672${NC}"
-    echo -e "   GLPI:     ${BLUE}http://localhost:8080${NC}"
+    echo -e "   Backend:       ${BLUE}http://localhost:3000${NC} (debug: 9229)"
+    echo -e "   Hermes Agent:  porta ${BLUE}3004${NC}"
+    echo -e "   Hermes Tools:  porta ${BLUE}3003${NC}"
+    echo -e "   RabbitMQ:      ${BLUE}http://localhost:15672${NC}"
+    echo -e "   Frontend:      rode em ${BLUE}~/Projetos/profile-driven-app${NC} (bun run dev:all)"
     echo ""
     echo -e "   Use ${YELLOW}$0 logs${NC} para ver logs"
     echo -e "   Use ${YELLOW}$0 stop${NC} para parar"
@@ -169,10 +159,9 @@ cmd_prod() {
     echo ""
     echo -e "${GREEN}✅ Serviços iniciados em modo produção!${NC}"
     echo ""
-    echo -e "   Backend:  ${BLUE}http://localhost:4000${NC}"
-    echo -e "   Frontend: ${BLUE}http://localhost:4001${NC}"
+    echo -e "   Backend:  ${BLUE}https://api.helpdeskmsm.com.br${NC}"
+    echo -e "   Frontend: ${BLUE}https://ti.helpdeskmsm.com.br${NC} (servido por nginx, build estático)"
     echo -e "   RabbitMQ: ${BLUE}http://localhost:15672${NC}"
-    echo -e "   GLPI:     ${BLUE}http://localhost:8080${NC}"
     echo ""
     echo -e "   Use ${YELLOW}$0 logs${NC} para ver logs"
     echo -e "   Use ${YELLOW}$0 stop${NC} para parar"
@@ -262,76 +251,12 @@ cmd_migrate() {
     echo -e "${GREEN}✅ Migrações executadas!${NC}"
 }
 
-cmd_migrate_glpi() {
-    echo -e "${BLUE}🔄 Migrando GLPI do DEV para PRODUÇÃO...${NC}"
-    echo ""
-    
-    # Verificar se volumes de dev existem
-    if ! docker volume inspect helpdesk_mysql_dev &>/dev/null; then
-        echo -e "${RED}❌ Volume de MySQL dev não encontrado!${NC}"
-        echo -e "   Execute ${YELLOW}./helpdesk.sh dev${NC} primeiro para criar o ambiente."
-        exit 1
-    fi
-    
-    if ! docker volume inspect helpdesk_glpi_dev &>/dev/null; then
-        echo -e "${RED}❌ Volume de GLPI dev não encontrado!${NC}"
-        exit 1
-    fi
-    
-    echo -e "${YELLOW}⚠️  ATENÇÃO: Isso vai SOBRESCREVER os dados de GLPI em produção!${NC}"
-    read -p "Deseja continuar? (s/N): " confirm
-    if [[ ! "$confirm" =~ ^[Ss]$ ]]; then
-        echo -e "${YELLOW}Operação cancelada.${NC}"
-        exit 0
-    fi
-    
-    echo ""
-    echo -e "${BLUE}[1/3] Exportando banco MySQL do dev...${NC}"
-    docker run --rm \
-        -v helpdesk_mysql_dev:/var/lib/mysql \
-        --network helpdesk_network \
-        mysql:8.0 \
-        mysqldump -h helpdesk_mysql -u root -proot123 glpi > /tmp/glpi_backup.sql 2>/dev/null || \
-    docker exec helpdesk_mysql mysqldump -u root -proot123 glpi > /tmp/glpi_backup.sql 2>/dev/null
-    
-    if [ ! -s /tmp/glpi_backup.sql ]; then
-        echo -e "${RED}❌ Falha ao exportar banco MySQL!${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}   ✅ Backup criado: /tmp/glpi_backup.sql${NC}"
-    
-    echo ""
-    echo -e "${BLUE}[2/3] Copiando arquivos GLPI...${NC}"
-    docker run --rm \
-        -v helpdesk_glpi_dev:/source:ro \
-        -v helpdesk_glpi:/dest \
-        alpine sh -c "rm -rf /dest/* && cp -a /source/. /dest/"
-    echo -e "${GREEN}   ✅ Arquivos copiados${NC}"
-    
-    echo ""
-    echo -e "${BLUE}[3/3] Importando banco MySQL na produção...${NC}"
-    # Garantir que o container mysql de prod está rodando
-    if ! docker ps | grep -q helpdesk_mysql; then
-        echo -e "${YELLOW}   Iniciando MySQL de produção...${NC}"
-        $DOCKER_COMPOSE -f docker-compose.yml up -d mysql
-        sleep 10
-    fi
-    docker exec -i helpdesk_mysql mysql -u root -proot123 glpi < /tmp/glpi_backup.sql 2>/dev/null
-    echo -e "${GREEN}   ✅ Banco importado${NC}"
-    
-    rm -f /tmp/glpi_backup.sql
-    
-    echo ""
-    echo -e "${GREEN}✅ GLPI migrado com sucesso!${NC}"
-    echo -e "   Reinicie o GLPI com: ${YELLOW}$0 prod${NC}"
-}
-
 cmd_shell() {
     local service="$1"
     
     if [ -z "$service" ]; then
         echo -e "${RED}❌ Especifique um serviço: $0 shell <serviço>${NC}"
-        echo -e "   Serviços: backend, frontend, bot, postgres, redis, rabbitmq, mysql, glpi"
+        echo -e "   Serviços: backend, hermes, hermes-tools, postgres, redis, rabbitmq"
         exit 1
     fi
     
@@ -375,9 +300,6 @@ case "${1:-help}" in
         ;;
     migrate)
         cmd_migrate
-        ;;
-    migrate-glpi)
-        cmd_migrate_glpi
         ;;
     shell|sh)
         cmd_shell "$2"

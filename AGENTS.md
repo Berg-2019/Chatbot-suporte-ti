@@ -18,14 +18,10 @@ Qualquer commit, comentário em código, ou mensagem de merge: **pt-BR**. Não u
 
 ## ⚠️ armadilhas que causam falha silenciosa
 
-### `git add -A` é perigoso aqui
-Este repo contém **14 subrepos embedded** que o git tenta stagear automaticamente:
-```
-hermes-agent/  suport-eletric/  support-compras/  support-mobile/  support-ti/
-```
-Se você rodar `git add -A`, vai criar commits gigantes com conteúdo undesired. Use:
+### `git add -A` — cuidado com submódulo
+Hoje só sobra **1 submódulo**: `hermes-agent/` (os 3 frontends por área e o `frontend_bk` foram removidos na limpeza de 2026-05-11). Mesmo assim, prefira adicionar por nome para evitar commitar modificações not intencionais dentro do submódulo:
 - `git add arquivo.ts` (adicionar por nome, individualmente)
-- `git add -A -- ':!hermes-agent/' ':!suport-eletric/' ...` (excluir subrepos)
+- `git add -A -- ':!hermes-agent/'` (excluir o submódulo)
 
 ### Arquivos com owner root bloqueiam operações
 `backend/uploads/attachments/*.webm` são root-owned (filmagem de celular). Git restore/checkout falha. Antes de operar nesses arquivos:
