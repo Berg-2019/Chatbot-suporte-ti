@@ -1,8 +1,4 @@
-/**
- * Notification Preferences Controller
- */
-
-import { Controller, Get, Put, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Body, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { NotificationPreferencesService } from './notification-preferences.service';
 import { UpdateNotificationPreferencesDto } from './notification-preferences.dto';
@@ -17,16 +13,16 @@ export class NotificationPreferencesController {
         return this.preferencesService.getAvailableSounds();
     }
 
-    @Get(':userId')
-    getPreferences(@Param('userId') userId: string) {
-        return this.preferencesService.getPreferences(userId);
+    @Get()
+    getPreferences(@Req() req: any) {
+        return this.preferencesService.getPreferences(req.user.id);
     }
 
-    @Put(':userId')
+    @Put()
     updatePreferences(
-        @Param('userId') userId: string,
+        @Req() req: any,
         @Body() dto: UpdateNotificationPreferencesDto,
     ) {
-        return this.preferencesService.updatePreferences(userId, dto);
+        return this.preferencesService.updatePreferences(req.user.id, dto);
     }
 }

@@ -1,15 +1,10 @@
-/**
- * Logs Controller - Server logs viewer (Admin only)
- */
-
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { readFile } from 'fs/promises';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles, UserRole } from '../../../common/decorators/roles.decorator';
 
-const execAsync = promisify(exec);
+const VALID_LEVELS = new Set(['ERROR', 'WARN', 'INFO', 'DEBUG', 'LOG', 'VERBOSE']);
 
 @Controller('admin/logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -18,33 +13,32 @@ export class LogsController {
   @Roles(UserRole.ADMIN)
   async getLogs(
     @Query('lines') lines: string = '500',
-    @Query('level') level?: string, // ERROR, WARN, INFO, DEBUG
+    @Query('level') level?: string,
   ) {
-    const linesNum = Math.min(parseInt(lines) || 500, 1000); // Max 1000 lines
-
-    // Log file path (adjust based on your setup)
+    const linesNum = Math.min(parseInt(lines) || 500, 1000);
     const logPath = process.env.LOG_FILE_PATH || '/var/log/helpdesk/app.log';
 
     try {
-      let command = `tail -n ${linesNum} ${logPath}`;
-
-      if (level) {
-        command += ` | grep "${level}"`;
+      const content = await readFile(logPath, 'utf-8').catch(() => null);
+      if (!content) {
+        return { total: 0, logs: [], error: 'Log file not found or not accessible' };
       }
 
-      const { stdout } = await execAsync(command);
-
-      const logLines = stdout
+      let logLines = content
         .split('\n')
         .filter((line) => line.trim())
-        .map((line) => this.parseLogLine(line));
+        .slice(-linesNum);
+
+      if (level && VALID_LEVELS.has(level.toUpperCase())) {
+        const target = level.toUpperCase();
+        logLines = logLines.filter((line) => line.toUpperCase().includes(target));
+      }
 
       return {
         total: logLines.length,
-        logs: logLines,
+        logs: logLines.map((line) => this.parseLogLine(line)),
       };
     } catch (error) {
-      // If file doesn't exist or command fails, return logs from console
       return {
         total: 0,
         logs: [],
@@ -58,19 +52,13 @@ export class LogsController {
   @Roles(UserRole.ADMIN)
   async downloadLogs() {
     const logPath = process.env.LOG_FILE_PATH || '/var/log/helpdesk/app.log';
-
-    return {
-      downloadUrl: `/files/logs/app.log`,
-      path: logPath,
-    };
+    return { downloadUrl: `/files/logs/app.log`, path: logPath };
   }
 
   private parseLogLine(line: string) {
-    // Try to parse as JSON (structured logging)
     try {
       return JSON.parse(line);
     } catch {
-      // If not JSON, return as plain text with timestamp
       return {
         message: line,
         timestamp: new Date().toISOString(),
