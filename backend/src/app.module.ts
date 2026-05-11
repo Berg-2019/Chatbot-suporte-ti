@@ -11,6 +11,7 @@ import { validate } from './config/env.validation';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { AuditModule } from './common/audit/audit.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { TraceIdInterceptor } from './common/interceptors/trace-id.interceptor';
 
 // Infrastructure
 import { PrismaModule } from './infrastructure/database/prisma.module';
@@ -153,6 +154,10 @@ import { HealthController } from './presentation/controllers/health.controller';
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TraceIdInterceptor,
     },
   ],
 })
