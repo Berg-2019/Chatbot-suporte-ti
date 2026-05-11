@@ -90,6 +90,10 @@ services:
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
       JWT_SECRET: ${JWT_SECRET:-dev-secret-jwt}
+      HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
       FRONTEND_URL: http://localhost:5173,http://192.168.7.118,http://192.168.7.118:5173,http://helpdeskmsm.com.br,https://helpdeskmsm.com.br,https://www.helpdeskmsm.com.br
     volumes:
       - ./backend:/app:delegated
