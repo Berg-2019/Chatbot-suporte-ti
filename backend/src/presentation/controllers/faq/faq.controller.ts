@@ -11,16 +11,16 @@ import {
   Param,
   Body,
   Query,
+  SetMetadata,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { SetMetadata } from '@nestjs/common';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
 import { FaqService } from './faq.service';
 
 @Controller('faq')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class FaqController {
   constructor(private faqService: FaqService) {}
 

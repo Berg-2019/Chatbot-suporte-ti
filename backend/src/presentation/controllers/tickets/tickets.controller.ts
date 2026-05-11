@@ -20,7 +20,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { Response } from 'express';
 import { IsString, IsOptional, IsEnum, IsUUID, MinLength } from 'class-validator';
 import { TicketsService } from './tickets.service';
@@ -77,7 +77,7 @@ class CreateTicketDto {
 }
 
 @Controller('tickets')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class TicketsController {
   constructor(
     private ticketsService: TicketsService,
@@ -178,12 +178,12 @@ export class TicketsController {
 
   @Get('by-phone/:phone')
   @SetMetadata('isPublic', true)
+  @UseGuards(HermesApiKeyGuard)
   async findByPhone(@Param('phone') phone: string) {
     return this.ticketsService.findByPhone(phone);
   }
 
   @Post(':id/attachments')
-  @UseGuards(AuthGuard('jwt'))
   @UseInterceptors(FileInterceptor('file'))
   async uploadAttachment(
     @Param('id') id: string,
@@ -207,7 +207,6 @@ export class TicketsController {
   }
 
   @Post(':id/auto-assign')
-  @UseGuards(AuthGuard('jwt'))
   async autoAssign(
     @Param('id') id: string,
     @Body() options?: {
