@@ -15,14 +15,12 @@ services:
       POSTGRES_DB: helpdesk
       POSTGRES_USER: helpdesk
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-helpdesk123}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - helpdesk_network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U helpdesk" ]
+      test: ["CMD-SHELL", "pg_isready -U helpdesk"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,14 +33,12 @@ services:
     container_name: helpdesk_redis
     restart: unless-stopped
     command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - helpdesk_network
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -57,15 +53,12 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-helpdesk}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-helpdesk123}
-    ports:
-      - "5672:5672" # AMQP
-      - "15672:15672" # Management UI
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - helpdesk_network
     healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -79,8 +72,6 @@ services:
       dockerfile: Dockerfile
     container_name: helpdesk_backend
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://helpdesk:${POSTGRES_PASSWORD:-helpdesk123}@postgres:5432/helpdesk
@@ -88,14 +79,20 @@ services:
       REDIS_PORT: 6379
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
-      JWT_SECRET: ${JWT_SECRET:-sua-chave-secreta-jwt}
-      FRONTEND_URL: https://ti.helpdeskmsm.com.br,https://eletrica.helpdeskmsm.com.br,https://compras.helpdeskmsm.com.br
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.helpdeskmsm.com.br}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      FRONTEND_URL: ${FRONTEND_URL:-https://ti.helpdeskmsm.com.br,https://eletrica.helpdeskmsm.com.br,https://compras.helpdeskmsm.com.br}
+      HERMES_API_KEY: ${HERMES_API_KEY}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:dev@helpdeskmsm.com.br}
     volumes:
       - backend_logs:/app/logs
+      - backend_uploads:/app/uploads
     networks:
       - helpdesk_network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,15 +100,97 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # ============================================================================
-  # Frontend (Frontend-chatbot) - Único build, 3 subdomínios via nginx
+  # Hermes Agent - Bot WhatsApp (Baileys + IA)
   # ============================================================================
-  # NOTA: O frontend é servido pelo container 'nginx' que faz proxy reverso
-  # para o build SPA em /usr/share/nginx/html (montado do volume frontend_dist)
-  # O build do frontend deve ser feito separadamente (repo Frontend-chatbot):
-  #   cd ./Frontend-chatbot && bun run build
-  # O volume 'frontend_dist' deve ser montado no container nginx
+  hermes:
+    build:
+      context: ./hermes-agent
+      dockerfile: Dockerfile
+    container_name: helpdesk_hermes
+    restart: unless-stopped
+    command: ["gateway", "run"]
+    entrypoint: ["/opt/hermes/.venv/bin/hermes"]
+    environment:
+      NODE_ENV: production
+      HERMES_HOME: /opt/data
+      HERMES_WEB_DIST: /opt/hermes/hermes_cli/web_dist
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      HERMES_BACKEND_URL: http://hermes-tools:3003
+      HERMES_API_KEY: ${HERMES_API_KEY}
+      WHATSAPP_ENABLED: "true"
+      WHATSAPP_MODE: bot
+      WHATSAPP_ALLOWED_USERS: "*"
+      WHATSAPP_BRIDGE_PORT: "3001"
+      GATEWAY_ALLOW_ALL_USERS: "true"
+      HERMES_MODEL_PROVIDER: openai-compatible
+      HERMES_MODEL_BASE_URL: ${HERMES_MODEL_BASE_URL:-https://api.minimax.io/v1}
+      HERMES_MODEL_NAME: ${HERMES_MODEL_NAME:-MiniMax-M2}
+    volumes:
+      - hermes_data:/opt/data
+      - hermes_whatsapp_session:/root/.hermes/platforms/whatsapp/session
+    networks:
+      - helpdesk_network
+    depends_on:
+      - hermes-tools
+
+  # ============================================================================
+  # Hermes Tools Server - Bridge entre Hermes Agent e Backend
+  # ============================================================================
+  hermes-tools:
+    build:
+      context: ./hermes-integration/backend-tools
+      dockerfile: Dockerfile
+    container_name: helpdesk_hermes_tools
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:3000
+      BACKEND_ORIGIN: http://backend:3000
+      WHATSAPP_BRIDGE_URL: http://hermes-tools:3001
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
+      HERMES_API_KEY: ${HERMES_API_KEY}
+      TOOLS_PORT: 3003
+      MEDIA_TEMP_DIR: /app/media
+    volumes:
+      - backend_uploads:/app/uploads:ro
+      - media_temp:/app/media
+    networks:
+      - helpdesk_network
+    depends_on:
+      - backend
+    command: >
+      sh -c "node proxy.cjs &
+              sleep 2 &&
+              node server.js &
+              sleep 3 &&
+              node outgoing-consumer.js"
+
+  # ============================================================================
+  # Frontend Builder (Frontend-chatbot SPA)
+  # Builda o dist/ e popula o volume `frontend_dist` consumido pelo nginx central.
+  # ============================================================================
+  frontend:
+    build:
+      context: ./Frontend-chatbot
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://api.helpdeskmsm.com.br}
+        VITE_WS_URL: ${VITE_WS_URL:-wss://api.helpdeskmsm.com.br}
+    container_name: helpdesk_frontend
+    restart: unless-stopped
+    volumes:
+      - frontend_dist:/srv/dist
+      - frontend_manifests:/srv/manifests
+      - frontend_icons:/srv/icons
 
   # ============================================================================
   # Nginx Reverse Proxy (wildcard subdomínios)
@@ -125,13 +204,16 @@ services:
       - "443:443"
     volumes:
       - ./nginx/sites-enabled:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/ssl:ro
       - frontend_dist:/usr/share/nginx/html:ro
       - frontend_manifests:/usr/share/nginx/html/manifests:ro
+      - frontend_icons:/usr/share/nginx/html/icons:ro
       - certbot_webroot:/var/www/certbot
     networks:
       - helpdesk_network
     depends_on:
       - backend
+      - frontend
 
 # ==============================================================================
 # Volumes
@@ -141,12 +223,14 @@ volumes:
   redis_data:
   rabbitmq_data:
   backend_logs:
+  backend_uploads:
+  hermes_data:
+  hermes_whatsapp_session:
+  media_temp:
   frontend_dist:
-    driver: local
   frontend_manifests:
-    driver: local
+  frontend_icons:
   certbot_webroot:
-    driver: local
 
 # ==============================================================================
 # Networks
@@ -154,4 +238,3 @@ volumes:
 networks:
   helpdesk_network:
     name: helpdesk_network
-    external: true

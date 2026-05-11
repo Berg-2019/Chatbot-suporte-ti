@@ -2,7 +2,7 @@
  * Tickets Service
  */
 
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
@@ -45,6 +45,17 @@ export class TicketsService {
     private stockService: StockService,
     private chatService: ChatService,
   ) { }
+
+  private assertSectorAccess(
+    ticket: { sector: Sector | string | null },
+    user: { role: string; sector: string },
+  ) {
+    if (user.role.startsWith('ADMIN')) return;
+    if (!ticket.sector) return;
+    if (ticket.sector !== user.sector) {
+      throw new ForbiddenException('Setor não autorizado para este ticket');
+    }
+  }
 
   async findAll(filters?: {
     status?: TicketStatus;
@@ -795,23 +806,34 @@ export class TicketsService {
     };
   }
 
-  async addNote(ticketId: string, content: string, senderId: string) {
+  async addNote(
+    ticketId: string,
+    content: string,
+    user: { id: string; role: string; sector: string },
+  ) {
     const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!ticket) throw new NotFoundException('Ticket não encontrado');
+
+    this.assertSectorAccess(ticket, user);
 
     return this.chatService.sendMessage({
       ticketId,
       content,
       kind: 'text',
       isInternal: true,
-      senderId,
+      senderId: user.id,
       senderType: 'technician',
     });
   }
 
-  async getTicketHistory(ticketId: string) {
+  async getTicketHistory(
+    ticketId: string,
+    user: { id: string; role: string; sector: string },
+  ) {
     const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!ticket) throw new NotFoundException('Ticket não encontrado');
+
+    this.assertSectorAccess(ticket, user);
 
     const [messages, auditLogs] = await Promise.all([
       this.prisma.message.findMany({

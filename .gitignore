@@ -42,10 +42,14 @@ coverage/
 # Misc
 *.tgz
 .cache/
-#url
-nginx/
 #agentes ia
 .agent/
+
+# nginx — config tracked, certs e logs ignorados
+nginx/certs/
+nginx/logs/
+nginx/*.pem
+nginx/*.key
 
 # Frontend (clone do repo Berg-2019/Frontend-chatbot — gerenciado separadamente)
 Frontend-chatbot/

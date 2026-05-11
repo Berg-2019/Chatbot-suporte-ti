@@ -22,7 +22,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { Response } from 'express';
-import { IsString, IsOptional, IsEnum, IsUUID, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, MinLength, MaxLength } from 'class-validator';
 import { TicketsService } from './tickets.service';
 import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -74,6 +74,13 @@ class CreateTicketDto {
   @IsOptional()
   @IsUUID()
   affectedAssetId?: string;
+}
+
+class CreateNoteDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(5000)
+  content: string;
 }
 
 @Controller('tickets')
@@ -133,8 +140,8 @@ export class TicketsController {
   }
 
   @Get(':id/history')
-  async getHistory(@Param('id') id: string) {
-    return this.ticketsService.getTicketHistory(id);
+  async getHistory(@Param('id') id: string, @Request() req: any) {
+    return this.ticketsService.getTicketHistory(id, req.user as AuthUser);
   }
 
   @Get(':id')
@@ -150,10 +157,10 @@ export class TicketsController {
   @Post(':id/notes')
   async addNote(
     @Param('id') id: string,
-    @Body('content') content: string,
+    @Body() dto: CreateNoteDto,
     @Request() req: any,
   ) {
-    return this.ticketsService.addNote(id, content, (req.user as AuthUser).id);
+    return this.ticketsService.addNote(id, dto.content, req.user as AuthUser);
   }
 
   @Post(':id/assign')
