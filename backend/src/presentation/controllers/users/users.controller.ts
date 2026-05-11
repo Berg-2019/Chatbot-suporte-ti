@@ -120,4 +120,13 @@ export class UsersController {
     }
     return this.usersService.delete(id);
   }
+
+  @Post(':id/reset-password')
+  @Roles('ADMIN')
+  async resetPassword(@Param('id') id: string, @Request() req: any) {
+    if (req.user.role !== 'ADMIN') {
+      throw new ForbiddenException('Apenas admins');
+    }
+    return this.usersService.resetPassword(id);
+  }
 }

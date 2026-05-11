@@ -96,6 +96,24 @@ export class UsersService {
     return { message: 'Usuário deletado' };
   }
 
+  async resetPassword(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+
+    const newPassword = Math.random().toString(36).slice(2, 10) +
+      Math.random().toString(36).slice(2, 6).toUpperCase();
+
+    const bcrypt = require('bcryptjs');
+    const hashed = await bcrypt.hash(newPassword, 12);
+
+    await this.prisma.user.update({
+      where: { id },
+      data: { password: hashed },
+    });
+
+    return { password: newPassword };
+  }
+
   async createLocal(data: {
     name: string;
     email: string;
