@@ -1,11 +1,12 @@
 # Checklist de Implementação V3
 
-> Snapshot de progresso em **2026-05-10** baseado em auditoria QA + smoke test E2E real contra `IMPLEMENTATION_PLAN_V3.md`.
+> Snapshot de progresso em **2026-05-11** — pós-reset do frontend + nova integração.
 > Marcar `[x]` quando concluir. Atualizar este arquivo a cada commit relevante.
 
-**Estado atual:** Fases 0-5 ✅ completas · Fase 6.13 LGPD 🔄 Sprint 1+2 ✅ · **Integração Lovable** ✅ Fases 1+2.2+3+5 concluídas · **Auditoria cross-FE↔BE** realizada (2026-05-10)
-**Branch:** `feature/chatbot-upgrade` · 170+ commits ahead de `main`
-**Último marco:** Auditoria completa frontend↔backend — 6 endpoints quebrados identificados, ~150 endpoints sem frontend, código morto mapeado. Ver [`docs/FRONTEND_BACKEND_AUDIT.md`](docs/FRONTEND_BACKEND_AUDIT.md).
+**Estado atual:** Fases 0-5 ✅ completas · **Fase 6 — Integração Frontend→Backend** 🔄
+**Backend A ✅** (2026-05-11) · **Frontend B ✅** (2026-05-11) · **Frontend C ⏳** (2026-05-11)
+**Branch:** `feature/chatbot-upgrade` · 165+ commits ahead de `main`
+**Último marco:** Fase A (backend gaps) + Fase B (de-mocking) completas — zero mocks, build OK, 61/61 tests passando.
 
 ---
 
@@ -70,11 +71,48 @@
 - [x] Compressão aplicada em `reports.tsx` (mídia de relatórios) e `chat.$ticketId.tsx` (image kind)
 - [x] `tickets.new.tsx` mantém compressão local pré-existente
 
-### ⏭️ Fases puladas / canceladas
+---
 
-- ⏭️ Fase 2.1 — `PATCH /users/me/preferences` para `SectorSwitcher` persistir → **descartada** (PWA único + switcher só em DEV)
-- ❌ Fase 4 — 3 manifests por subdomínio → **cancelada** (decisão PWA único)
-- ⏭️ Fase 6 — E2E Playwright → adiada para após smoke manual
+## 🔄 Fase 6 — Integração Frontend → Backend (2026-05-11, plano: `PLANO_FRONTEND_INTEGRACAO_E_IMPLANTACAO.md`)
+
+### ✅ Fase A — Backend gaps (commit `81e95eb`)
+
+- [x] A1: `GET /tickets/my` — lista tickets filtrados por `assignedToId` + `sector`
+- [x] A2: `GET /tickets/:id/history` — timeline unificada `Message[]` + `AuditLog` (recurso `resource='tickets'`)
+- [x] A3: `GET /sla/policies` e `/sla/dashboard` — **já existiam** (sem mudança)
+- [x] A4: `GET /push/vapid-public-key` — retorna `{ key: env.VAPID_PUBLIC_KEY }`
+- [x] A5: `GET /ai/suggestions/:ticketId` — alias para `reply-suggestions`
+- [x] A6: `POST /tickets/:id/notes` — nota interna via `ChatService.sendMessage(isInternal=true)`
+- [x] A7: WS hardening — JWT via cookie na handshake, CORS allowlist, sector guard em `ticket:subscribe`, team-chat por sala de setor
+- [x] A8: `@Throttle` 5 req/min em `POST /auth/login`
+- [x] `tsc --noEmit` zero erros · 5/5 test suites passando · 61/61 tests OK
+
+### ✅ Fase B — De-mocking do frontend (commits no `Frontend-chatbot`)
+
+- [x] B1: `socket.io-client@^4.8.3` adicionado ao `package.json`
+- [x] B2: `src/lib/socket.ts` substituído por client real (cookie JWT, reconnection, wsUrl de `VITE_WS_URL`)
+- [x] B3: `ticketService.getMyTickets()` → `GET /tickets/my` (api.ts já tinha o path correto — sem mudança)
+- [x] B4: `aiService.getSuggestions` → `GET /ai/suggestions/:ticketId` (api.ts já tinha — sem mudança)
+- [x] B5: `catch{demoData()}` removido de: `purchases.tsx`, `tickets.$id.tsx`, `chat.$ticketId.tsx` (demoTicket + demoMessages), `team.tsx` (channels + messages), `engineer.index.tsx` (tickets + purchases)
+- [x] B6: `DEMO_USERS` removido do `AuthContext.tsx` — login exige backend real; `devLogin()` gateado com `import.meta.env.DEV`
+- [x] B7: `userStore.ts` — `SEED` agora `[]` (array vazio, não mais 4 usuarios demo)
+- [x] B8: `technicalReportsService` adicionado em `api.ts` (list, get, create, update, remove)
+- [x] B9: `stockService` adicionado em `api.ts` (list, get, create, update, movements, registerMovement)
+- [x] B10: `src/lib/audit.ts` mantido (sem demo data, usado por `reports.tsx`)
+- [x] B11: `toolsService` (list, getLoans, createLoan, returnLoan) + `pushService` (getVapidPublicKey, subscribe, unsubscribe) adicionados em `api.ts`
+- [x] B11b: `mockLoans` export removido do `LoansPanel.tsx`, default `loans=[]`
+- [x] **Verificação:** `npm run build` OK · `grep demo|mockLoans|DEMO_USERS` → só `SEED=[]` em `userStore.ts` (vazio) · build succeed
+
+### ⏭️ Fase C — PWA real + Web Push (2026-05-11)
+
+> Em progresso — iniciado 2026-05-11
+
+- [ ] C1: `vite-plugin-pwa` + workbox runtime caching (`/api/*` NetworkFirst, assets CacheFirst, `/auth/*` NetworkOnly)
+- [ ] C2: Gerar ícones 192/256/512 + maskable a partir dos logos por sector (`docs/Logo TI.jpeg`, etc.)
+- [ ] C3: Reescrever `notificationService.ts` → hook `usePushNotifications`: SW → `GET /push/vapid-public-key` → `pushManager.subscribe()` → `POST /push/subscribe`
+- [ ] C4: Toggle "Receber notificações" em `/settings`
+- [ ] C5: `InstallPwaPrompt` — captura `beforeinstallprompt`, tutorial iOS/Safari
+- [ ] C6: Backend: triggers push via `PushService.sendToSector()` na criação de ticket / mudança de status
 
 ### 📋 Pré-requisitos para deploy
 
