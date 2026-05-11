@@ -3,10 +3,10 @@
 > Snapshot de progresso em **2026-05-11** — pós-reset do frontend + nova integração.
 > Marcar `[x]` quando concluir. Atualizar este arquivo a cada commit relevante.
 
-**Estado atual:** Fases 0-5 ✅ completas · **Fase 6 — Integração Frontend→Backend** ✅ A+B+C
-**Backend A ✅** (2026-05-11) · **Frontend B ✅** (2026-05-11) · **Frontend C ✅** (2026-05-11)
+**Estado atual:** Fases 0-5 ✅ completas · **Fase 6 A+B+C+D ✅**
+**Backend A ✅** (2026-05-11) · **Frontend B ✅** (2026-05-11) · **Frontend C ✅** (2026-05-11) · **Hardening D ✅** (2026-05-11)
 **Branch:** `feature/chatbot-upgrade` · 165+ commits ahead de `main`
-**Último marco:** Fase C (PWA real + Web Push) completa — 2026-05-11.
+**Último marco:** Fase D (hardening + E2E) completa — trace-id interceptor + E2E suite.
 
 ---
 
@@ -108,11 +108,21 @@
 > Completa — smoke verificado 2026-05-11
 
 - [x] C1: `vite-plugin-pwa` + workbox runtime caching (`/api/*` NetworkFirst, assets CacheFirst, `/auth/*` NetworkOnly)
-- [x] C2: Gerar ícones 192/256/512 + maskable a partir dos logos por sector (`docs/Logo TI.jpeg`, etc.) — **skip, já existiam** (`public/icons/{ti,electric,compras}/`)
+- [x] C2: Gerar ícones 192/256/512 + maskable a partir dos logos por sector — **skip, já existiam** (`public/icons/{ti,electric,compras}/`)
 - [x] C3: Hook `usePushNotifications` — SW → `GET /push/vapid-public-key` → `pushManager.subscribe()` → `POST /push/subscribe`
 - [x] C4: Toggle "Receber notificações" em `/settings` com Switch + Bell icon
 - [x] C5: `InstallPwaPrompt` — captura `beforeinstallprompt`, tutorial iOS/Safari
 - [x] C6: Backend push trigger — **skip, já existia** (`PushService.sendToSector()` em tickets.service + purchase-requests.service)
+
+### ✅ Fase D — Hardening + smoke E2E (2026-05-11)
+
+> Completa — commits `dd7d057`
+
+- [x] D1: Helmet + CSP estrita em `main.ts` (já implementado, revisado)
+- [x] D2: `npm audit --production` — backend: axios high + @nestjs/core moderate (fix requer breaking changes, deferred); frontend: postcss moderate (deferred)
+- [x] D3: Playwright E2E suite em `backend/e2e/` — 3 fluxos (TI ticket, ELECTRIC checklist, COMPRAS approve + SSO cookie)
+- [x] D4: `TraceIdInterceptor` — `X-Request-ID` em toda response via `AsyncLocalStorage`, `uuid` ou respeita header do cliente
+- [x] D5: DTOs class-validator nos endpoints da Fase A — `CreateTicketDto`, `SubscribeDto`, `UnsubscribeDto`, `SlaPolicyDto`
 
 ### 📋 Pré-requisitos para deploy
 
