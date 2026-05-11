@@ -201,6 +201,19 @@ export class TicketsService {
       type: ticket.type,
     });
 
+    // 🔔 Push notification para todos os técnicos do sector
+    if (ticket.sector && ticket.type !== 'SERVICE_REPORT') {
+      try {
+        await this.pushService.sendToSector(ticket.sector, {
+          title: `Novo chamado · ${ticket.sector}`,
+          body: ticket.title,
+          data: { ticketId: ticket.id, action: 'ticket_created' },
+        });
+      } catch (err: any) {
+        this.logger.warn(`Push (create) falhou: ${err.message}`);
+      }
+    }
+
     // 🤖 Auto-assignment (se habilitado e ticket não tem assignedToId)
     if (!ticket.assignedToId && ticket.type !== 'SERVICE_REPORT') {
       try {
@@ -421,6 +434,19 @@ export class TicketsService {
       await this.slaService.resumeTimer(id);
     } else if (status === 'RESOLVED') {
       await this.slaService.markFirstResponse(id);
+    }
+
+    // 🔔 Push notification para o técnico responsável (se houver)
+    if (ticket.assignedToId) {
+      try {
+        await this.pushService.sendToUser(ticket.assignedToId, {
+          title: `Chamado #${ticket.id.slice(0, 8)} · ${status}`,
+          body: ticket.title,
+          data: { ticketId: ticket.id, action: 'status_changed', status },
+        });
+      } catch (err: any) {
+        this.logger.warn(`Push (status) falhou: ${err.message}`);
+      }
     }
 
     // 🤖 Trigger automation: ticket_updated / ticket_resolved / ticket_closed

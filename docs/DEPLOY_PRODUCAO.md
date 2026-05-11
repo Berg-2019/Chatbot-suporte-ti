@@ -39,12 +39,23 @@ A **Fase E** é a implantação da stack completa em produção nos domínios:
 - `compras.helpdeskmsm.com.br` — mesmo SPA, header `X-Frontend-Sector: COMPRAS`
 - `api.helpdeskmsm.com.br` — backend NestJS + WebSocket upgrade
 
-### `Frontend-chatbot/Dockerfile` ✅ (novo — criado 2026-05-11)
+### `Frontend-chatbot/Dockerfile` ✅ (commitado em Berg-2019/Frontend-chatbot)
 
-Multi-stage build com `oven/bun:1-alpine` → `nginx:alpine`.
-Build do TanStack Start + servem em porta 8080 internamente.
+Single-stage builder com `oven/bun:1-alpine`. Roda `bun install --frozen-lockfile`
++ `bun run build` e copia o output pra 3 volumes (`/srv/dist`, `/srv/manifests`,
+`/srv/icons`). Container fica em standby (`tail -f /dev/null`) pra manter os
+volumes vivos e permitir rebuilds via `docker compose up -d --build frontend`.
 
-### `scripts/gen-wildcard-cert.sh` ✅ (novo — criado 2026-05-11)
+Args VITE_API_URL e VITE_WS_URL são injetados em build time pelo compose.
+
+### `docker-compose.yml` ✅ (atualizado)
+
+Serviços de produção: `postgres`, `redis`, `rabbitmq`, `backend`, `hermes`,
+`hermes-tools`, `frontend` (builder), `nginx`. O `nginx` central consome os
+volumes populados pelo `frontend` e faz proxy_pass pra `backend:3000` em
+`api.helpdeskmsm.com.br`.
+
+### `scripts/gen-wildcard-cert.sh` ✅
 
 Certbot DNS-01 manual para wildcard `*.helpdeskmsm.com.br`.
 
@@ -127,18 +138,29 @@ sudo cp /etc/letsencrypt/live/helpdeskmsm.com.br/fullchain.pem ./nginx/certs/
 sudo cp /etc/letsencrypt/live/helpdeskmsm.com.br/privkey.pem   ./nginx/certs/
 sudo chmod 600 ./nginx/certs/*.pem
 
-# --- 4. Build + subir infraestrutura ---
-docker compose build backend
+# --- 4. Build de TODAS as imagens ---
+# backend, hermes, hermes-tools e frontend (TanStack Start) buildam aqui.
+# O frontend é builder que popula 3 volumes (dist, manifests, icons) consumidos
+# pelo nginx central — não é container HTTP próprio.
+docker compose build
+
+# --- 5. Subir infra ---
 docker compose up -d postgres redis rabbitmq
 
 # Aguardar saúde
 docker compose ps
 
-# --- 5. Aplicar migrations ---
-docker compose exec backend npx prisma migrate deploy
+# --- 6. Aplicar migrations ---
+docker compose run --rm backend npx prisma migrate deploy
+# (alternativa: docker compose exec backend ... depois do up -d backend)
 
-# --- 6. Subir serviços ---
-docker compose up -d backend hermes hermes-tools nginx
+# --- 7. Subir todos os serviços ---
+# Ordem: backend → hermes-tools → hermes → frontend (popula volume) → nginx
+docker compose up -d backend hermes-tools hermes frontend nginx
+
+# Aguardar frontend popular o volume (uns 10s após build)
+sleep 15 && docker compose logs frontend | tail -3
+# Esperado: "Frontend dist populated. Container idle."
 
 # --- 7. Verificar health ---
 curl -s https://api.helpdeskmsm.com.br/api/health

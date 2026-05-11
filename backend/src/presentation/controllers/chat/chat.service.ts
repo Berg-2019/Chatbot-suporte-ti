@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
+import { PushService } from '../push/push.service';
 import { MessageType, Direction } from '@prisma/client';
 
 const KIND_TO_TYPE: Record<string, MessageType> = {
@@ -24,9 +25,12 @@ interface SendMessageInput {
 
 @Injectable()
 export class ChatService {
+    private readonly logger = new Logger(ChatService.name);
+
     constructor(
         private prisma: PrismaService,
         private rabbitmq: RabbitMQService,
+        private pushService: PushService,
     ) { }
 
     async getConversations(sector?: string) {
@@ -113,6 +117,31 @@ export class ChatService {
         });
 
         const msg = m as any;
+
+        // 🔔 Push notification para o técnico responsável quando mensagem é INCOMING
+        // (cliente respondeu) ou INTERNAL (colega adicionou nota). Não enviar para
+        // mensagens OUTGOING público (já vão pro cliente via WhatsApp).
+        if (direction === 'INCOMING' || input.isInternal) {
+            try {
+                const ticket = await this.prisma.ticket.findUnique({
+                    where: { id: input.ticketId },
+                    select: { assignedToId: true, title: true },
+                });
+                if (ticket?.assignedToId && ticket.assignedToId !== input.senderId) {
+                    const label = input.isInternal ? 'Nota interna' : 'Nova mensagem';
+                    const preview = input.content.length > 60
+                        ? input.content.slice(0, 57) + '...'
+                        : input.content;
+                    await this.pushService.sendToUser(ticket.assignedToId, {
+                        title: `${label} · ${ticket.title}`,
+                        body: preview,
+                        data: { ticketId: input.ticketId, messageId: msg.id, action: 'message_new' },
+                    });
+                }
+            } catch (err: any) {
+                this.logger.warn(`Push (message) falhou: ${err.message}`);
+            }
+        }
 
         if (direction === 'OUTGOING' && !input.isInternal) {
             const ticket = await this.prisma.ticket.findUnique({

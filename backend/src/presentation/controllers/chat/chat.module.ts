@@ -6,9 +6,11 @@ import { v4 as uuid } from 'uuid';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
+    PushModule,
     MulterModule.register({
       storage: diskStorage({
         destination: './uploads/messages',
