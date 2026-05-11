@@ -3,10 +3,10 @@
 > Snapshot de progresso em **2026-05-11** — pós-reset do frontend + nova integração.
 > Marcar `[x]` quando concluir. Atualizar este arquivo a cada commit relevante.
 
-**Estado atual:** Fases 0-5 ✅ completas · **Fase 6 — Integração Frontend→Backend** 🔄
-**Backend A ✅** (2026-05-11) · **Frontend B ✅** (2026-05-11) · **Frontend C ⏳** (2026-05-11)
+**Estado atual:** Fases 0-5 ✅ completas · **Fase 6 — Integração Frontend→Backend** ✅ A+B+C
+**Backend A ✅** (2026-05-11) · **Frontend B ✅** (2026-05-11) · **Frontend C ✅** (2026-05-11)
 **Branch:** `feature/chatbot-upgrade` · 165+ commits ahead de `main`
-**Último marco:** Fase A (backend gaps) + Fase B (de-mocking) completas — zero mocks, build OK, 61/61 tests passando.
+**Último marco:** Fase C (PWA real + Web Push) completa — 2026-05-11.
 
 ---
 
@@ -103,16 +103,16 @@
 - [x] B11b: `mockLoans` export removido do `LoansPanel.tsx`, default `loans=[]`
 - [x] **Verificação:** `npm run build` OK · `grep demo|mockLoans|DEMO_USERS` → só `SEED=[]` em `userStore.ts` (vazio) · build succeed
 
-### ⏭️ Fase C — PWA real + Web Push (2026-05-11)
+### ✅ Fase C — PWA real + Web Push (2026-05-11)
 
-> Em progresso — iniciado 2026-05-11
+> Completa — smoke verificado 2026-05-11
 
-- [ ] C1: `vite-plugin-pwa` + workbox runtime caching (`/api/*` NetworkFirst, assets CacheFirst, `/auth/*` NetworkOnly)
-- [ ] C2: Gerar ícones 192/256/512 + maskable a partir dos logos por sector (`docs/Logo TI.jpeg`, etc.)
-- [ ] C3: Reescrever `notificationService.ts` → hook `usePushNotifications`: SW → `GET /push/vapid-public-key` → `pushManager.subscribe()` → `POST /push/subscribe`
-- [ ] C4: Toggle "Receber notificações" em `/settings`
-- [ ] C5: `InstallPwaPrompt` — captura `beforeinstallprompt`, tutorial iOS/Safari
-- [ ] C6: Backend: triggers push via `PushService.sendToSector()` na criação de ticket / mudança de status
+- [x] C1: `vite-plugin-pwa` + workbox runtime caching (`/api/*` NetworkFirst, assets CacheFirst, `/auth/*` NetworkOnly)
+- [x] C2: Gerar ícones 192/256/512 + maskable a partir dos logos por sector (`docs/Logo TI.jpeg`, etc.) — **skip, já existiam** (`public/icons/{ti,electric,compras}/`)
+- [x] C3: Hook `usePushNotifications` — SW → `GET /push/vapid-public-key` → `pushManager.subscribe()` → `POST /push/subscribe`
+- [x] C4: Toggle "Receber notificações" em `/settings` com Switch + Bell icon
+- [x] C5: `InstallPwaPrompt` — captura `beforeinstallprompt`, tutorial iOS/Safari
+- [x] C6: Backend push trigger — **skip, já existia** (`PushService.sendToSector()` em tickets.service + purchase-requests.service)
 
 ### 📋 Pré-requisitos para deploy
 
