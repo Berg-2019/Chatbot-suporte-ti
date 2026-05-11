@@ -112,10 +112,10 @@ services:
         condition: service_healthy
 
   # ============================================================================
-  # Frontend - profile-driven-app (Único build, 3 subdomínios via nginx)
+  # Frontend - Frontend-chatbot (Único build, 3 subdomínios via nginx)
   # ============================================================================
   # NOTA: Em dev local, rode o frontend separadamente com bun:
-  #   cd ~/Projetos/profile-driven-app
+  #   cd ./Frontend-chatbot
   #   bun run dev:ti       # → http://localhost:5173 (TI)
   #   bun run dev:electric  # → http://localhost:5174 (Elétrica)
   #   bun run dev:compras   # → http://localhost:5175 (Compras)

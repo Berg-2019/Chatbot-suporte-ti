@@ -33,7 +33,7 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
 
 **Repositórios:**
 - Backend (este repo): https://github.com/Berg-2019/Chatbot-suporte-ti — branch atual `feature/chatbot-upgrade`
-- Frontend único: https://github.com/Berg-2019/profile-driven-app (TanStack Start + React 19 + Tailwind 4 + Bun) — clonado em `./profile-driven-app/` (raiz deste repo, gitignored)
+- Frontend único: https://github.com/Berg-2019/Frontend-chatbot (TanStack Start + React 19 + Tailwind 4 + Bun) — clonado em `./Frontend-chatbot/` (raiz deste repo, gitignored)
 - Produção: https://*.helpdeskmsm.com.br (wildcard cert Let's Encrypt DNS-01)
 
 ---
@@ -81,7 +81,7 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
 | Estratégia: evoluir o backend atual (não recriar do zero) | ✅ |
 | **Remover GLPI** — substituir por CMDB nativo + SLA + License | ✅ |
 | **Remover bot legado** (`bot/`) — Hermes 100% no WhatsApp | ✅ |
-| Frontend único (`profile-driven-app`) servido em 3 subdomínios | ✅ |
+| Frontend único (`Frontend-chatbot`) servido em 3 subdomínios | ✅ |
 | SSO via cookie httpOnly em `.helpdeskmsm.com.br` | ✅ |
 | Sem Cloudflare — tudo local com Docker | ✅ |
 | **PWA mobile-first** (câmera, QR scanner, push, offline real) | ✅ |
@@ -142,11 +142,11 @@ Chatbot-suporte-ti/                 ← este repo
 ├── .env.example
 │
 ├── IMPLEMENTATION_PLAN_V3.md        # ← plano vigente
-├── profile-driven-app/              # ← frontend (repo Berg-2019/profile-driven-app, gitignored)
+├── Frontend-chatbot/              # ← frontend (repo Berg-2019/Frontend-chatbot, gitignored)
 └── CLAUDE.md                        # ← este arquivo
 ```
 
-> **Frontend agora vive DENTRO deste repo** (em `profile-driven-app/`), gitignored — é um clone do repo `Berg-2019/profile-driven-app`. Decisão tomada em 2026-05-11 após reset completo do frontend para reiniciar a Fase 6 do zero.
+> **Frontend agora vive DENTRO deste repo** (em `Frontend-chatbot/`), gitignored — é um clone do repo `Berg-2019/Frontend-chatbot`. Decisão tomada em 2026-05-11 após reset completo do frontend para reiniciar a Fase 6 do zero.
 
 > **`bot/` será deletado** na Fase 1. **`frontend/` legado** já foi removido. **`glpi.service.ts` e `glpi-sync.service.ts`** serão deletados na Fase 1.
 
@@ -164,7 +164,7 @@ Chatbot-suporte-ti/                 ← este repo
 - WebSocket Socket.IO para tempo real
 - **Clean Architecture v2** com 4 camadas: `presentation/` → `application/` → `domain/` → `infrastructure/`
 
-### Frontend (`profile-driven-app`)
+### Frontend (`Frontend-chatbot`)
 - **TanStack Start** (React 19 + TanStack Router file-based + Vite)
 - **Tailwind 4** + shadcn/ui (Radix UI)
 - React Hook Form + Zod
@@ -233,7 +233,7 @@ export const Route = createFileRoute('/_authed/tickets/')({
 });
 ```
 
-Tema vem do **JWT** (`user.sector`). `detectSectorFromHost()` permanece em [profile-driven-app/src/lib/sector.ts](profile-driven-app/src/lib/sector.ts) apenas como **fallback pré-login** (tela de `/login` antes do `useAuth().sector` estar disponível):
+Tema vem do **JWT** (`user.sector`). `detectSectorFromHost()` permanece em [Frontend-chatbot/src/lib/sector.ts](Frontend-chatbot/src/lib/sector.ts) apenas como **fallback pré-login** (tela de `/login` antes do `useAuth().sector` estar disponível):
 
 ```typescript
 // src/contexts/ThemeContext.tsx
@@ -295,10 +295,10 @@ docker logs -f helpdesk_hermes
 docker exec -it helpdesk_hermes hermes whatsapp
 ```
 
-### 2. Frontend (`profile-driven-app`, gitignored dentro deste repo)
+### 2. Frontend (`Frontend-chatbot`, gitignored dentro deste repo)
 
 ```bash
-cd profile-driven-app        # ← no root deste repo
+cd Frontend-chatbot        # ← no root deste repo
 bun install                  # ⚠️ Bun, não npm
 
 # Subir os 3 frontends em portas diferentes (simulando subdomínios)
@@ -379,7 +379,7 @@ Cliente envia msg → Hermes (Baileys) → skill helpdesk-conversation
 | **3** | SLA Engine: SlaPolicy, BusinessHours, SlaTimer, EscalationRule | 1 sem |
 | **4** | PurchaseRequest CRUD + workflow approve/reject | 1 sem |
 | **5** | Hermes orchestration: skill helpdesk-conversation + idempotência WA | 1 sem |
-| **6** | Frontend `profile-driven-app` + 3 subdomínios + PWA mobile | 2-3 sem |
+| **6** | Frontend `Frontend-chatbot` + 3 subdomínios + PWA mobile | 2-3 sem |
 | | **Total** | **8-9 sem** |
 
 Sequência **importa** — Fase 0 destrava todas as outras (rebase + segurança). Fases 2-4 podem rodar levemente em paralelo se houver mais de 1 dev. Fase 6 só começa após 4.

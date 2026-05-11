@@ -137,7 +137,7 @@ const data = result.data.data;
 
 ## Repos siblings (não mexer aqui)
 
-- Frontend: `profile-driven-app/` (clonado na raiz deste repo) — TanStack Start + React 19 + Tailwind 4 + Bun
+- Frontend: `Frontend-chatbot/` (clonado na raiz deste repo) — TanStack Start + React 19 + Tailwind 4 + Bun
 - Nginx (produção): config vive aqui (`nginx/sites-enabled/`), mas docker-compose referencia `./nginx:/etc/nginx/conf.d`
 
 ---

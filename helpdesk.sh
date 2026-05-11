@@ -104,7 +104,7 @@ cmd_install() {
     cd "$SCRIPT_DIR"
     echo ""
     echo -e "${GREEN}✅ Dependências instaladas!${NC}"
-    echo -e "${YELLOW}ℹ️  Frontend: 'cd profile-driven-app && bun install' (gitignored, neste repo).${NC}"
+    echo -e "${YELLOW}ℹ️  Frontend: 'cd Frontend-chatbot && bun install' (gitignored, neste repo).${NC}"
 }
 
 cmd_build() {
@@ -138,7 +138,7 @@ cmd_dev() {
     echo -e "   Hermes Agent:  porta ${BLUE}3004${NC}"
     echo -e "   Hermes Tools:  porta ${BLUE}3003${NC}"
     echo -e "   RabbitMQ:      ${BLUE}http://localhost:15672${NC}"
-    echo -e "   Frontend:      rode em ${BLUE}./profile-driven-app${NC} (bun run dev:all)"
+    echo -e "   Frontend:      rode em ${BLUE}./Frontend-chatbot${NC} (bun run dev:all)"
     echo ""
     echo -e "   Use ${YELLOW}$0 logs${NC} para ver logs"
     echo -e "   Use ${YELLOW}$0 stop${NC} para parar"

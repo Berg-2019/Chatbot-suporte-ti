@@ -13,7 +13,7 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant** servido em 
 - **Idempotência** via Redis (TTL 24h por `wa_message_id`)
 
 ### 🏢 Frontend único, 3 subdomínios
-Mesmo build do `profile-driven-app`, tema/abas decididos pelo **JWT** (`user.sector`):
+Mesmo build do `Frontend-chatbot`, tema/abas decididos pelo **JWT** (`user.sector`):
 
 | Subdomínio | Setor | Tema |
 |-----------|-------|------|
@@ -45,10 +45,10 @@ docker compose -f docker-compose.dev.yml up -d \
 docker logs -f helpdesk_hermes
 ```
 
-Frontend (clone do repo Berg-2019/profile-driven-app, gitignored neste repo):
+Frontend (clone do repo Berg-2019/Frontend-chatbot, gitignored neste repo):
 
 ```bash
-cd profile-driven-app
+cd Frontend-chatbot
 bun install
 bun run dev:all   # ti=5173, eletrica=5174, compras=5175
 ```
@@ -66,7 +66,7 @@ bun run dev:all   # ti=5173, eletrica=5174, compras=5175
                      ▼          ▼            ▼            ▼
                   ┌─────────────────────────────┐   ┌──────────┐
                   │  FRONTEND ÚNICO              │   │ BACKEND  │
-                  │  (profile-driven-app)        │   │ NestJS   │
+                  │  (Frontend-chatbot)        │   │ NestJS   │
                   │  1 build · 3 vhosts          │   │ Clean v2 │
                   │  Tema vem do JWT             │   │          │
                   └──────────────────────────────┘   └────┬─────┘
@@ -99,7 +99,7 @@ Chatbot-suporte-ti/
 ├── helpdesk.sh              # script de gerenciamento
 ├── CLAUDE.md                # instruções
 ├── IMPLEMENTATION_PLAN_V3.md
-└── profile-driven-app/      # frontend (clone do repo Berg-2019/profile-driven-app, gitignored)
+└── Frontend-chatbot/      # frontend (clone do repo Berg-2019/Frontend-chatbot, gitignored)
 ```
 
 ---

@@ -105,12 +105,12 @@ services:
         condition: service_healthy
 
   # ============================================================================
-  # Frontend (profile-driven-app) - Único build, 3 subdomínios via nginx
+  # Frontend (Frontend-chatbot) - Único build, 3 subdomínios via nginx
   # ============================================================================
   # NOTA: O frontend é servido pelo container 'nginx' que faz proxy reverso
   # para o build SPA em /usr/share/nginx/html (montado do volume frontend_dist)
-  # O build do frontend deve ser feito separadamente (repo profile-driven-app):
-  #   cd ~/Projetos/profile-driven-app && bun run build
+  # O build do frontend deve ser feito separadamente (repo Frontend-chatbot):
+  #   cd ./Frontend-chatbot && bun run build
   # O volume 'frontend_dist' deve ser montado no container nginx
 
   # ============================================================================
