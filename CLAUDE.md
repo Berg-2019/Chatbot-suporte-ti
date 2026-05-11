@@ -33,7 +33,7 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
 
 **Repositórios:**
 - Backend (este repo): https://github.com/Berg-2019/Chatbot-suporte-ti — branch atual `feature/chatbot-upgrade`
-- Frontend único: https://github.com/Berg-2019/profile-driven-app (TanStack Start + React 19 + Tailwind 4 + Bun) — clonado em `profile-driven-app/` na raiz deste repo
+- Frontend único: https://github.com/Berg-2019/profile-driven-app (TanStack Start + React 19 + Tailwind 4 + Bun) — clonado em `./profile-driven-app/` (raiz deste repo, gitignored)
 - Produção: https://*.helpdeskmsm.com.br (wildcard cert Let's Encrypt DNS-01)
 
 ---
@@ -142,10 +142,11 @@ Chatbot-suporte-ti/                 ← este repo
 ├── .env.example
 │
 ├── IMPLEMENTATION_PLAN_V3.md        # ← plano vigente
+├── profile-driven-app/              # ← frontend (repo Berg-2019/profile-driven-app, gitignored)
 └── CLAUDE.md                        # ← este arquivo
-
-~/Projetos/profile-driven-app/        ← frontend (repo sibling, NÃO neste repo)
 ```
+
+> **Frontend agora vive DENTRO deste repo** (em `profile-driven-app/`), gitignored — é um clone do repo `Berg-2019/profile-driven-app`. Decisão tomada em 2026-05-11 após reset completo do frontend para reiniciar a Fase 6 do zero.
 
 > **`bot/` será deletado** na Fase 1. **`frontend/` legado** já foi removido. **`glpi.service.ts` e `glpi-sync.service.ts`** serão deletados na Fase 1.
 
@@ -232,7 +233,7 @@ export const Route = createFileRoute('/_authed/tickets/')({
 });
 ```
 
-Tema vem do **JWT** (`user.sector`). `detectSectorFromHost()` permanece em [src/lib/sector.ts](../profile-driven-app/src/lib/sector.ts) apenas como **fallback pré-login** (tela de `/login` antes do `useAuth().sector` estar disponível):
+Tema vem do **JWT** (`user.sector`). `detectSectorFromHost()` permanece em [profile-driven-app/src/lib/sector.ts](profile-driven-app/src/lib/sector.ts) apenas como **fallback pré-login** (tela de `/login` antes do `useAuth().sector` estar disponível):
 
 ```typescript
 // src/contexts/ThemeContext.tsx
@@ -294,10 +295,10 @@ docker logs -f helpdesk_hermes
 docker exec -it helpdesk_hermes hermes whatsapp
 ```
 
-### 2. Frontend (`profile-driven-app`, repo sibling)
+### 2. Frontend (`profile-driven-app`, gitignored dentro deste repo)
 
 ```bash
-cd ~/Projetos/profile-driven-app
+cd profile-driven-app        # ← no root deste repo
 bun install                  # ⚠️ Bun, não npm
 
 # Subir os 3 frontends em portas diferentes (simulando subdomínios)

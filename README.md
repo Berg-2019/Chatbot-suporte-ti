@@ -45,10 +45,10 @@ docker compose -f docker-compose.dev.yml up -d \
 docker logs -f helpdesk_hermes
 ```
 
-Frontend (repo sibling):
+Frontend (clone do repo Berg-2019/profile-driven-app, gitignored neste repo):
 
 ```bash
-cd ~/Projetos/profile-driven-app
+cd profile-driven-app
 bun install
 bun run dev:all   # ti=5173, eletrica=5174, compras=5175
 ```
@@ -98,9 +98,8 @@ Chatbot-suporte-ti/
 ├── docker-compose.staging.yml
 ├── helpdesk.sh              # script de gerenciamento
 ├── CLAUDE.md                # instruções
-└── IMPLEMENTATION_PLAN_V3.md
-
-~/Projetos/profile-driven-app/   # frontend (repo sibling)
+├── IMPLEMENTATION_PLAN_V3.md
+└── profile-driven-app/      # frontend (clone do repo Berg-2019/profile-driven-app, gitignored)
 ```
 
 ---

@@ -46,3 +46,6 @@ coverage/
 nginx/
 #agentes ia
 .agent/
+
+# Frontend (clone do repo Berg-2019/profile-driven-app — gerenciado separadamente)
+profile-driven-app/
