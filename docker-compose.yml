@@ -188,9 +188,7 @@ services:
     container_name: helpdesk_frontend
     restart: unless-stopped
     volumes:
-      - frontend_dist:/srv/dist
-      - frontend_manifests:/srv/manifests
-      - frontend_icons:/srv/icons
+      - frontend_dist:/srv/html
 
   # ============================================================================
   # Nginx Reverse Proxy (wildcard subdomínios)
@@ -206,8 +204,6 @@ services:
       - ./nginx/sites-enabled:/etc/nginx/conf.d:ro
       - ./nginx/certs:/etc/ssl:ro
       - frontend_dist:/usr/share/nginx/html:ro
-      - frontend_manifests:/usr/share/nginx/html/manifests:ro
-      - frontend_icons:/usr/share/nginx/html/icons:ro
       - certbot_webroot:/var/www/certbot
     networks:
       - helpdesk_network
@@ -228,8 +224,6 @@ volumes:
   hermes_whatsapp_session:
   media_temp:
   frontend_dist:
-  frontend_manifests:
-  frontend_icons:
   certbot_webroot:
 
 # ==============================================================================
@@ -238,3 +232,4 @@ volumes:
 networks:
   helpdesk_network:
     name: helpdesk_network
+    external: true
