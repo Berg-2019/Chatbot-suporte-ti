@@ -1,10 +1,11 @@
 # CLAUDE.md — Chatbot-suporte-ti
 
 > Instruções para o Claude Code trabalhar neste projeto.
+> 🚨 **LEIA PRIMEIRO:** [`HANDOFF.md`](HANDOFF.md) — snapshot atual da stack, pendentes priorizados, armadilhas conhecidas, comandos prontos.
 > **Plano vigente:** [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) — toda decisão de arquitetura, fase e prioridade vem de lá.
 > **Estado operacional:** [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md) — checklist e indicadores atualizados.
-> **Armadilhas conhecidas:** [`AGENTS.md`](AGENTS.md).
-> Última atualização: 2026-05-11
+> **Armadilhas conhecidas:** [`AGENTS.md`](AGENTS.md) (HANDOFF.md amplia com casos novos).
+> Última atualização: 2026-05-12
 
 ## 📌 Estado atual (snapshot 2026-05-04)
 
