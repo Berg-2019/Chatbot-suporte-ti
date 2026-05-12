@@ -81,9 +81,11 @@ services:
       REDIS_PORT: 6379
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
-      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.helpdeskmsm.com.br}
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      FRONTEND_URL: ${FRONTEND_URL:-https://ti.helpdeskmsm.com.br,https://eletrica.helpdeskmsm.com.br,https://compras.helpdeskmsm.com.br}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # 1 domínio único (sector vem do JWT, não do host). Proxy reverso externo
+      # finaliza SSL e reescreve Host; aqui no compose interno é localhost.
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost,http://localhost:80,http://localhost:5173,http://nginx}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:dev@helpdeskmsm.com.br}
     volumes:
       - backend_logs:/app/logs
@@ -180,15 +182,18 @@ services:
       context: ./Frontend-chatbot
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-https://api.helpdeskmsm.com.br}
-        VITE_WS_URL: ${VITE_WS_URL:-wss://api.helpdeskmsm.com.br}
+        # API e WS pelo mesmo origin do SPA (path /api e /socket.io no nginx interno).
+        # Quando o proxy reverso externo finalizar SSL, basta apontar pra http://nginx:80
+        # — VITE_API_URL pode continuar relativo.
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_WS_URL: ${VITE_WS_URL:-}
     container_name: helpdesk_frontend
     restart: unless-stopped
     volumes:
       - frontend_dist:/srv/html
 
   # ============================================================================
-  # Nginx Reverse Proxy (wildcard subdomínios)
+  # Nginx interno (single vhost HTTP; SSL/multi-host fica no proxy reverso externo)
   # ============================================================================
   nginx:
     image: nginx:alpine
@@ -196,12 +201,9 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx/sites-enabled:/etc/nginx/conf.d:ro
-      - ./nginx/certs:/etc/ssl:ro
       - frontend_dist:/usr/share/nginx/html:ro
-      - certbot_webroot:/var/www/certbot
     networks:
       - helpdesk_network
     depends_on:
@@ -221,7 +223,6 @@ volumes:
   hermes_whatsapp_session:
   media_temp:
   frontend_dist:
-  certbot_webroot:
 
 # ==============================================================================
 # Networks

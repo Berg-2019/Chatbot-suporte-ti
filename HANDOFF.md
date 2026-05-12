@@ -1,19 +1,38 @@
 # HANDOFF.md — Chatbot-suporte-ti
 
 > 🚨 **LEIA PRIMEIRO ESTE ARQUIVO** antes de qualquer ação neste repo.
-> Atualizado: 2026-05-12 · Branch: `feature/chatbot-upgrade` · 10 commits ahead de `origin/feature/chatbot-upgrade`
+> Atualizado: 2026-05-12 (tarde) · Branch: `feature/chatbot-upgrade`
+
+## 🆕 Mudança de arquitetura 2026-05-12 (tarde)
+
+**1 domínio único** — Lovable entregou `SectorThemeSync` que aplica `data-sector` + `theme-color` a partir do JWT (`useAuth().sector`). Os 3 subdomínios `ti./eletrica./compras.helpdeskmsm.com.br` **não são mais usados**. Setor é decidido pelo login.
+
+Implicações já aplicadas:
+- `nginx/sites-enabled/helpdeskmsm.conf`: 1 vhost HTTP default (não SSL, não multi-host). Servir SPA + `/api` proxy.
+- `docker-compose.yml` (nginx service): só porta 80, sem mount de certs.
+- Backend: `FRONTEND_URL=http://localhost,...,http://nginx` (origins locais; SSL fica no proxy reverso EXTERNO).
+- Backend: `COOKIE_SECURE=false`, `COOKIE_DOMAIN=` vazio (proxy externo cuida disso em prod).
+- Frontend build args: `VITE_API_URL=/api` (path relativo, mesmo origin).
+- Smoke `http://localhost/` → 200 SPA, `http://localhost/api/health` → 200, login + cookie OK.
+
+**Proxy reverso externo** (Nginx Proxy Manager, Traefik, Caddy ou nginx upstream gerenciado) é responsável por:
+- Terminar SSL (Let's Encrypt etc)
+- Roteamento de domínio público → container `nginx:80`
+- HSTS / forçar HTTPS
+
+O nginx INTERNO do compose é só roteador local. Em produção real, basta apontar o proxy externo pra `http://<host>:80` (ou container `nginx` na mesma rede docker).
 
 ---
 
-##_snapshot_ status: ✅ A+B+C+D+E artefatos ✅ completos · deploy pendente
+## Snapshot status: ✅ stack UP, smoke single-domain verde, integração Lovable absorvida
 
 ---
 
-## Como confirmar que a stack está no ar (6 comandos)
+## Como confirmar que a stack está no ar (single domain)
 
 ```bash
-# 1. Backend health
-curl -s http://localhost:3000/api/health
+# 1. Backend health via nginx interno
+curl -s http://localhost/api/health
 # Esperado: {"status":"ok","services":{"api":true,"redis":true}}
 
 # 2. Todos os 6 endpoints críticos (cookie admin@helpdesk.com / password123)
