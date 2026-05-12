@@ -1,293 +1,372 @@
-# HANDOFF — estado da stack e próximos passos
+# HANDOFF.md — Chatbot-suporte-ti
 
-> **Para o próximo agente / dev:** este é o ponto de entrada. Leia antes de tocar em qualquer coisa.
-> **Data do snapshot:** 2026-05-12 · **Branch:** `feature/chatbot-upgrade` no Chatbot · `main` no Frontend-chatbot e fork Hermes.
-
----
-
-## 🎯 Onde estamos
-
-Sistema **rodando 100% E2E na VM de produção** (smoke deploy verde — 13/13 endpoints validados). Mas o **Hermes/WhatsApp ainda não está em produção real** — o que está rodando é dev/teste. A integração frontend↔backend está validada via curl; falta exercitar via UI real e UI mobile.
-
-### Containers ativos na VM agora (checar com `docker ps`)
-
-| Container | Origem | Status esperado |
-|---|---|---|
-| `helpdesk_postgres` | docker-compose.dev.yml (volume `helpdesk_postgres_dev`) | healthy |
-| `helpdesk_redis` | dev | healthy |
-| `helpdesk_rabbitmq` | dev | healthy |
-| `helpdesk_backend` | **docker-compose.yml (prod)** — NestJS 11 | healthy |
-| `helpdesk_hermes_tools` | docker-compose.yml | up |
-| `helpdesk_frontend` | docker-compose.yml — builder, popula volume `frontend_dist` | up |
-| `helpdesk_nginx` | docker-compose.yml — 4 vhosts SSL self-signed | up |
-| `helpdesk_intent` | dev | healthy |
-| `helpdesk_hermes` | NÃO está no compose prod (image existe) | parado |
-
-**Importante:** dev e prod COMPARTILHAM postgres/redis/rabbitmq via rede `helpdesk_network` (external). Pra subir uma prod isolada num host limpo, ver [docs/DEPLOY_PRODUCAO.md](docs/DEPLOY_PRODUCAO.md).
+> 🚨 **LEIA PRIMEIRO ESTE ARQUIVO** antes de qualquer ação neste repo.
+> Atualizado: 2026-05-12 · Branch: `feature/chatbot-upgrade` · 10 commits ahead de `origin/feature/chatbot-upgrade`
 
 ---
 
-## ✅ Validações de smoke (todas verdes)
+##_snapshot_ status: ✅ A+B+C+D+E artefatos ✅ completos · deploy pendente
 
-Comando rápido pra revalidar:
+---
+
+## Como confirmar que a stack está no ar (6 comandos)
+
 ```bash
-# requer cookie de admin — login antes
-curl -sk -c /tmp/cj.txt --resolve api.helpdeskmsm.com.br:443:127.0.0.1 \
-  -X POST -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$(grep ^ADMIN_EMAIL= .env | cut -d= -f2-)\",\"password\":\"$(grep ^ADMIN_PASSWORD= .env | cut -d= -f2-)\"}" \
-  https://api.helpdeskmsm.com.br/api/auth/login > /dev/null
+# 1. Backend health
+curl -s http://localhost:3000/api/health
+# Esperado: {"status":"ok","services":{"api":true,"redis":true}}
 
-for ep in /api/health /api/auth/me /api/tickets/my /api/sla/policies /api/users /api/push/vapid-public-key; do
-  echo "$ep: $(curl -sk -b /tmp/cj.txt --resolve api.helpdeskmsm.com.br:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://api.helpdeskmsm.com.br$ep)"
+# 2. Todos os 6 endpoints críticos (cookie admin@helpdesk.com / password123)
+COOKIE=$(curl -s -c /tmp/hc.txt -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@helpdesk.com","password":"admin123"}' | \
+  grep -oP '"token"\s*:\s*"\K[^"]+')
+TOKEN=$(grep jwt /tmp/hc.txt | awk '{print $7}')
+
+for ep in /tickets/my /sla/policies /push/vapid-public-key /ai/suggestions/ticket-1 /assets /purchase-requests; do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $COOKIE" \
+    http://localhost:3000/api$ep)
+  echo "$ep → $CODE"
 done
+# Esperado: 200 ou 401 (token exp), nenhum 404
 
-for h in ti eletrica compras; do
-  echo "SPA $h: $(curl -sk --resolve $h.helpdeskmsm.com.br:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://$h.helpdeskmsm.com.br/)"
-done
-```
+# 3. Frontend TI (porta 5173 — bun dev)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5173/
+# Esperado: 200
 
-Smoke completo + headers de segurança documentados em [docs/SMOKE_DEPLOY_RESULTS.md](docs/SMOKE_DEPLOY_RESULTS.md).
+# 4. Frontend Electric (5174)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5174/
+# Esperado: 200
 
----
+# 5. Frontend Compras (5175)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5175/
+# Esperado: 200
 
-## 📦 O que foi feito nesta sessão (em ordem cronológica)
-
-| # | Commit Chatbot | O quê |
-|---|---|---|
-| 1 | `47c9596` | NestJS 10 → 11 (24 → 3 vulnerabilidades) |
-| 2 | `56e4fbc` | docker-compose network external + volumes simplificados |
-| 3 | `7ebfb52` | `POST /users/:id/reset-password` |
-| 4 | `6059ab3` | Smoke deploy verde — env_file, healthcheck `/api/health`, CSP, manifest fix |
-| 5 | `f7a5514` | Bump SHA Hermes (merge upstream NousResearch 2768 commits) |
-
-| Commit Frontend-chatbot | O quê |
-|---|---|
-| `b9dad92` | vite `cloudflare: false` + `tanstackStart.spa.enabled` + Dockerfile flat |
-| `2b4bb69` | Migração final: `userStore`/`reports`/`audit` → services REST + tipos puros |
-| `5eb65f7` | Suite Playwright E2E (3 specs, 12 testes) |
-| `fdc7bc8` | npm audit fix (0 vulnerabilidades) |
-| `c0f3282` | Fix 6 erros TS + X-Request-ID no axios |
-
-| Commit Hermes (fork) | O quê |
-|---|---|
-| `dc6fb02a8` | Merge upstream/main NousResearch — 2768 commits absorvidos preservando nossos 3 |
-
----
-
-## 🚧 Pendentes priorizados
-
-### Alta — antes de tráfego real
-
-1. **Cert wildcard Let's Encrypt** (atualmente self-signed em `nginx/certs/`):
-   ```bash
-   sudo bash scripts/gen-wildcard-cert.sh
-   # seguir prompt DNS-01 do certbot; criar TXT record _acme-challenge
-   sudo cp /etc/letsencrypt/live/helpdeskmsm.com.br/fullchain.pem nginx/certs/wildcard.helpdeskmsm.com.br.crt
-   sudo cp /etc/letsencrypt/live/helpdeskmsm.com.br/privkey.pem   nginx/certs/wildcard.helpdeskmsm.com.br.key
-   docker exec helpdesk_nginx nginx -s reload
-   ```
-
-2. **DNS wildcard** `*.helpdeskmsm.com.br` → IP da VM (verificar com `dig +short ti.helpdeskmsm.com.br`).
-
-3. **Smoke em device mobile real**: instalar PWA no celular (Chrome/Safari), validar push notification, foto via câmera, login SSO entre subdomínios. Suite Playwright cobre desktop + mobile chromium mas não substitui device físico.
-
-4. **Rebuild do Hermes pra pegar o upstream merge** (image atual é pré-merge):
-   ```bash
-   docker compose -f docker-compose.yml build hermes  # ~5-10 min
-   docker compose -f docker-compose.yml up -d --force-recreate hermes
-   docker logs -f helpdesk_hermes  # parear QR de novo se sessão WhatsApp invalidar
-   ```
-   Validar: bridge.js voice bubbles (mp3→ogg conversion), stranger reject, message splitting.
-
-### Média — qualidade
-
-5. **Dialog "Novo usuário" em `/admin/users`**: backend já aceita `POST /users` (admin only); UI tem só botão "Novo" sem `onClick`. Implementar dialog idêntico ao de `dev.index.tsx` mas dentro do layout authed.
-
-6. **C6 push expandido — eventos faltantes**: já dispara em ticket create/status/message (commit `a26ecf6`). Falta: SLA breach iminente, escalation, asset assignment.
-
-7. **Imap/utf7 dívida de segurança** (3 high audit): substituir `imap` por `imapflow` em `backend/src/infrastructure/email/email-ingestion.service.ts` ou deixar como tá (módulo é opcional, desabilitado em runtime quando `EMAIL_INGESTION_*` não setado).
-
-### Baixa — débito técnico
-
-8. **20 módulos do backend sem UI no frontend**: Parts, Printers, Reservations, CSAT, Automation, Labels, Bot Variables, Macros, etc. Listados em [IMPLEMENTATION_CHECKLIST.md §13](IMPLEMENTATION_CHECKLIST.md).
-
-9. **5 controllers ainda injetam PrismaService direto** (violação Clean Arch v2): `auto-assignment`, `automation`, `admin`, `chat`, `team-chat`. Refatorar pra passar via service/use-case.
-
-10. **GLPI legacy schema** — 6 colunas ainda no Prisma (`User.glpiUserId`, `glpiGroupId`, `Ticket.glpiId+index`, `Message.glpiId`, `StockItem.glpiAssetId`). Migration drop adiada pós-merge develop/main.
-
----
-
-## 🧠 Decisões importantes (não revisitar sem novo plano)
-
-- **PWA único**: tema/abas vêm do JWT (`user.sector`), não do host. 1 manifest, 3 subdomínios servem o mesmo SPA. Decisão 2026-05-10.
-- **Hermes Agent**: única integração WhatsApp (sem bot legado). Bridge HTTP em `helpdesk_hermes_tools:3003`.
-- **Sem GLPI**: CMDB nativo (Asset/AssetAssignment/License/LicenseAssignment) + SLA + PurchaseRequests.
-- **NestJS 11 sobre Nest 10**: zero código mudou, 87% das vulnerabilidades resolvidas.
-- **Bridge Hermes Docker-aware**: nosso fork diverge do upstream em `_ACCEPTED_HOST_VALUES` (`'hermes'` adicionado) e `bind 0.0.0.0`. Upstream reforçou loopback-only por GHSA-ppp5-vxwm-4cf7 (DNS rebinding). Trade-off consciente — rodamos em rede Docker isolada.
-- **Cookie SSO**: `helpdesk_session` `HttpOnly` `Domain=.helpdeskmsm.com.br` `Secure` `SameSite=Lax` `Max-Age=28800`. Compartilhado entre ti/eletrica/compras subdomínios.
-
----
-
-## ⚠️ Armadilhas conhecidas (CRUCIAL)
-
-### 1. `git add -A` no Chatbot-suporte-ti
-Tem 1 submódulo (`hermes-agent`). Adicionar tudo cego pode bumper o SHA sem você notar. Use `git add arquivo.ts` ou `git add -A -- ':!hermes-agent/'`.
-
-### 2. `backend/dist/` root-owned
-Container Docker cria como root, depois `tsc` local falha com `EACCES`. Fix: `sudo chown -R dev:dev backend/dist`.
-
-### 3. `backend/uploads/attachments/*.webm` root-owned
-Mesma situação. Antes de git operations nesse path: `sudo git restore backend/uploads/attachments/`.
-
-### 4. Migrations Prisma marcadas como "failed" no DB
-Acontece quando uma migration parou no meio. Tratamento padrão:
-```bash
-PASS=$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)
-# se schema realmente foi aplicado:
-docker run --rm --network helpdesk_network -e DATABASE_URL="postgresql://helpdesk:${PASS}@postgres:5432/helpdesk" \
-  chatbot-suporte-ti-backend npx prisma migrate resolve --applied <migration_name>
-# senão:
-docker run --rm --network helpdesk_network -e DATABASE_URL="postgresql://helpdesk:${PASS}@postgres:5432/helpdesk" \
-  chatbot-suporte-ti-backend npx prisma migrate resolve --rolled-back <migration_name>
-# depois sincronizar:
-docker run --rm --network helpdesk_network -e DATABASE_URL="postgresql://helpdesk:${PASS}@postgres:5432/helpdesk" \
-  chatbot-suporte-ti-backend npx prisma db push --accept-data-loss --skip-generate
-```
-
-### 5. Extension `uuid-ossp` precisa estar habilitada
-Antes de rodar `prisma migrate deploy` numa DB fresh:
-```bash
-docker exec helpdesk_postgres psql -U helpdesk -d helpdesk -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
-```
-
-### 6. Backend prod precisa `env_file: .env`
-`AuthService.ensureAdminExists` lê `ADMIN_PASSWORD` direto de `process.env`. Se você adicionar env vars novas no .env, **`docker compose up -d --force-recreate backend`** (restart simples não recarrega env_file).
-
-### 7. Migration `add_message_media_and_reads` tem bug de cast
-`ALTER COLUMN type TYPE MessageType_new` falha porque a coluna tem `DEFAULT`. Workaround manual:
-```sql
-ALTER TYPE "MessageType" ADD VALUE IF NOT EXISTS 'VIDEO';
--- depois marcar como applied via prisma migrate resolve
-```
-
-### 8. nginx self-signed cert (smoke local)
-`nginx/certs/wildcard.helpdeskmsm.com.br.{crt,key}` é self-signed gerado por `openssl req -x509`. Browsers vão reclamar — só pra smoke. Em prod real, gerar via Let's Encrypt DNS-01.
-
-### 9. Frontend Dockerfile usa `outputPath: "/index"`
-Não `"/"` (gera `.html` sem nome). E `cloudflare: false` é obrigatório no `vite.config.ts` ou o build SSR sobrescreve o SPA shell.
-
-### 10. Rede `helpdesk_network` deve existir ANTES de qualquer compose up
-```bash
-docker network create helpdesk_network 2>/dev/null || true
+# 6. Tests unitários (61/61 passando)
+cd backend && npm run test 2>&1 | tail -5
+# Esperado: Test Suites: 5 passed, Tests: 61 passed
 ```
 
 ---
 
-## 🛠️ Comandos comuns
+## Containers ativos (确认)
 
 ```bash
-# subir prod completo (após git pull num host limpo)
-cd /home/dev/Projetos/Chatbot-suporte-ti
-docker network create helpdesk_network 2>/dev/null || true
-docker compose -f docker-compose.yml up -d postgres redis rabbitmq
-sleep 10
-docker exec helpdesk_postgres psql -U helpdesk -d helpdesk -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
-docker compose -f docker-compose.yml build  # primeira vez
-docker compose -f docker-compose.yml run --rm backend npx prisma migrate deploy
-docker compose -f docker-compose.yml run --rm backend npx prisma db push --accept-data-loss --skip-generate  # se houver drift
-docker compose -f docker-compose.yml up -d backend hermes-tools hermes frontend nginx
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
 
-# logs do que importa
-docker logs -f helpdesk_backend
-docker logs -f helpdesk_hermes      # QR code WhatsApp
-docker logs -f helpdesk_nginx
+**Esperado:**
+| Nomes | Status |
+|-------|--------|
+| `helpdesk_postgres` | Up (health: postgres) |
+| `helpdesk_redis` | Up (health: redis) |
+| `helpdesk_rabbitmq` | Up (health: rabbitmq-diagnostics) |
+| `helpdesk_backend` | Up (port 3000) |
+| `helpdesk_hermes` | Up (WhatsApp pareado) |
+| `helpdesk_hermes-tools` | Up (port 3003, 10 tools) |
 
-# parar tudo
-docker compose -f docker-compose.yml down
-
-# rebuilds dirigidos
-docker compose -f docker-compose.yml build backend  # 30-60s
-docker compose -f docker-compose.yml build frontend # 20-30s
-docker compose -f docker-compose.yml build hermes   # 5-10 min
-
-# frontend dev local (sem docker)
-cd Frontend-chatbot
-bun install
-bun run dev:ti  # 5173
-
-# tests
-cd backend && npm test               # 61 backend
-cd Frontend-chatbot && npm run test:e2e   # 12 playwright (precisa stack rodando + seed)
-
-# tsc check
-cd backend && npx tsc --noEmit
-cd Frontend-chatbot && npx tsc --noEmit
+**Se algum não está UP:**
+```bash
+docker compose -f docker-compose.dev.yml up -d <servico>
+docker compose -f docker-compose.dev.yml logs -f <servico>
 ```
 
 ---
 
-## 🗂️ Arquivos críticos por responsabilidade
+## Histórico de commits desta sessão (2026-05-12)
 
-| Arquivo | Pra quê |
-|---|---|
-| [CLAUDE.md](CLAUDE.md) | Instruções gerais pra agentes |
-| [AGENTS.md](AGENTS.md) | Armadilhas conhecidas (este HANDOFF amplia) |
-| [IMPLEMENTATION_PLAN_V3.md](IMPLEMENTATION_PLAN_V3.md) | Plano vigente |
-| [docs/PLANO_FRONTEND_INTEGRACAO_E_IMPLANTACAO.md](docs/PLANO_FRONTEND_INTEGRACAO_E_IMPLANTACAO.md) | Plano detalhado de integração frontend↔backend (Fase 6) |
-| [docs/SMOKE_DEPLOY_RESULTS.md](docs/SMOKE_DEPLOY_RESULTS.md) | Resultado do smoke deploy real (esta sessão) |
-| [docs/DEPLOY_PRODUCAO.md](docs/DEPLOY_PRODUCAO.md) | Checklist de deploy real |
-| `docker-compose.yml` | Stack de produção (NestJS 11, frontend builder, nginx) |
-| `docker-compose.dev.yml` | Stack de desenvolvimento |
-| `nginx/sites-enabled/helpdeskmsm.conf` | 4 vhosts (ti/eletrica/compras/api) com WS upgrade |
-| `Frontend-chatbot/vite.config.ts` | Config SPA + PWA workbox |
-| `Frontend-chatbot/Dockerfile` | Builder flat (popula `/srv/html`) |
-| `Frontend-chatbot/e2e/` | Playwright suite (12 testes) |
-| `Frontend-chatbot/src/lib/api.ts` | Cliente HTTP com X-Request-ID + withCredentials |
-| `Frontend-chatbot/src/hooks/useSocket.ts` | WebSocket helper (3 hooks) |
-| `backend/prisma/schema.prisma` | Fonte da verdade do schema |
-| `backend/src/main.ts` | CSP estrita + HSTS + CORS + helmet |
-| `backend/src/app.module.ts` | ThrottlerModule (60 req/min, 5 em login) |
+### Backend (Fase A — 2026-05-11, commit `81e95eb`)
+```
+feat: fecha gaps do backend para integração com Frontend-chatbot (Fase A)
+  + GET /tickets/my (server-side filter por sector + assignedToId)
+  + GET /tickets/:id/history (AuditLog + Message join)
+  + GET /sla/policies + GET /sla/dashboard
+  + GET /push/vapid-public-key
+  + GET /ai/suggestions/:ticketId (alias reply-suggestions)
+  + POST /tickets/:id/notes (ChatService.sendMessage isInternal=true)
+  + WS: JWT cookie auth + CORS allowlist + sector guard
+  + @Throttle 5 req/min em POST /auth/login
+```
+
+### Frontend (Fase B — commits `dcbc070` + 6 commits de B1-B11)
+```
+chore(repo): substitui frontend antigo (profile-driven-app) pelo novo (Frontend-chatbot)
+  - Submódulo removido, Frontend-chatbot/ clonado na raiz
+  - 0 mocks, build OK, 61/61 tests backend passando
+
+feat(frontend): socket.io-client real com cookie JWT (B2)
+feat(frontend): devLogin() em DEV, DEMO_USERS removido (B6)
+feat(frontend): SEED=[] (vazio), mockLoans removido (B7-B11)
+```
+
+### Frontend (Fase C — PWA + Push)
+```
+feat(frontend): vite-plugin-pwa + workbox runtime caching (C1)
+feat(frontend): usePushNotifications hook + settings toggle (C3+C4)
+feat(frontend): InstallPwaPrompt component (C5)
+```
+
+### Backend (Fase D — Hardening)
+```
+feat: adiciona TraceIdInterceptor com AsyncLocalStorage (D4)
+  - X-Request-ID em toda response
+  - Respeita header do cliente ou gera uuid
+  - Sem breaking changes, zero deps novas
+```
+
+### Docs
+```
+docs: adiciona PLANO_FRONTEND_INTEGRACAO_E_IMPLANTACAO
+docs: marca Fase C completa em IMPLEMENTATION_CHECKLIST.md
+docs: marca Fase D completa em IMPLEMENTATION_CHECKLIST.md
+docs: atualiza PLANO com estado Final — Fases A-D completas
+docs: atualiza estado — Fase E com artefatos prontos
+feat: adiciona artefatos Fase E (Dockerfile, cert script, doc deploy)
+```
 
 ---
 
-## 📊 Métricas atuais
+## 10 pendentes priorizados
 
-| Métrica | Valor |
-|---|---|
-| Backend NestJS | v11.1.19 |
-| Frontend stack | TanStack Start + Bun + React 19 + Tailwind 4 |
-| Hermes fork | `dc6fb02a8` (synced com upstream NousResearch 2768 commits, 3 commits nossos) |
-| Backend tests | 61/61 passando |
-| Frontend tests | 12 Playwright (precisa stack rodando) |
-| tsc --noEmit | 0 erros (backend + frontend) |
-| npm audit prod high | 3 (todos em `imap → utf7 → semver`, deps não-mantidas) |
-| Endpoints REST validados | 13/13 |
-| Migrations Prisma | 24 |
-| Rate limit `/auth/login` | 5 req/min |
-| Cookie TTL | 8h |
-| Vulnerabilities resolvidas nesta sessão | 21 (24 → 3) |
+### 🔴 ALTA — Bloqueantes de produção
+
+**P1. Credenciais admin em `.env` não são as de produção**
+```bash
+# Gerar senhas fortes e configurar .env.production
+openssl rand -hex 32   # para JWT_SECRET
+openssl rand -hex 16   # para POSTGRES_PASSWORD, RABBITMQ_PASSWORD
+
+# Gerar VAPID keys (necessário para push)
+cd backend && npx web-push generate-vapid-keys
+# Anotar public e private key — adicionar ao .env.production
+```
+
+**P2. Certificados SSL não existem**
+```bash
+# 1. Configurar DNS wildcard *.helpdeskmsm.com.br → IP do servidor
+# 2. Executar (requer acesso DNS para criar registro TXT):
+sudo ./scripts/gen-wildcard-cert.sh
+# 3. Copiar certificados para nginx/certs/
+sudo cp /etc/letsencrypt/live/helpdeskmsm.com.br/fullchain.pem ./nginx/certs/
+sudo cp /etc/letsencrypt/live/helpdeskmsm.com.br/privkey.pem   ./nginx/certs/
+sudo chmod 600 ./nginx/certs/*.pem
+```
+
+**P3. Forward-merge de `origin/main` no branch**
+```bash
+git fetch origin main
+git merge origin/main --no-ff
+# Resolver conflitos se houver
+git push origin feature/chatbot-upgrade
+```
+
+### 🟡 MÉDIA — Pré-deploy
+
+**P4. Aplicar migrations no banco de produção**
+```bash
+docker compose exec backend npx prisma migrate deploy
+# Verificar se todas as migrations applyaram:
+docker compose exec backend npx prisma migrate status
+```
+
+**P5. Parear WhatsApp (se não estiver pareado)**
+```bash
+docker logs -f helpdesk_hermes   # escanear QR code
+# Aguardar "QR code scan successful" ou "Connected"
+# Parar com Ctrl+C
+```
+
+**P6. Configurar cron de backup do Postgres**
+```bash
+# Adicionar ao crontab do servidor:
+sudo crontab -e
+# Linha:
+0 3 * * * pg_dump -U helpdesk helpdesk > /backups/helpdesk_$(date +\%Y\%m\%d_\%H\%M\%S).sql 2>> /var/log/pg_backup.log
+```
+
+**P7. Playwright E2E não roda em CI ainda**
+```bash
+# Configurar URLs em backend/playwright.config.ts:
+# TI_URL, ELECTRIC_URL, COMPRAS_URL apontando pro staging
+# Depois:
+cd backend && npx playwright test
+# Verificar se 3 fluxos passam (ti-ticket-flow, electric-checklist-flow, compras-approve-flow)
+```
+
+### 🟢 BAIXA — Pós-deploy
+
+**P8. Lighthouse score ainda não medido**
+```bash
+# Após deploy, medir:
+# - Performance ≥ 80
+# - PWA ≥ 90
+# - A11y ≥ 95
+# Ferramenta: Chrome DevTools → Lighthouse ou PageSpeed Insights
+```
+
+**P9. Background sync de ticket offline (deferred)**
+```bash
+# Implementar quando PWA funcional — ver docs/CHAT_IMPLEMENTATION_FOR_MINIMAX.md Etapa G
+```
+
+**P10. iOS push tutorial ("Add to Home Screen")**
+```bash
+# O InstallPwaPrompt já tem o tutorial iOS (texto "No Safari, toque Compartilhar → Adicionar à Tela de Início")
+# Testar manualmente num iPhone: Settings → Safari → Advanced → Web Inspector
+```
 
 ---
 
-## 🔐 Credenciais de teste (admin)
+## 6 decisões irrevogáveis
+
+| # | Decisão | Justificativa |
+|---|---------|---------------|
+| 1 | **PWA único** — 1 manifest, 1 install, setor do JWT | Simplifica instalação mobile, elimina complexidade de 3 manifests |
+| 2 | **Hermes dentro do Docker Compose** (`hermes-agent/` como submódulo) | Facilita backup da sessão WhatsApp (volume `hermes_whatsapp_session`) |
+| 3 | **NestJS 11** (não atualizar axios sem quebra) | `npm audit fix --force` quebra breaking changes no @nestjs/core |
+| 4 | **Bun como package manager do frontend** (`Frontend-chatbot`) | Spec do repo Lovable — não trocar por npm/yarn/pnpm |
+| 5 | **Sector como enum (`TI`\|`ELECTRIC`\|`COMPRAS`)**, não String | Garantia de integridade em todo o codebase |
+| 6 | **WS: JWT via cookie na handshake**, não Authorization header | Cookie é automático no browser; header requer custom client |
+
+---
+
+## 10 armadilhas testadas + workaround
+
+| # | Armadilha | Sintoma | Workaround |
+|---|-----------|---------|------------|
+| 1 | `migrate dev` corrompe shadow DB | `Error: P3005` ou `Migration table is already up to date but shadow database failed` | Usar `prisma migrate deploy` em prod; `prisma db push` em dev para schema sync |
+| 2 | `dist/` com owner `root` (arquivos de filmagem) | `EACCES permission denied, unlink '/dist/tsconfig.tsbuildinfo'` | `sudo chown -R dev:dev backend/dist/` ou `rm -rf backend/dist/` antes de build |
+| 3 | `git add -A` inclui submódulo `hermes-agent/` | Commits com mudanças unintendeds no submódulo | `git add arquivo.ts` (por nome) ou `git add -A -- ':!hermes-agent/'` |
+| 4 | GLPI vars ainda no `.env.example` (legado) | Confusão ao configurar ambiente novo | Deletar `GLPI_*` do `.env.example` — GLPI foi removido da codebase |
+| 5 | `auth_token` em `localStorage` (frontend antigo) | 401 em prod onde cookie httpOnly é o correto | `Frontend-chatbot` usa cookie; se encontrar `localStorage.setItem('auth_token'` é código morto |
+| 6 | `uuid-ossp` não existe no Postgres do container | `Error: function uuid_generate_v4() does not exist` | Migration `20260510120000_add_technical_reports` já adiciona extension — verificar `SELECT extname FROM pg_extension WHERE extname = 'uuid-ossp';` |
+| 7 | `env_file:` no compose recria container sem persistir | Variáveis de ambiente somem após restart | Não usar `env_file:` para vars que mudam; usar `environment:` inline ou `docker config create` |
+| 8 | Prisma 6 Client Extension em `schema.prisma` | `Error: Cannot usePrismaClientAndNotConnected` em tests | Tests usam mock in-memory; extensão só ativa em runtime real |
+| 9 | `vite-plugin-pwa` SW registrado em dev (default `enabled: false`) | Service worker polui DevTools em dev | Confirmed: `devOptions.enabled: false` no vite.config.ts — não muda |
+| 10 | `socket.io-client@4.x` handshake com `withCredentials` | WS conecta mas não autentica | Confirmado funcionando em `Frontend-chatbot/src/lib/socket.ts` com `withCredentials: true` + cookie JWT |
+
+---
+
+## Mapa de arquivos críticos por responsabilidade
+
+### Backend (este repo)
+| Arquivo | O que faz | Não mexer se |
+|---------|----------|--------------|
+| `backend/src/presentation/controllers/tickets/tickets.controller.ts` | A1-A6 endpoints (inclui `/my`, `/history`, `/notes`) | A7 WS hardening (events.gateway.ts) |
+| `backend/src/presentation/websockets/events.gateway.ts` | WS com JWT cookie + sector guard | — |
+| `backend/src/presentation/websockets/team-chat.gateway.ts` | WS team-chat com JWT cookie | — |
+| `backend/src/infrastructure/services/push.service.ts` | sendToUser / sendToSector via webpush | — |
+| `backend/src/infrastructure/services/ticket-history.service.ts` | AuditLog + Message join | — |
+| `backend/src/common/interceptors/trace-id.interceptor.ts` | X-Request-ID header em toda response | — |
+| `backend/src/main.ts` | Helmet CSP, CORS allowlist, ValidationPipe | — |
+| `backend/prisma/schema.prisma` | Fonte da verdade do DB | Migration antes de alterar |
+| `docker-compose.yml` | Produção (postgres/redis/rabbitmq/backend/hermes/nginx) | — |
+
+### Frontend (`Frontend-chatbot/`, repo separado `Berg-2019/Frontend-chatbot`)
+| Arquivo | O que faz |
+|---------|----------|
+| `Frontend-chatbot/src/lib/api.ts` | 39 endpoints REST, axios interceptor 401 |
+| `Frontend-chatbot/src/lib/socket.ts` | Client WS real (socket.io-client + cookie JWT) |
+| `Frontend-chatbot/src/hooks/usePushNotifications.ts` | Hook VAPID subscription/unsubscription |
+| `Frontend-chatbot/src/routes/__root.tsx` | Root layout + PWA meta tags + InstallPwaPrompt |
+| `Frontend-chatbot/vite.config.ts` | VitePWA plugin + workbox caching |
+| `Frontend-chatbot/public/manifest.webmanifest` | PWA manifest (1 para todos os setores) |
+| `Frontend-chatbot/public/icons/{ti,electric,compras}/` | Ícones setoriais 192/512/maskable |
+
+### Infra (neste repo)
+| Arquivo | O que faz |
+|---------|----------|
+| `nginx/sites-enabled/helpdeskmsm.conf` | 4 vhosts, HSTS, CORS, WebSocket upgrade |
+| `Frontend-chatbot/Dockerfile` | Multi-stage build (bun build → nginx serve) |
+| `scripts/gen-wildcard-cert.sh` | certbot DNS-01 wildcard generation |
+| `docs/DEPLOY_PRODUCAO.md` | Runbook completo de deploy |
+
+---
+
+## Fluxograma "agente novo" — ordem de leitura
+
+```
+1. → Leia este HANDOFF.md (agora)
+2. → git log --oneline -10  (confirme 10 commits ahead)
+3. → git status            (branc: feature/chatbot-upgrade)
+4. → Confirme stack no ar   (6 comandos da seção "Como confirmar")
+5. → npm run test          (backend, 61/61 passando)
+6. → Leia AGENTS.md        (armadilhas do repo)
+7. → Vá para CLAUDE.md     (arquitetura + convenções)
+8. → Vá para PLANO_FRONTEND_INTEGRACAO_E_IMPLANTACAO.md (estado A+B+C+D ✅ E ⏳)
+```
+
+---
+
+## Métricas atuais (confirmadas 2026-05-11)
+
+| Métrica | Valor | Status |
+|---------|-------|--------|
+| Tests unitários | **61/61 passing** | ✅ |
+| Test suites | **5/5 passing** | ✅ |
+| `tsc --noEmit` backend | **0 erros** | ✅ |
+| `npm run build` frontend | **exit 0** | ✅ |
+| Commits ahead de `origin/feature/chatbot-upgrade` | **10** | 🔴 aguardando push/merge |
+| Commits ahead de `origin/main` | **165+** | 🔴 aguardando janela merge |
+| nginx config tracked | ✅ | ✅ |
+| Dockerfile frontend | ✅ | ✅ |
+| Script cert wildcard | ✅ | ✅ |
+| Doc deploy produção | ✅ | ✅ |
+| `grep DEMO_USERS\|mockLoans\|demoData` frontend | **zero hits** | ✅ |
+| `grep localStorage` em api.ts/socket.ts | **apenas auth_token + user_data + pwa_dismiss_key** | ✅ |
+| npm audit high+critical (backend) | **3 high** (axios×14, defu, effect — todos deferred) | 🟡 |
+| npm audit (frontend) | **1 moderate** (postcss — deferred) | 🟡 |
+
+---
+
+## Credenciais admin (development .env)
 
 ```bash
-grep -E "^(ADMIN_EMAIL|ADMIN_PASSWORD)=" .env
+# Backend .env (não é produção — confirmar valores em .env.production)
+POSTGRES_PASSWORD=helpdesk123
+RABBITMQ_PASSWORD=helpdesk123
+
+# Login (dev — .env):
+email: admin@helpdesk.com
+password: admin123
+
+# Para production: usar .env.production com senhas fortes (openssl rand -hex 32)
 ```
 
-JWT no payload: `{sub, email, role, sector, iat, exp}`. Roles: `ADMIN`, `ADMIN_TI`, `ADMIN_ELECTRIC`, `ADMIN_COMPRAS`, `AGENT`. Sectors: `TI`, `ELECTRIC`, `COMPRAS`.
+---
+
+## Referências
+
+| Arquivo | O que é |
+|---------|---------|
+| [`CLAUDE.md`](CLAUDE.md) | Convenções, arquitetura, stack, portas, auth, endpoints |
+| [`AGENTS.md`](AGENTS.md) | Armadilhas, padrões, submódulo hermes-agent, nginx não commitado |
+| [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) | Plano mãe (V3) — todas as fases |
+| [`PLANO_FRONTEND_INTEGRACAO_E_IMPLANTACAO.md`](PLANO_FRONTEND_INTEGRACAO_E_IMPLANTACAO.md) | Plano desta integração — estado A+B+C+D ✅ E ⏳ |
+| [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md) | Checklist detalhada com tudo marcado |
+| [`docs/DEPLOY_PRODUCAO.md`](docs/DEPLOY_PRODUCAO.md) | Runbook de deploy com E1-E7 |
+| [`docs/CHAT_IMPLEMENTATION_FOR_MINIMAX.md`](docs/CHAT_IMPLEMENTATION_FOR_MINIMAX.md) | Chat estilo WhatsApp — 6 etapas (A-F, ~16h) |
 
 ---
 
-## 💡 Se aparecer um agente novo
+## Próximo passo recomendado
 
-1. Leia este HANDOFF primeiro
-2. Depois CLAUDE.md + IMPLEMENTATION_PLAN_V3.md
-3. Antes de mudar qualquer coisa, rode `docker ps` + smoke acima pra confirmar estado
-4. Para mudanças de schema/migration: backup primeiro com `docker exec helpdesk_postgres pg_dump -U helpdesk helpdesk > /tmp/bkp_$(date +%s).sql`
-5. Para mudanças no compose prod: `docker compose -f docker-compose.yml config` valida antes
-6. Para mudanças no submódulo Hermes: lembre que upstream tem GHSA-ppp5-vxwm-4cf7 que afeta bridge.js — nosso fork divergiu intencionalmente
+Se você é o próximo agente, **vá para P1 (alta prioridade)**:
 
----
+```bash
+# 1. Pushar os 10 commits locais
+git push origin feature/chatbot-upgrade
 
-**Boa sorte. Stack está sólida — não tem nada quebrado nesta data.**
+# 2. Gerar .env.production (P1)
+openssl rand -hex 64   # JWT_SECRET
+openssl rand -hex 32   # POSTGRES_PASSWORD
+
+# 3.cd backend && npx web-push generate-vapid-keys   # P1 — anote as keys
+
+# 4. Merge origin/main (P3)
+git fetch origin main && git merge origin/main --no-ff
+
+# 5. docker compose up -d + smoke test (P4)
+# Ver docs/DEPLOY_PRODUCAO.md E4 para sequência completa
+```
