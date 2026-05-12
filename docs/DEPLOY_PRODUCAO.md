@@ -25,7 +25,8 @@ A **Fase E** é a implantação da stack completa em produção nos domínios:
 - [ ] DNS: wildcard A record `*.helpdeskmsm.com.br` → IP do servidor
 - [ ] Portas 80 e 443 abertas na firewall
 - [ ] Domínio com acesso DNS para desafio DNS-01 Let's Encrypt (ou HTTP-01)
-- [ ] `docker network create helpdesk_network` criado no host
+- [ ] `docker network create helpdesk_network` criado no host **(antes de qualquer compose up)**
+- [ ] Após postgres subir: `docker exec helpdesk_postgres psql -U helpdesk -d helpdesk -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'` (algumas migrations dependem dessa extension)
 
 ---
 
@@ -150,9 +151,15 @@ docker compose up -d postgres redis rabbitmq
 # Aguardar saúde
 docker compose ps
 
-# --- 6. Aplicar migrations ---
+# 5b. Extension uuid-ossp (uma vez por banco)
+docker exec helpdesk_postgres psql -U helpdesk -d helpdesk \
+  -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+
+# --- 6. Aplicar migrations + sync schema ---
 docker compose run --rm backend npx prisma migrate deploy
-# (alternativa: docker compose exec backend ... depois do up -d backend)
+# Se houver drift (colunas no schema.prisma ainda não materializadas via migration),
+# sincronizar com:
+docker compose run --rm backend npx prisma db push --accept-data-loss --skip-generate
 
 # --- 7. Subir todos os serviços ---
 # Ordem: backend → hermes-tools → hermes → frontend (popula volume) → nginx

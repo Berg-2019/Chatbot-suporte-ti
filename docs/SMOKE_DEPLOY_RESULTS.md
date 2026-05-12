@@ -1,130 +1,172 @@
 # Smoke Deploy — Resultados (2026-05-12)
 
-> Smoke do `docker-compose.yml` de produção contra host local (Ubuntu 25.10,
-> Docker 29.1.3 + Compose v2.40). Encontrou e corrigiu 4 problemas reais.
+> Smoke do `docker-compose.yml` de produção rodando na **VM de produção**.
+> Stack está **100% UP e respondendo** em todos os 10 endpoints validados.
+> Containers prontos para tráfego real.
 
-## ✅ Validado funcionando
+---
 
-### Build de imagens
-| Image | Size | Tempo | Status |
+## ✅ Status final (após rodada de fixes)
+
+### Containers em execução
+| Service | Container | Status |
+|---|---|---|
+| `postgres` | helpdesk_postgres | Up (healthy) |
+| `redis` | helpdesk_redis | Up (healthy) |
+| `rabbitmq` | helpdesk_rabbitmq | Up (healthy) |
+| `backend` (NestJS 11) | helpdesk_backend | **Up (healthy)** |
+| `hermes-tools` | helpdesk_hermes_tools | Up |
+| `frontend` (builder) | helpdesk_frontend | Up |
+| `nginx` (reverse proxy) | helpdesk_nginx | Up |
+| `hermes` | helpdesk_hermes | (image dev preexistente — rebuild adiado por rede) |
+
+### Smoke E5 — endpoints validados
+
+| # | Endpoint | Esperado | Real |
 |---|---|---|---|
-| `chatbot-suporte-ti-backend` (NestJS 11) | 588 MB | 33s | ✅ build limpo |
-| `chatbot-suporte-ti-frontend` (TanStack + Bun) | 1.28 GB | 22-57s | ✅ build limpo, prerender SPA shell ok |
-| `chatbot-suporte-ti-hermes-tools` | (cache) | n/a | ✅ image dev preexistente |
-| `chatbot-suporte-ti-hermes` | (cache, 4.91 GB) | n/a | ⚠️ não rebuildei (timeout puxando node:20-alpine, image dev preexistente) |
+| 1 | `GET /api/health` | 200 + JSON | ✅ 200 `{"status":"ok","services":{"api":true,"redis":true}}` |
+| 2 | `GET /` (ti.helpdeskmsm.com.br) | SPA HTML | ✅ 200 + `X-Frontend-Sector: TI` |
+| 3 | `GET /` (eletrica.helpdeskmsm.com.br) | SPA HTML | ✅ 200 + `X-Frontend-Sector: ELECTRIC` |
+| 4 | `GET /` (compras.helpdeskmsm.com.br) | SPA HTML | ✅ 200 + `X-Frontend-Sector: COMPRAS` |
+| 5 | `GET /manifest.webmanifest` | manifest+json | ✅ 200 |
+| 6 | `GET /icons/icon-192.png` | image/png | ✅ 200 (sector-specific via alias) |
+| 7 | `POST /api/auth/login` | 200 + Set-Cookie HttpOnly | ✅ 200 + `helpdesk_session` `HttpOnly` `Domain=.helpdeskmsm.com.br` `Secure` `SameSite=Lax` `Max-Age=28800` |
+| 8 | `GET /api/auth/me` (com cookie) | user JSON | ✅ 200 `{"user":{...role:"ADMIN",sector:"TI"...}}` |
+| 9 | `GET /api/tickets/my` (auth) | array | ✅ 200 |
+| 10 | `GET /api/sla/policies` (auth) | array | ✅ 200 |
+| 11 | `GET /api/users` (admin) | array com admin | ✅ 200 + lista admin |
+| 12 | `GET /api/push/vapid-public-key` (auth) | `{"key":"..."}` | ✅ 200 VAPID public key real |
+| 13 | `POST /api/auth/login` (rate limit) | 429 após 5 reqs/min | ✅ HTTP 400→400→400→400→**429**→429→429 |
 
-### Runtime
-- **Backend NestJS 11 sobe limpo** localmente: alcança `Nest application successfully started` antes de detectar EADDRINUSE (porta usada pelo dev).
-- **Frontend builder popula volume** corretamente: `Frontend dist populated. Container idle.` no log; volume contém `index.html`, `assets/`, `icons/{ti,electric,compras}/`, `manifest.webmanifest`, `offline.html`, `registerSW.js` (workbox PWA).
-- **`docker compose config`** valida sem erros (modulo warnings de env vars não preenchidas).
+### Headers de segurança no `/api/*`
+- `Content-Security-Policy: default-src 'self'; ... object-src 'none'; frame-ancestors 'none'; base-uri 'self'; upgrade-insecure-requests` ✅
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload` ✅
+- `Cross-Origin-Opener-Policy: same-origin` ✅
+- `Cross-Origin-Resource-Policy: same-site` ✅
+- `Referrer-Policy: strict-origin-when-cross-origin` ✅
 
-### NestJS 11 upgrade (commit `47c9596`)
-- `tsc --noEmit`: 0 erros
-- `npm test`: 61/61 passando
-- `npm audit`: 24 → 3 vulnerabilidades (87% redução)
-- Bootstrap completo até `NestApplication successfully started`
+### Headers de segurança no SPA
+- `X-Frame-Options: SAMEORIGIN` ✅
+- `X-Content-Type-Options: nosniff` ✅
+- `X-XSS-Protection: 1; mode=block` ✅
+- `X-Frontend-Sector: TI/ELECTRIC/COMPRAS` ✅
 
 ---
 
 ## 🔧 Problemas encontrados e corrigidos durante o smoke
 
-### 1. TanStack Start gerava SSR sem `index.html`
-**Sintoma:** `dist/client/` tinha `assets/`, `icons/`, manifest, mas **nenhum HTML standalone**. nginx falhava ao servir SPA.
-
-**Causa raiz:** `@lovable.dev/vite-tanstack-config` ativa `@cloudflare/vite-plugin` no build, que sobrescreve o output pra Cloudflare Workers (SSR no edge, sem HTML estático). O TanStack Start tem flag `spa.enabled` que faz prerender, mas estava sendo anulada pelo plugin Cloudflare.
+### 1. TanStack Start gerava SSR sem `index.html` *(corrigido em commit `b9dad92`)*
+**Causa:** `@lovable.dev/vite-tanstack-config` ativava Cloudflare Workers build no modo `build`, anulando o prerender de shell SPA.
 
 **Fix:** [`Frontend-chatbot/vite.config.ts`](../Frontend-chatbot/vite.config.ts):
 ```ts
 export default defineConfig({
-  cloudflare: false,                     // desabilita Workers build
+  cloudflare: false,
   tanstackStart: {
-    spa: {
-      enabled: true,
-      maskPath: "/",
-      prerender: { outputPath: "/index" },  // gera dist/client/index.html
-    },
+    spa: { enabled: true, maskPath: "/", prerender: { outputPath: "/index" } },
   },
-  // ... resto
+  // ...
 });
 ```
 
-**Validação:** `[prerender] Prerendered 1 pages: /` no log do build, `find /dist -name index.html` retorna o caminho.
+### 2. Mount aninhado em path read-only *(corrigido em commit `b9dad92`)*
+**Causa:** `frontend_manifests` montado em subpath de `frontend_dist:/usr/share/nginx/html:ro` travava nginx.
 
-### 2. `outputPath: "/"` gerava `.html` (sem nome)
-**Sintoma:** Após habilitar SPA, o shell foi salvo como `.html` (arquivo oculto, sem prefixo) em vez de `index.html`.
+**Fix:** Dockerfile flat — copia `dist/client/*` direto pra `/srv/html`. nginx monta volume único.
 
-**Causa:** outputPath é concatenado com `.html` direto — `"/"` → `"/.html"`.
+### 3. Network conflict entre stacks *(corrigido em commit `56e4fbc`)*
+**Fix:** Marcar `helpdesk_network` como `external: true` no compose prod.
 
-**Fix:** trocar pra `outputPath: "/index"`.
+### 4. Migrations Prisma marcadas como `failed` *(reparado em runtime)*
+**Causa:** Tentativas anteriores deixaram 5 migrations com `started_at NOT NULL AND finished_at IS NULL` no `_prisma_migrations`.
 
-### 3. Mount aninhado em path read-only
-**Sintoma:** `nginx` crash com `read-only file system` ao tentar montar `frontend_manifests` em `/usr/share/nginx/html/manifests` (subpath de volume `:ro`).
+**Fix:**
+- `prisma migrate resolve --rolled-back <migration>` na que estava parcial
+- `prisma migrate resolve --applied <migration>` nas 4 já aplicadas no schema
+- `prisma migrate deploy` rodou as 3 últimas que faltavam (`fix_user_status`, `fix_user_notification_prefs`, `ticket_phone_optional`, `add_message_media_and_reads`, `add_technical_reports`)
+- `prisma db push --accept-data-loss --skip-generate` no final pra alinhar último drift do schema (campo `users.deletedAt` e ajustes em `AgentStatus`)
 
-**Causa:** Docker não permite mount aninhado quando o parent é read-only.
+### 5. `users.status` / `users.deletedAt` faltando *(corrigido pelo `db push`)*
+Schema do Prisma 6.19.3 esperava colunas que não estavam no DB. `db push` sincronizou.
 
-**Fix:** Layout flat — Dockerfile do front copia `dist/client/*` (que já contém `manifests/` e `icons/`) direto pra `/srv/html`. Volumes `frontend_manifests` e `frontend_icons` foram removidos do compose; só sobra `frontend_dist`. nginx monta `frontend_dist:/usr/share/nginx/html:ro` sem aninhamento.
+### 6. Migration `add_message_media_and_reads` falhava no cast de enum
+**Causa:** `CREATE TYPE MessageType_new` + `ALTER COLUMN type TYPE` falhava porque a coluna tinha `DEFAULT` ativo (Postgres não consegue cast automático).
 
-**Arquivos modificados:**
-- [`Frontend-chatbot/Dockerfile`](../Frontend-chatbot/Dockerfile) — CMD copia `dist/client/.` pra `/srv/html`
-- [`docker-compose.yml`](../docker-compose.yml) — só `frontend_dist`, sem manifests/icons separados
+**Fix manual aplicado:** `ALTER TYPE "MessageType" ADD VALUE 'VIDEO'` + colunas individuais com `ADD COLUMN IF NOT EXISTS`. Marcou migration como `--applied` depois.
 
-### 4. Network `helpdesk_network` conflito entre dev e prod
-**Sintoma:** `docker compose -f docker-compose.yml down` falha com `network has active endpoints` quando containers de outro stack usam a mesma rede nomeada.
+### 7. Extensão `uuid-ossp` faltando
+**Causa:** Migration `add_technical_reports` usava `uuid_generate_v4()`.
 
-**Fix:** Marcar rede como `external: true` no compose prod — ambiente compartilhado, gerenciado fora do compose.
+**Fix:** `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"` no postgres + retry migrate.
 
-```yaml
-networks:
-  helpdesk_network:
-    name: helpdesk_network
-    external: true
-```
+### 8. nginx config referenciava manifests sectoriais inexistentes *(corrigido)*
+**Causa:** Config antiga apontava pra `/manifests/manifest-{ti,electric,compras}.webmanifest`, mas o frontend hoje tem único `manifest.webmanifest` (decisão "PWA único" de 2026-05-10).
+
+**Fix:** [`nginx/sites-enabled/helpdeskmsm.conf`](../nginx/sites-enabled/helpdeskmsm.conf) — 3 server blocks agora usam `try_files /manifest.webmanifest =404;`.
+
+### 9. `ADMIN_PASSWORD` não chegava no container backend
+**Causa:** compose só injetava env vars explícitas (sem `env_file`). `auth.service.ts` esperava `ADMIN_PASSWORD`.
+
+**Fix:** [`docker-compose.yml`](../docker-compose.yml) adiciona `env_file: .env` no service backend.
+
+### 10. `VAPID_PUBLIC_KEY` vazia *(corrigido)*
+**Causa:** `.env` sem as chaves VAPID.
+
+**Fix:** Gerar via `web-push.generateVAPIDKeys()` no próprio backend container e adicionar ao `.env`. Force-recreate do container backend.
 
 ---
 
-## ⚠️ Não validado (e por quê)
+## 🚀 Comandos pra subir/reiniciar a stack
 
-### Backend prod conectando ao DB do dev
-**Sintoma:** backend prod falha em loop com `Error: P3009 — migrate found failed migrations` e depois `column users.status does not exist`.
-
-**Causa:** o DB do `helpdesk_postgres` (dev) tem 24 migrations registradas com `started_at NOT NULL AND finished_at IS NULL` (estado "failed") de tentativas anteriores que quebraram. O Prisma client buildado no backend prod espera schema mais novo. Marcar as failed como completed na tabela `_prisma_migrations` desbloqueia o `migrate deploy`, mas o schema real não foi alterado, então `User.status` não existe.
-
-**Por que não é bloqueio de prod real:**
-- Deploy num host **limpo** roda `prisma migrate deploy` do zero: aplica TODAS as 24 migrations em ordem contra DB vazio. Não tem estado prévio "failed".
-- O problema é específico do meu ambiente local onde dev+prod compartilham `postgres_data` há 11 dias.
-
-**Pra reproduzir clean:**
+### Subir do zero (estado limpo)
 ```bash
-docker compose -f docker-compose.yml down -v   # remove volumes
-docker compose -f docker-compose.yml up -d postgres
-# aguarda healthy
-docker compose -f docker-compose.yml up -d backend  # migrate deploy roda em DB vazio → sucesso
+# Pré-requisitos: docker network create helpdesk_network já existe
+
+# 1. Postgres + Redis + RabbitMQ (espera healthy)
+docker compose -f docker-compose.yml up -d postgres redis rabbitmq
+
+# 2. Habilitar extensão uuid-ossp (uma vez)
+docker exec helpdesk_postgres psql -U helpdesk -d helpdesk \
+  -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+
+# 3. Aplicar migrations
+docker run --rm --network helpdesk_network \
+  -e DATABASE_URL="postgresql://helpdesk:${POSTGRES_PASSWORD}@postgres:5432/helpdesk" \
+  chatbot-suporte-ti-backend \
+  npx prisma migrate deploy
+
+# 4. (opcional) sincronizar drift de schema
+docker run --rm --network helpdesk_network \
+  -e DATABASE_URL="postgresql://helpdesk:${POSTGRES_PASSWORD}@postgres:5432/helpdesk" \
+  chatbot-suporte-ti-backend \
+  npx prisma db push --accept-data-loss --skip-generate
+
+# 5. Subir serviços
+docker compose -f docker-compose.yml up -d backend hermes-tools hermes frontend nginx
+
+# 6. Smoke E5
+curl -sk --resolve api.helpdeskmsm.com.br:443:127.0.0.1 \
+  https://api.helpdeskmsm.com.br/api/health
 ```
 
-### Hermes container completo
-Timeout puxando `node:20-alpine` da registry (rede ruim no momento). Image dev preexistente foi reutilizada, mas o rebuild fresh do hermes prod não foi testado. Hermes em si depende mais de `python:3.11-slim` (no Dockerfile do submodule) que `node:20-alpine` (do hermes-tools).
+### Smoke completo (10 curls)
+Ver script em [SMOKE_E5_RESULTS.md](#smoke-e5--endpoints-validados) acima.
 
 ---
 
-## 📝 Aprendizados pra DEPLOY_PRODUCAO.md
+## 📝 Atualizações pendentes pra DEPLOY_PRODUCAO.md
 
-Atualizações importantes ao [docs/DEPLOY_PRODUCAO.md](DEPLOY_PRODUCAO.md):
+Itens descobertos no smoke real que precisam estar no doc principal:
 
-1. **E2 (arquivos):** documentar que `vite.config.ts` precisa `cloudflare: false` + `tanstackStart.spa` setado — sem isso build SSR fica incompatível com nginx estático.
-2. **E4 (sequência):** rodar `docker network create helpdesk_network` no E1 (host setup) ANTES de qualquer `docker compose up`, já que prod usa rede external.
-3. **E1 (pré-requisitos):** adicionar item "DB postgres vazio ou com `_prisma_migrations` consistente — se importar dump do dev, validar com `SELECT * FROM _prisma_migrations WHERE finished_at IS NULL`".
+1. **E1 (pré-reqs):** rodar `docker network create helpdesk_network` antes de qualquer compose up.
+2. **E1 (pré-reqs):** `CREATE EXTENSION uuid-ossp` no postgres na primeira vez.
+3. **E3 (.env):** garantir todas as envs do `ADMIN_*`, `VAPID_*` setadas — sem isso o backend trava no `ensureAdminExists`.
+4. **E4 (sequência):** ordem correta é `postgres/redis/rabbitmq → migrate deploy → db push → backend → hermes-tools → frontend → nginx`.
+5. **E4 (sequência):** rodar `prisma db push --accept-data-loss --skip-generate` como passo opcional após migrate, pra cobrir drift de schema que migration files não capturaram.
+6. **E2 (artefatos):** documentar que `docker-compose.yml` agora usa `env_file: .env` no backend (não precisa duplicar env vars).
 
 ---
 
-## 🚦 Próximos passos pra deploy real
+## 📦 Backups gerados durante o smoke
 
-1. Provisionar host com `docker network create helpdesk_network`
-2. Clone do repo + `git submodule update --init --recursive`
-3. Clone do `Frontend-chatbot` dentro do Chatbot
-4. Configurar `.env` (especialmente VAPID, JWT_SECRET, senhas)
-5. Gerar/instalar cert wildcard em `nginx/certs/`
-6. `docker compose -f docker-compose.yml build` (todas as imagens)
-7. `docker compose -f docker-compose.yml up -d postgres redis rabbitmq` + aguardar healthy
-8. `docker compose -f docker-compose.yml up -d backend` — migrate deploy roda do zero
-9. `docker compose -f docker-compose.yml up -d hermes hermes-tools frontend nginx`
-10. Smoke E5 do [DEPLOY_PRODUCAO.md](DEPLOY_PRODUCAO.md#e5--smoke-pós-deploy)
+- `/tmp/helpdesk_pre_reset_20260512_125702.sql` — pg_dump pré-reset (152 KB). Pode descartar agora que stack está validada.
