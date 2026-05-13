@@ -187,6 +187,8 @@ services:
         # — VITE_API_URL e VITE_WS_URL podem continuar relativos / mesmo origin.
         VITE_API_URL: ${VITE_API_URL:-/api}
         VITE_WS_URL: ${VITE_WS_URL:-/}
+        # Senha do dev console (build-time). Em prod, setar via .env.
+        VITE_DEV_PASSWORD: ${VITE_DEV_PASSWORD:-msm-dev-2026}
     container_name: helpdesk_frontend
     restart: unless-stopped
     volumes:
