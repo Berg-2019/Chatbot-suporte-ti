@@ -22,6 +22,7 @@ import { ServicesModule } from './infrastructure/services/services.module';
 // Presentation
 import { AuthModule } from './presentation/controllers/auth/auth.module';
 import { DevModule } from './presentation/controllers/dev/dev.module';
+import { NotificationsModule } from './presentation/controllers/notifications/notifications.module';
 import { TicketsModule } from './presentation/controllers/tickets/tickets.module';
 import { MessagesModule } from './presentation/controllers/messages/messages.module';
 import { UsersModule } from './presentation/controllers/users/users.module';
@@ -101,6 +102,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     // Features
     AuthModule,
     DevModule,
+    NotificationsModule,
     TicketsModule,
     MessagesModule,
     UsersModule,
