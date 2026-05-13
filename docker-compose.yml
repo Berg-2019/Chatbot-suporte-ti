@@ -184,9 +184,9 @@ services:
       args:
         # API e WS pelo mesmo origin do SPA (path /api e /socket.io no nginx interno).
         # Quando o proxy reverso externo finalizar SSL, basta apontar pra http://nginx:80
-        # — VITE_API_URL pode continuar relativo.
+        # — VITE_API_URL e VITE_WS_URL podem continuar relativos / mesmo origin.
         VITE_API_URL: ${VITE_API_URL:-/api}
-        VITE_WS_URL: ${VITE_WS_URL:-}
+        VITE_WS_URL: ${VITE_WS_URL:-/}
     container_name: helpdesk_frontend
     restart: unless-stopped
     volumes:
