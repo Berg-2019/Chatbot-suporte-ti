@@ -22,6 +22,7 @@ import { WhatsAppStatus } from './whatsapp.types';
 import { SESSION_DIR, RECONNECT_DELAY, STATUS_KEY } from './whatsapp.constants';
 import { RedisService } from '../cache/redis.service';
 import { RabbitMQService } from '../messaging/rabbitmq.service';
+import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
 export class BaileysService implements OnModuleInit, OnModuleDestroy {
@@ -40,6 +41,7 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
     private config: ConfigService,
     private redis: RedisService,
     private rabbitmq: RabbitMQService,
+    private prisma: PrismaService,
   ) {
     this.enabled = this.config.get('WHATSAPP_BOT_ENABLED', 'true') === 'true';
   }
@@ -213,7 +215,7 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
       await this.rabbitmq.consume(
         RabbitMQService.QUEUES.OUTGOING_MESSAGES,
         async (data: any) => {
-          const { to, text, content, messageId } = data;
+          const { to, text, content, messageId, mediaUrl, mediaType } = data;
           const message = text || content;
           if (!to || !message) return;
 
@@ -222,10 +224,12 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
 
           if (waId && messageId) {
             try {
-              const { PrismaService } = await import('../database/prisma.service');
-              // Update via Redis pub or direct — will be wired in Etapa 3
-              this.logger.debug(`Outgoing enviado: ${waId}`);
-            } catch { /* ignore */ }
+              await this.prisma.message.update({
+                where: { id: messageId },
+                data: { waMessageId: waId },
+              });
+              this.logger.debug(`Outgoing enviado: ${waId} (msg: ${messageId})`);
+            } catch { /* message may not exist */ }
           }
         },
       );

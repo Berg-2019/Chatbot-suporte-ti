@@ -1,8 +1,12 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { RedisService } from '../cache/redis.service';
 import { IntentService, Intent } from '../../presentation/controllers/intent/intent.service';
 import { FaqService } from '../../presentation/controllers/faq/faq.service';
+import { ContactService } from '../services/contact.service';
+import { MessagesService } from '../../presentation/controllers/messages/messages.service';
+import { AlertService } from '../services/alert.service';
+import { EventsGateway } from '../../presentation/websockets/events.gateway';
 import { BaileysService } from './baileys.service';
 import { FlowState, ConversationSession } from './whatsapp.types';
 import { MESSAGES, SESSION_TTL, SESSION_PREFIX } from './whatsapp.constants';
@@ -17,19 +21,38 @@ export class FlowService implements OnModuleInit {
     private redis: RedisService,
     private intent: IntentService,
     private faq: FaqService,
+    private contact: ContactService,
+    private messages: MessagesService,
+    private alert: AlertService,
+    private events: EventsGateway,
+    @Inject(forwardRef(() => BaileysService))
     private baileys: BaileysService,
   ) {}
 
   onModuleInit() {
     this.baileys.onMessage(async (from, text, msg) => {
-      await this.handleMessage(from, text);
+      const waMessageId = msg.key?.id || undefined;
+      await this.handleMessage(from, text, waMessageId);
     });
     this.logger.log('FlowService registrado como handler de mensagens');
   }
 
-  async handleMessage(from: string, text: string) {
+  async handleMessage(from: string, text: string, waMessageId?: string) {
     const phone = from.split('@')[0];
+    const jid = from;
     const normalized = text.trim();
+
+    // Upsert contato
+    try {
+      const contactData = await this.contact.upsertByPhone(phone, {
+        name: phone,
+      });
+      if (contactData) {
+        this.logger.debug(`Contato upserted: ${phone}`);
+      }
+    } catch (err: any) {
+      this.logger.debug(`Contact upsert skip: ${err.message}`);
+    }
 
     let session = await this.getSession(phone);
 
@@ -263,6 +286,40 @@ export class FlowService implements OnModuleInit {
         session.state = FlowState.WAITING_AGENT;
         await this.saveSession(phone, session);
 
+        // Persistir mensagem inicial como INCOMING
+        try {
+          await this.messages.createFromWhatsApp(
+            ticket.id,
+            session.data.problem || '',
+            `bot_initial_${ticket.id}`,
+            'TEXT',
+          );
+        } catch { /* non-critical */ }
+
+        // Emitir evento Socket.IO para frontend
+        this.events.emitTicketCreated({
+          id: ticket.id,
+          title: ticket.title,
+          status: ticket.status,
+          priority: ticket.priority,
+          sector: ticket.sector,
+          customerName: ticket.customerName,
+          phoneNumber: ticket.phoneNumber,
+          createdAt: ticket.createdAt,
+        });
+
+        // Alertar técnicos N1
+        try {
+          await this.alert.sendAlertToLevel('N1', {
+            type: 'NEW_TICKET',
+            ticketId: ticket.id,
+            title: `Novo chamado via WhatsApp`,
+            message: ticket.title,
+          });
+        } catch (err: any) {
+          this.logger.warn(`Alert N1 falhou: ${err.message}`);
+        }
+
         await this.send(from, MESSAGES.ticketCreated(ticketNumber));
         this.logger.log(`🎫 Ticket criado: ${ticketNumber} (${phone})`);
       } catch (err: any) {
@@ -283,17 +340,29 @@ export class FlowService implements OnModuleInit {
   }
 
   private async handleWaitingAgent(from: string, phone: string, text: string, session: ConversationSession) {
-    if (session.data.ticketId) {
-      try {
-        await this.prisma.message.create({
-          data: {
-            ticketId: session.data.ticketId,
-            content: text,
-            type: 'TEXT',
-            direction: 'INCOMING',
-          },
+    if (!session.data.ticketId) return;
+
+    try {
+      const waId = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const { message, isNew } = await this.messages.createFromWhatsApp(
+        session.data.ticketId,
+        text,
+        waId,
+        'TEXT',
+      );
+
+      if (isNew && message) {
+        this.events.emitNewMessage(session.data.ticketId, {
+          id: message.id,
+          content: text,
+          kind: 'text',
+          sender: 'user',
+          senderName: session.data.customerName || phone,
+          createdAt: message.createdAt,
         });
-      } catch { /* non-critical */ }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Erro ao persistir mensagem WAITING_AGENT: ${err.message}`);
     }
   }
 
