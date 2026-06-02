@@ -63,6 +63,9 @@ import { PushModule } from './presentation/controllers/push/push.module';
 import { TechnicalReportsModule } from './presentation/controllers/technical-reports/technical-reports.module';
 import { AiModule } from './presentation/controllers/ai/ai.module';
 
+// WhatsApp Bot (Baileys direto, substitui Hermes)
+import { WhatsAppModule } from './infrastructure/whatsapp/whatsapp.module';
+
 // Admin
 import { AdminModule } from './presentation/controllers/admin/admin.module';
 
@@ -135,6 +138,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     NotificationPreferencesModule,
     SettingsModule,
     HermesModule,
+    WhatsAppModule,
     ToolsModule,
     AssetsModule,
     LicensesModule,
