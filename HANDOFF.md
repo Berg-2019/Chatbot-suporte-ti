@@ -19,13 +19,13 @@
 
 | Etapa | Status | Commit | Descrição |
 |-------|--------|--------|-----------|
-| **1. BaileysService** | ✅ Done | `e4189f7` | Conexão Baileys dentro do NestJS, QR, endpoints REST, consume outgoing_messages |
-| **2. FlowService** | 🔲 Pendente | — | State machine + classificação via IntentService (MiniMax) |
-| **3. Integração** | 🔲 Pendente | — | RabbitMQ, ContactService, MessagesService, AlertService, Socket.IO |
-| **4. IA conversacional** | 🔲 Pendente | — | Respostas naturais MiniMax quando confidence < 0.6 |
-| **5. CSAT + Ranking** | 🔲 Pendente | — | Pesquisa satisfação pós-ticket + ranking de agentes |
-| **6. Console DEV** | 🔲 Pendente | — | Aba WhatsApp (QR/status), Satisfação, Ranking no frontend /dev |
-| **7. Limpeza** | 🔲 Pendente | — | Remover Hermes, hermes-tools, hermes-agent do compose e código |
+| **1. BaileysService** | ✅ Done | `e4189f7` | Conexão Baileys dentro do NestJS, QR, endpoints REST |
+| **2. FlowService** | ✅ Done | `b5577eb` | State machine 10 estados + IntentService (MiniMax) |
+| **3. Integração** | ✅ Done | `cdb0167` | Contact, Messages, Alert, Socket.IO, outgoing consumer |
+| **4. IA conversacional** | ✅ Done | `4aa6415` | ConversationAIService — respostas naturais MiniMax |
+| **5. CSAT + Ranking** | ✅ Done | `0bc5a71` | Pesquisa satisfação + ranking agentes + endpoints |
+| **6. Console DEV** | ✅ Done | `84c6e9c` (frontend) | Abas WhatsApp, Satisfação, Ranking |
+| **7. Limpeza** | ✅ Done | (current) | Hermes removido do docker-compose, docs atualizados |
 
 ### Arquivos criados (Etapa 1)
 
@@ -38,20 +38,18 @@ backend/src/infrastructure/whatsapp/
 └── whatsapp.types.ts         # FlowState enum, ConversationSession, WhatsAppStatus
 ```
 
-### O que NÃO tocar até Etapa 7
+### Estado pós-limpeza
 
-- **NÃO deletar** `hermes-agent/`, `hermes-integration/`, Hermes containers — ainda funcionam em paralelo
-- **NÃO deletar** `backend/src/presentation/controllers/hermes/` — o HermesModule ainda está registrado
-- O WhatsAppModule coexiste com o HermesModule até a limpeza final
+- **`hermes` e `hermes-tools` removidos** do `docker-compose.dev.yml`
+- **`HermesModule` ainda registrado** no AppModule (código não deletado, apenas não roda containers)
+- **`hermes-agent/` e `hermes-integration/`** ainda existem no repo (podem ser deletados quando conveniente)
+- **WhatsApp bot roda dentro do backend** — volume `whatsapp_sessions` para sessão Baileys
 
-### Próxima ação (Etapa 2)
+### Próxima ação
 
-Criar `flow.service.ts` em `backend/src/infrastructure/whatsapp/` com:
-1. State machine (FlowState enum já definido em whatsapp.types.ts)
-2. Sessão via Redis (prefix `wa:session:`)
-3. Integrar `IntentService.classify()` para classificar intenção
-4. Handlers para cada estado (GREETING, COLLECT_PROBLEM, CONFIRM, etc.)
-5. Registrar callback `BaileysService.onMessage()` no FlowService
+1. **Testar E2E:** subir backend → parear WhatsApp via /dev → enviar mensagem → verificar ticket criado
+2. **Rebuild backend** para carregar o novo WhatsAppModule
+3. Opcionalmente deletar `hermes-agent/` submodule e `hermes-integration/backend-tools/`
 
 ### Provider IA
 

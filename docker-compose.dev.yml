@@ -90,15 +90,28 @@ services:
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
       JWT_SECRET: ${JWT_SECRET:-dev-secret-jwt}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
+      HERMES_ENABLED: ${HERMES_ENABLED:-true}
       MINIMAX_API_KEY: ${MINIMAX_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
-      FRONTEND_URL: http://localhost:5173,http://192.168.7.118,http://192.168.7.118:5173,http://helpdeskmsm.com.br,https://helpdeskmsm.com.br,https://www.helpdeskmsm.com.br
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@helpdeskmsm.com.br}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
     volumes:
       - ./backend:/app:delegated
       - /app/node_modules
       - backend_logs:/app/logs
+      - whatsapp_sessions:/app/sessions
     networks:
       - helpdesk_network
     extra_hosts:
@@ -144,83 +157,10 @@ services:
       retries: 3
 
   # ============================================================================
-  # Hermes Agent - AI Agent como Bot WhatsApp
+  # Hermes Agent + Tools — REMOVIDOS (substituídos por WhatsAppModule nativo)
+  # Bot WhatsApp agora roda dentro do backend NestJS via BaileysService
+  # Veja: backend/src/infrastructure/whatsapp/
   # ============================================================================
-  hermes:
-    build:
-      context: ./hermes-agent
-      dockerfile: Dockerfile
-    container_name: helpdesk_hermes
-    restart: unless-stopped
-    command: ["gateway", "run"]
-    entrypoint: ["/opt/hermes/.venv/bin/hermes"]
-    ports:
-      - "3004:3000"  # Gateway API port
-    environment:
-      NODE_ENV: development
-      HERMES_HOME: /opt/data
-      HERMES_WEB_DIST: /opt/hermes/hermes_cli/web_dist
-      # MiniMax AI Provider
-      MINIMAX_API_KEY: ${MINIMAX_API_KEY}
-      # Backend integration
-      HERMES_BACKEND_URL: http://hermes-tools:3003
-      HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
-      # WhatsApp Configuration
-      WHATSAPP_ENABLED: "true"
-      WHATSAPP_MODE: bot
-      WHATSAPP_ALLOWED_USERS: "*"
-      WHATSAPP_BRIDGE_PORT: "3001"
-      GATEWAY_ALLOW_ALL_USERS: "true"
-      # Model Configuration
-      HERMES_MODEL_PROVIDER: openai-compatible
-      HERMES_MODEL_BASE_URL: https://api.minimax.io/v1
-      HERMES_MODEL_NAME: MiniMax-M2
-    volumes:
-      - hermes_data:/opt/data
-      - hermes_skills:/root/.hermes/skills:ro
-      - hermes_whatsapp_session:/root/.hermes/platforms/whatsapp/session
-    networks:
-      - helpdesk_network
-    depends_on:
-      - hermes-tools
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-  # ============================================================================
-  # Hermes Tools Server - Bridge entre Hermes Agent e Backend
-  # ============================================================================
-  hermes-tools:
-    build:
-      context: ./hermes-integration/backend-tools
-      dockerfile: Dockerfile
-    container_name: helpdesk_hermes_tools
-    restart: unless-stopped
-    ports:
-      - "3003:3003"
-    environment:
-      NODE_ENV: development
-      BACKEND_URL: http://backend:3000
-      BACKEND_ORIGIN: http://backend:3000
-      WHATSAPP_BRIDGE_URL: http://hermes-tools:3001
-      RABBITMQ_URL: amqp://helpdesk:${RABBITMQ_PASSWORD:-37b87676ed3d28ca08e2d5f2e95cfc79}@rabbitmq:5672
-      HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
-      TOOLS_PORT: 3003
-      MEDIA_TEMP_DIR: /app/media
-    volumes:
-      - ./backend/uploads:/app/uploads:ro
-      - media_temp:/app/media
-    networks:
-      - helpdesk_network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - backend
-    command: >
-      sh -c "node proxy.cjs &
-              sleep 2 &&
-              node server.js &
-              sleep 3 &&
-              node outgoing-consumer.js"
 
 # ==============================================================================
 # Volumes
@@ -236,14 +176,8 @@ volumes:
     name: helpdesk_backend_node_modules_dev
   backend_logs:
     name: helpdesk_backend_logs_dev
-  hermes_data:
-    name: helpdesk_hermes_data
-  hermes_skills:
-    name: helpdesk_hermes_skills
-  hermes_whatsapp_session:
-    name: helpdesk_hermes_whatsapp_session
-  media_temp:
-    name: helpdesk_media_temp
+  whatsapp_sessions:
+    name: helpdesk_whatsapp_sessions
 
 # ==============================================================================
 # Networks
