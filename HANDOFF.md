@@ -1,7 +1,64 @@
 # HANDOFF.md — Chatbot-suporte-ti
 
 > 🚨 **LEIA PRIMEIRO ESTE ARQUIVO** antes de qualquer ação neste repo.
-> Atualizado: 2026-05-12 (tarde) · Branch: `feature/chatbot-upgrade`
+> Atualizado: 2026-06-02 · Branch: `feature/chatbot-upgrade`
+
+---
+
+## 🔴 MUDANÇA ARQUITETURAL EM ANDAMENTO (2026-06-02)
+
+### Substituindo Hermes Agent por WhatsApp Bot nativo
+
+**Decisão:** Remover o Hermes Agent (Python gateway + Node.js bridge + 2 containers extras) e substituir por um **WhatsApp bot Baileys rodando dentro do NestJS** (mesmo processo, 0 containers extras).
+
+**Plano completo:** [`/home/dev/.claude/plans/parsed-growing-glacier.md`](.claude/plans/parsed-growing-glacier.md)
+
+**Motivação:** 10 bugs em 1 sessão causados por cola entre camadas; complexidade desproporcional (780K linhas de framework Python + LLM probabilístico para 5 ações determinísticas).
+
+### Progresso das Etapas
+
+| Etapa | Status | Commit | Descrição |
+|-------|--------|--------|-----------|
+| **1. BaileysService** | ✅ Done | `e4189f7` | Conexão Baileys dentro do NestJS, QR, endpoints REST, consume outgoing_messages |
+| **2. FlowService** | 🔲 Pendente | — | State machine + classificação via IntentService (MiniMax) |
+| **3. Integração** | 🔲 Pendente | — | RabbitMQ, ContactService, MessagesService, AlertService, Socket.IO |
+| **4. IA conversacional** | 🔲 Pendente | — | Respostas naturais MiniMax quando confidence < 0.6 |
+| **5. CSAT + Ranking** | 🔲 Pendente | — | Pesquisa satisfação pós-ticket + ranking de agentes |
+| **6. Console DEV** | 🔲 Pendente | — | Aba WhatsApp (QR/status), Satisfação, Ranking no frontend /dev |
+| **7. Limpeza** | 🔲 Pendente | — | Remover Hermes, hermes-tools, hermes-agent do compose e código |
+
+### Arquivos criados (Etapa 1)
+
+```
+backend/src/infrastructure/whatsapp/
+├── whatsapp.module.ts        # NestJS module
+├── baileys.service.ts        # Conexão Baileys, QR, send/receive, consume outgoing
+├── whatsapp.controller.ts    # GET /api/whatsapp/status, /qr, POST /disconnect, /restart
+├── whatsapp.constants.ts     # Estados, mensagens template, config
+└── whatsapp.types.ts         # FlowState enum, ConversationSession, WhatsAppStatus
+```
+
+### O que NÃO tocar até Etapa 7
+
+- **NÃO deletar** `hermes-agent/`, `hermes-integration/`, Hermes containers — ainda funcionam em paralelo
+- **NÃO deletar** `backend/src/presentation/controllers/hermes/` — o HermesModule ainda está registrado
+- O WhatsAppModule coexiste com o HermesModule até a limpeza final
+
+### Próxima ação (Etapa 2)
+
+Criar `flow.service.ts` em `backend/src/infrastructure/whatsapp/` com:
+1. State machine (FlowState enum já definido em whatsapp.types.ts)
+2. Sessão via Redis (prefix `wa:session:`)
+3. Integrar `IntentService.classify()` para classificar intenção
+4. Handlers para cada estado (GREETING, COLLECT_PROBLEM, CONFIRM, etc.)
+5. Registrar callback `BaileysService.onMessage()` no FlowService
+
+### Provider IA
+
+- **Primário:** MiniMax (MiniMax-M2.5) — key em `MINIMAX_API_KEY`, endpoint OpenAI-compatible
+- **Fallback:** Ollama local (`qwen2.5:3b`) → GLM-4 (se GLM_API_KEY configurada)
+- **Serviço:** `IntentService` em `backend/src/presentation/controllers/intent/intent.service.ts`
+- **9 intenções:** abrir_ticket_ti, abrir_ticket_eletrica, reservar_equipamento, consultar_faq, consultar_ticket, falar_tecnico, saudacao, avaliar_atendimento, outro
 
 ## 🆕 Mudança de arquitetura 2026-05-12 (tarde)
 
