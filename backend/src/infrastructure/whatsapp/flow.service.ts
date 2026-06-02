@@ -8,6 +8,7 @@ import { MessagesService } from '../../presentation/controllers/messages/message
 import { AlertService } from '../services/alert.service';
 import { EventsGateway } from '../../presentation/websockets/events.gateway';
 import { BaileysService } from './baileys.service';
+import { ConversationAIService } from './conversation-ai.service';
 import { FlowState, ConversationSession } from './whatsapp.types';
 import { MESSAGES, SESSION_TTL, SESSION_PREFIX } from './whatsapp.constants';
 import { Sector, TicketStatus } from '@prisma/client';
@@ -25,6 +26,7 @@ export class FlowService implements OnModuleInit {
     private messages: MessagesService,
     private alert: AlertService,
     private events: EventsGateway,
+    private conversationAI: ConversationAIService,
     @Inject(forwardRef(() => BaileysService))
     private baileys: BaileysService,
   ) {}
@@ -154,11 +156,39 @@ export class FlowService implements OnModuleInit {
 
       default:
         if (confidence >= 0.6 && text.length > 10) {
-          session.data.sector = 'TI' as Sector;
-          session.data.problem = text;
-          session.state = FlowState.COLLECT_LOCATION;
+          // Alta confiança + texto descritivo → extrair entidades e avançar
+          const entities = await this.conversationAI.extractEntities(text);
+          if (entities.sector === 'TI' || entities.sector === 'ELECTRIC') {
+            session.data.sector = entities.sector as Sector;
+          } else {
+            session.data.sector = 'TI' as Sector;
+          }
+          session.data.problem = entities.problemSummary || text;
+          if (entities.location) {
+            session.data.location = entities.location;
+          }
+          session.state = entities.location ? FlowState.CONFIRM_TICKET : FlowState.COLLECT_LOCATION;
           await this.saveSession(phone, session);
-          await this.send(from, MESSAGES.askLocation);
+          if (entities.location) {
+            await this.send(from, MESSAGES.confirmTicket({
+              sector: session.data.sector || 'TI',
+              problem: session.data.problem || '',
+              location: session.data.location || '',
+            }));
+          } else {
+            await this.send(from, MESSAGES.askLocation);
+          }
+        } else if (confidence < 0.6 && text.length > 5) {
+          // Baixa confiança → usar IA conversacional para guiar
+          const response = await this.conversationAI.generateResponse(
+            text,
+            session.data.messageHistory,
+            { state: 'greeting' },
+          );
+          session.data.messageHistory.push({ role: 'bot', content: response.text });
+          session.state = FlowState.GREETING;
+          await this.saveSession(phone, session);
+          await this.send(from, response.text);
         } else {
           session.state = FlowState.GREETING;
           await this.saveSession(phone, session);
@@ -241,7 +271,8 @@ export class FlowService implements OnModuleInit {
 
     if (choice >= 1 && choice <= faqs.length) {
       const selected = faqs[choice - 1];
-      await this.send(from, `📖 *${selected.question}*\n\n${selected.answer}\n\n---\nIsso resolveu? Responda *sim* ou *não*.`);
+      const summary = await this.conversationAI.summarizeFaqAnswer(selected.question, selected.answer);
+      await this.send(from, `📖 *${selected.question}*\n\n${summary}\n\n---\nIsso resolveu? Responda *sim* ou *não*.`);
       return;
     }
 

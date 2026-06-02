@@ -11,6 +11,7 @@ import { MessagesModule } from '../../presentation/controllers/messages/messages
 import { WebsocketModule } from '../../presentation/websockets/websocket.module';
 import { BaileysService } from './baileys.service';
 import { FlowService } from './flow.service';
+import { ConversationAIService } from './conversation-ai.service';
 import { WhatsAppController } from './whatsapp.controller';
 
 @Module({
@@ -27,7 +28,7 @@ import { WhatsAppController } from './whatsapp.controller';
     forwardRef(() => WebsocketModule),
   ],
   controllers: [WhatsAppController],
-  providers: [BaileysService, FlowService],
-  exports: [BaileysService, FlowService],
+  providers: [BaileysService, FlowService, ConversationAIService],
+  exports: [BaileysService, FlowService, ConversationAIService],
 })
 export class WhatsAppModule {}
