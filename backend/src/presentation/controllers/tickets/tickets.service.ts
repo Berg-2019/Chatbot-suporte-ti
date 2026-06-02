@@ -5,6 +5,7 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq.service';
+import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { AutomationEngineService } from '../../../infrastructure/services/automation-engine.service';
 import { SlaService } from '../sla/sla.service';
 import { PushService } from '../push/push.service';
@@ -39,6 +40,7 @@ export class TicketsService {
   constructor(
     private prisma: PrismaService,
     private rabbitmq: RabbitMQService,
+    private redis: RedisService,
     private automationEngine: AutomationEngineService,
     private slaService: SlaService,
     private pushService: PushService,
@@ -408,16 +410,47 @@ export class TicketsService {
       },
     });
 
-    // Se fechou, enviar mensagem ao cliente
+    // Se fechou, enviar mensagem ao cliente + pesquisa CSAT
     if (status === 'CLOSED' && ticket.phoneNumber) {
       const technicianName = ticket.assignedTo?.name || 'Suporte';
-      const closeMessage = `✅ *Chamado Encerrado*\n\nSeu chamado foi finalizado por *${technicianName}*.\n\nSe precisar de mais ajuda, é só enviar uma nova mensagem!\n\nObrigado pelo contato. 😊`;
+      const ticketNumber = id.slice(0, 8).toUpperCase();
+      const closeMessage = `✅ *Chamado #${ticketNumber} Encerrado*\n\nSeu chamado foi finalizado por *${technicianName}*.\n\nSe precisar de mais ajuda, é só enviar uma nova mensagem!`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: ticket.phoneNumber,
         text: closeMessage,
         ticketId: id,
       });
+
+      // Enviar pesquisa CSAT após 5 segundos
+      const phoneForCsat = ticket.phoneNumber!;
+      const phone = phoneForCsat.split('@')[0];
+      setTimeout(async () => {
+        try {
+          const csatMessage = `Como você avalia o atendimento do chamado *#${ticketNumber}*?\n\nResponda com uma nota de *1* a *5*:\n1⭐ Péssimo\n2⭐ Ruim\n3⭐ Regular\n4⭐ Bom\n5⭐ Excelente`;
+
+          // Criar sessão RATING no Redis para o FlowService processar a resposta
+          await this.redis.set(
+            `wa:session:${phone}`,
+            JSON.stringify({
+              state: 'rating',
+              data: { ticketId: id, messageHistory: [] },
+              updatedAt: Date.now(),
+            }),
+            600,
+          );
+
+          await this.rabbitmq.publishOutgoingMessage({
+            to: phoneForCsat,
+            text: csatMessage,
+            ticketId: id,
+          });
+
+          this.logger.log(`📊 CSAT enviado para ${phone} (ticket #${ticketNumber})`);
+        } catch (err: any) {
+          this.logger.warn(`Falha ao enviar CSAT: ${err.message}`);
+        }
+      }, 5000);
     }
 
     // Notificar painel para atualizar listas

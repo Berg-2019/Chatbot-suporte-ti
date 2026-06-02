@@ -66,6 +66,7 @@ import { AiModule } from './presentation/controllers/ai/ai.module';
 // WhatsApp Bot (Baileys direto, substitui Hermes)
 import { WhatsAppModule } from './infrastructure/whatsapp/whatsapp.module';
 
+
 // Admin
 import { AdminModule } from './presentation/controllers/admin/admin.module';
 

@@ -15,6 +15,7 @@ import { PushModule } from '../push/push.module';
 import { StockModule } from '../stock/stock.module';
 import { ChatModule } from '../chat/chat.module';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { RedisModule } from '../../../infrastructure/cache/redis.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
     PushModule,
     StockModule,
     ChatModule,
+    RedisModule,
     MulterModule.register({
       storage: diskStorage({
         destination: './uploads/attachments',
