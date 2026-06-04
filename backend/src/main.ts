@@ -80,6 +80,7 @@ async function bootstrap() {
       'http://helpdeskmsm.com.br',
       'https://helpdeskmsm.com.br',
       // Dev (simulating subdomains via ports)
+      'http://localhost',
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:5175',
@@ -107,7 +108,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Frontend-Sector'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Frontend-Sector', 'X-Request-ID', 'x-api-key', 'x-hermes-api-key'],
     exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
   });
 
