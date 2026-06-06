@@ -24,7 +24,8 @@ export async function loginAs(
   await passwordInput.fill(password);
   await submitButton.click();
 
-  await page.waitForURL(/\/(tickets|requests|dashboard|checklist)/, { timeout: 15000 });
+  // Após login a app navega para "/" (home autenticada); aguarda sair de /login.
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15000 });
 }
 
 export async function logout(page: Page): Promise<void> {
