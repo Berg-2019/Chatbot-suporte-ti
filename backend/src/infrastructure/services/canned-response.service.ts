@@ -209,9 +209,9 @@ export class CannedResponseService {
     let interpolated = content;
 
     // Substituir variáveis no formato {{variable}}
+    // Usa replaceAll com string literal para evitar ReDoS (sem construir RegExp com input externo)
     Object.entries(variables).forEach(([key, value]) => {
-      const regex = new RegExp(`{{${key}}}`, 'g');
-      interpolated = interpolated.replace(regex, String(value || ''));
+      interpolated = interpolated.replaceAll(`{{${key}}}`, String(value || ''));
     });
 
     // Remover variáveis não substituídas
