@@ -11,6 +11,7 @@ import { SlaService } from '../sla/sla.service';
 import { PushService } from '../push/push.service';
 import { StockService } from '../stock/stock.service';
 import { ChatService } from '../chat/chat.service';
+import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { Sector } from '@prisma/client';
 
 describe('TicketsService', () => {
@@ -70,6 +71,10 @@ describe('TicketsService', () => {
     sendMessage: jest.fn().mockResolvedValue({ id: 'msg-1', content: 'test' }),
   };
 
+  const mockRedisService = {
+    set: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -81,6 +86,7 @@ describe('TicketsService', () => {
         { provide: PushService, useValue: mockPushService },
         { provide: StockService, useValue: mockStockService },
         { provide: ChatService, useValue: mockChatService },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 
