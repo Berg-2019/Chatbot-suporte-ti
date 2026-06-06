@@ -28,7 +28,7 @@ import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { AuthUser } from '../../../domain/auth-user';
-import { HermesApiKeyGuard } from '../hermes/guards/hermes-api-key.guard';
+import { ApiKeyGuard } from '../../../common/guards/api-key.guard';
 
 class CreateTicketDto {
   @IsString()
@@ -219,7 +219,7 @@ export class TicketsController {
 
   @Get('by-phone/:phone')
   @SetMetadata('isPublic', true)
-  @UseGuards(HermesApiKeyGuard)
+  @UseGuards(ApiKeyGuard)
   async findByPhone(@Param('phone') phone: string) {
     return this.ticketsService.findByPhone(phone);
   }
@@ -236,7 +236,7 @@ export class TicketsController {
   }
 
   @Get('attachments/:attachmentId/file')
-  @UseGuards(HermesApiKeyGuard)
+  @UseGuards(ApiKeyGuard)
   async serveAttachment(
     @Param('attachmentId') attachmentId: string,
     @Res() res: Response,

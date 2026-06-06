@@ -7,16 +7,24 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+/**
+ * Protege endpoints internos consumidos por integrações server-to-server
+ * via header `x-api-key`. Lê INTERNAL_API_KEY (com fallback a HERMES_API_KEY
+ * por compatibilidade com deploys existentes).
+ */
 @Injectable()
-export class HermesApiKeyGuard implements CanActivate {
-  private readonly logger = new Logger(HermesApiKeyGuard.name);
+export class ApiKeyGuard implements CanActivate {
+  private readonly logger = new Logger(ApiKeyGuard.name);
   private readonly apiKey: string;
 
   constructor(private configService: ConfigService) {
-    this.apiKey = this.configService.get<string>('HERMES_API_KEY') || '';
+    this.apiKey =
+      this.configService.get<string>('INTERNAL_API_KEY') ||
+      this.configService.get<string>('HERMES_API_KEY') ||
+      '';
 
     if (!this.apiKey) {
-      this.logger.warn('HERMES_API_KEY nao definida! Endpoints do Hermes estao desprotegidos.');
+      this.logger.warn('INTERNAL_API_KEY nao definida! Endpoints internos estao desprotegidos.');
     }
   }
 
@@ -25,12 +33,12 @@ export class HermesApiKeyGuard implements CanActivate {
     const providedKey = request.headers['x-api-key'] || request.headers['x-hermes-api-key'];
 
     if (!providedKey) {
-      this.logger.warn(`Acesso ao Hermes sem API Key de ${request.ip}`);
+      this.logger.warn(`Acesso a endpoint interno sem API Key de ${request.ip}`);
       throw new UnauthorizedException('API Key obrigatoria. Envie via header x-api-key.');
     }
 
     if (!this.apiKey) {
-      this.logger.error('HERMES_API_KEY nao configurada — bloqueando todas as requisicoes');
+      this.logger.error('INTERNAL_API_KEY nao configurada — bloqueando todas as requisicoes');
       throw new UnauthorizedException('Servico nao configurado.');
     }
 

@@ -96,24 +96,6 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  hermes-tools:
-    build:
-      context: ./hermes-integration/backend-tools
-      dockerfile: Dockerfile
-    container_name: helpdesk_hermes_tools_staging
-    restart: unless-stopped
-    ports:
-      - "3003:3003"
-    environment:
-      NODE_ENV: production
-      BACKEND_URL: http://backend:3000
-      HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
-      TOOLS_PORT: 3003
-    networks:
-      - helpdesk_staging
-    depends_on:
-      - backend
-
   # -----------------------------------------------------------------------
   # Nginx — simula os 4 subdomínios em portas locais
   # -----------------------------------------------------------------------

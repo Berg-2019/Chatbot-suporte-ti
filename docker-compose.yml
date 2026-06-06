@@ -90,6 +90,7 @@ services:
     volumes:
       - backend_logs:/app/logs
       - backend_uploads:/app/uploads
+      - whatsapp_sessions:/app/sessions
     networks:
       - helpdesk_network
     depends_on:
@@ -107,71 +108,9 @@ services:
       start_period: 40s
 
   # ============================================================================
-  # Hermes Agent - Bot WhatsApp (Baileys + IA)
+  # WhatsApp Bot (Baileys) roda DENTRO do serviço backend (WhatsAppModule).
+  # Hermes Agent e Hermes Tools foram removidos — ver volume whatsapp_sessions.
   # ============================================================================
-  hermes:
-    build:
-      context: ./hermes-agent
-      dockerfile: Dockerfile
-    container_name: helpdesk_hermes
-    restart: unless-stopped
-    command: ["gateway", "run"]
-    entrypoint: ["/opt/hermes/.venv/bin/hermes"]
-    environment:
-      NODE_ENV: production
-      HERMES_HOME: /opt/data
-      HERMES_WEB_DIST: /opt/hermes/hermes_cli/web_dist
-      MINIMAX_API_KEY: ${MINIMAX_API_KEY}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      HERMES_BACKEND_URL: http://hermes-tools:3003
-      HERMES_API_KEY: ${HERMES_API_KEY}
-      WHATSAPP_ENABLED: "true"
-      WHATSAPP_MODE: bot
-      WHATSAPP_ALLOWED_USERS: "*"
-      WHATSAPP_BRIDGE_PORT: "3001"
-      GATEWAY_ALLOW_ALL_USERS: "true"
-      HERMES_MODEL_PROVIDER: openai-compatible
-      HERMES_MODEL_BASE_URL: ${HERMES_MODEL_BASE_URL:-https://api.minimax.io/v1}
-      HERMES_MODEL_NAME: ${HERMES_MODEL_NAME:-MiniMax-M2}
-    volumes:
-      - hermes_data:/opt/data
-      - hermes_whatsapp_session:/root/.hermes/platforms/whatsapp/session
-    networks:
-      - helpdesk_network
-    depends_on:
-      - hermes-tools
-
-  # ============================================================================
-  # Hermes Tools Server - Bridge entre Hermes Agent e Backend
-  # ============================================================================
-  hermes-tools:
-    build:
-      context: ./hermes-integration/backend-tools
-      dockerfile: Dockerfile
-    container_name: helpdesk_hermes_tools
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      BACKEND_URL: http://backend:3000
-      BACKEND_ORIGIN: http://backend:3000
-      WHATSAPP_BRIDGE_URL: http://hermes-tools:3001
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
-      HERMES_API_KEY: ${HERMES_API_KEY}
-      TOOLS_PORT: 3003
-      MEDIA_TEMP_DIR: /app/media
-    volumes:
-      - backend_uploads:/app/uploads:ro
-      - media_temp:/app/media
-    networks:
-      - helpdesk_network
-    depends_on:
-      - backend
-    command: >
-      sh -c "node proxy.cjs &
-              sleep 2 &&
-              node server.js &
-              sleep 3 &&
-              node outgoing-consumer.js"
 
   # ============================================================================
   # Frontend Builder (Frontend-chatbot SPA)
@@ -187,6 +126,8 @@ services:
         # — VITE_API_URL e VITE_WS_URL podem continuar relativos / mesmo origin.
         VITE_API_URL: ${VITE_API_URL:-/api}
         VITE_WS_URL: ${VITE_WS_URL:-/}
+        # URL pública final (usada em emails / templates). Em dev cai pra origin.
+        VITE_PUBLIC_URL: ${VITE_PUBLIC_URL:-https://helpdeskmsm.com.br}
     container_name: helpdesk_frontend
     restart: unless-stopped
     volumes:
@@ -219,9 +160,7 @@ volumes:
   rabbitmq_data:
   backend_logs:
   backend_uploads:
-  hermes_data:
-  hermes_whatsapp_session:
-  media_temp:
+  whatsapp_sessions:
   frontend_dist:
 
 # ==============================================================================

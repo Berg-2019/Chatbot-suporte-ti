@@ -54,7 +54,6 @@ import { MacrosModule } from './presentation/controllers/macros/macros.module';
 import { LiveViewModule } from './presentation/controllers/live-view/live-view.module';
 import { NotificationPreferencesModule } from './presentation/controllers/notification-preferences/notification-preferences.module';
 import { SettingsModule } from './presentation/controllers/settings/settings.module';
-import { HermesModule } from './presentation/controllers/hermes/hermes.module';
 import { ToolsModule } from './presentation/controllers/tools/tools.module';
 import { AssetsModule } from './presentation/controllers/assets/assets.module';
 import { LicensesModule } from './presentation/controllers/licenses/licenses.module';
@@ -138,7 +137,6 @@ import { HealthController } from './presentation/controllers/health.controller';
     LiveViewModule,
     NotificationPreferencesModule,
     SettingsModule,
-    HermesModule,
     WhatsAppModule,
     ToolsModule,
     AssetsModule,

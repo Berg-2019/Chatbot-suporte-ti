@@ -7,7 +7,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { existsSync, statSync, createReadStream } from 'fs';
 import { join } from 'path';
-import { HermesApiKeyGuard } from '../hermes/guards/hermes-api-key.guard';
+import { ApiKeyGuard } from '../../../common/guards/api-key.guard';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './chat.dto';
 
@@ -69,7 +69,7 @@ export class ChatController {
     }
 
     @Patch('messages/:id/wa-id')
-    @UseGuards(HermesApiKeyGuard)
+    @UseGuards(ApiKeyGuard)
     async setWaId(@Param('id') id: string, @Body('waMessageId') waMessageId: string) {
         return this.service.setWaMessageId(id, waMessageId);
     }
@@ -100,7 +100,7 @@ export class ChatController {
     }
 
     @Get('media-internal/:messageId')
-    @UseGuards(HermesApiKeyGuard)
+    @UseGuards(ApiKeyGuard)
     async getMediaInternal(@Param('messageId') messageId: string, @Res() res: Response) {
         this.logger.debug(`[getMediaInternal] called with messageId=${messageId}`);
         const message = await this.service.getMessageById(messageId);

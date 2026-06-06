@@ -92,8 +92,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-jwt}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      HERMES_API_KEY: ${HERMES_API_KEY:-hermes_dev_key_change_me}
-      HERMES_ENABLED: ${HERMES_ENABLED:-true}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-internal_dev_key_change_me}
       MINIMAX_API_KEY: ${MINIMAX_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
@@ -136,25 +135,10 @@ services:
   # Para smoke test completo com nginx, use docker-compose.staging.yml
 
   # ============================================================================
-  # Intent Classification Service - Python com spaCy/sklearn
+  # Intent Classification Service — REMOVIDO
+  # Classificação de intenção agora é feita pelo IntentService dentro do NestJS
+  # via MiniMax API (sem container Python separado)
   # ============================================================================
-  intent-service:
-    build:
-      context: ./intent-service
-      dockerfile: Dockerfile
-    container_name: helpdesk_intent
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    environment:
-      PORT: 5000
-    networks:
-      - helpdesk_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # ============================================================================
   # Hermes Agent + Tools — REMOVIDOS (substituídos por WhatsAppModule nativo)
