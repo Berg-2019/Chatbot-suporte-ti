@@ -1,13 +1,28 @@
 # HANDOFF.md — Chatbot-suporte-ti
 
 > 🚨 **LEIA PRIMEIRO ESTE ARQUIVO** antes de qualquer ação neste repo.
-> Atualizado: 2026-06-02 · Branch: `feature/chatbot-upgrade`
+> Atualizado: 2026-06-06 · Branch: `feature/chatbot-upgrade`
 
 ---
 
-## 🔴 MUDANÇA ARQUITETURAL EM ANDAMENTO (2026-06-02)
+## ✅ HERMES 100% REMOVIDO (2026-06-06)
 
-### Substituindo Hermes Agent por WhatsApp Bot nativo
+A migração Hermes → bot WhatsApp nativo está **concluída e o Hermes foi deletado do repo**:
+
+- Pastas `hermes-agent/` (gitlink) e `hermes-integration/` apagadas do disco e do índice git
+- `HermesModule` removido do `app.module.ts`; pasta `backend/src/presentation/controllers/hermes/` deletada
+- Serviços `hermes`/`hermes-tools` removidos de `docker-compose.yml` e `docker-compose.staging.yml`; `intent-service` (Python) removido do `docker-compose.dev.yml`
+- Vars `HERMES_*`/`OPENROUTER_API_KEY` removidas de `.env`/`.env.example`/compose → substituídas por `INTERNAL_API_KEY`
+- O guard `HermesApiKeyGuard` virou `ApiKeyGuard` genérico em `backend/src/common/guards/api-key.guard.ts` (lê `INTERNAL_API_KEY`, fallback `HERMES_API_KEY`)
+- Verificado: backend bota limpo (0 erros TS, sem DI errors), rotas `/api/hermes/*` retornam 404, `/api/whatsapp/*` mapeadas, 61/61 testes unitários, smoke test verde
+
+**Pendências de limpeza (não bloqueantes):**
+- 4 endpoints internos guardados por `ApiKeyGuard` (`tickets/by-phone`, attachment file, `chat/messages/:id/wa-id`, `chat/media-internal`) eram a ponte do Hermes — hoje provavelmente mortos (bot é in-process). Remover quando confirmado.
+- Frontend (`Frontend-chatbot`) tem refs mortas: `AssistantPanel.tsx` (modo demo) e `notificationService.ts` chama `/hermes/send` (inexistente).
+
+---
+
+## 📜 Histórico: migração Hermes → bot nativo (2026-06-02)
 
 **Decisão:** Remover o Hermes Agent (Python gateway + Node.js bridge + 2 containers extras) e substituir por um **WhatsApp bot Baileys rodando dentro do NestJS** (mesmo processo, 0 containers extras).
 
@@ -136,9 +151,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 | `helpdesk_postgres` | Up (health: postgres) |
 | `helpdesk_redis` | Up (health: redis) |
 | `helpdesk_rabbitmq` | Up (health: rabbitmq-diagnostics) |
-| `helpdesk_backend` | Up (port 3000) |
-| `helpdesk_hermes` | Up (WhatsApp pareado) |
-| `helpdesk_hermes-tools` | Up (port 3003, 10 tools) |
+| `helpdesk_backend` | Up (port 3000, WhatsApp bot Baileys embutido) |
 
 **Se algum não está UP:**
 ```bash
@@ -246,9 +259,10 @@ docker compose exec backend npx prisma migrate status
 
 **P5. Parear WhatsApp (se não estiver pareado)**
 ```bash
-docker logs -f helpdesk_hermes   # escanear QR code
-# Aguardar "QR code scan successful" ou "Connected"
-# Parar com Ctrl+C
+# O bot Baileys roda dentro do backend. Escanear o QR via:
+#   - GET http://localhost:3000/api/whatsapp/qr  (ou a aba WhatsApp em /dev)
+#   - ou nos logs: docker logs -f helpdesk_backend_dev | grep QR
+# Aguardar log "Connected" do BaileysService. Sessão persiste no volume whatsapp_sessions.
 ```
 
 **P6. Configurar cron de backup do Postgres**

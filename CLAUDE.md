@@ -10,8 +10,8 @@
 ## 📌 Estado atual (snapshot 2026-05-04)
 
 - **Fases 0-5** ✅ completas; **Fase 6** 🔄 em progresso (tarefas pendentes executadas 2026-05-04)
-- **Stack rodando E2E localmente** — backend/Hermes/frontend/postgres/redis/rabbitmq operacionais
-- **WhatsApp pareado** — confirmado 2026-05-04 via logs `helpdesk_hermes`
+- **Stack rodando E2E localmente** — backend/frontend/postgres/redis/rabbitmq operacionais (WhatsApp bot embutido no backend)
+- **WhatsApp** — bot Baileys nativo dentro do backend NestJS (`WhatsAppModule`). Pareamento via `GET /api/whatsapp/qr`. **Hermes removido em 2026-06-06.**
 - **165 commits ahead de main** — aguardando janela de 1-2 sem para merge `--no-ff` (sem squash, sem rebase). Detalhe em [§9 do plano](IMPLEMENTATION_PLAN_V3.md)
 - **Bloqueadores pré-merge restantes:** forward-merge `git merge origin/main`, Playwright E2E suite, smoke test mobile real
 
@@ -30,7 +30,7 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
 
 > **Decisão 2026-05-10 — PWA único.** Tema/abas/dados vêm do **JWT (`user.sector`)**, não do host. Manifest é um só (`/public/manifest.webmanifest`). Os 3 subdomínios continuam servindo o mesmo app por conveniência de URL/SSO, mas o usuário instala apenas **1 PWA** no celular. Sem redirect entre subdomínios após login. `SectorSwitcher` existe apenas em build DEV (`import.meta.env.DEV`) para previewar temas — em produção retorna `null`.
 
-**WhatsApp** como canal alternativo de atendimento, com **Hermes Agent** como brain conversacional. **Bot legado (`bot/`) será removido** na Fase 1 — não usar.
+**WhatsApp** como canal alternativo de atendimento, atendido por um **bot Baileys nativo rodando dentro do backend NestJS** (`backend/src/infrastructure/whatsapp/` — `BaileysService` + `FlowService` + `ConversationAIService`/MiniMax). **O Hermes Agent foi removido em 2026-06-06** (ver HANDOFF.md). O bot legado (`bot/`) também não existe mais.
 
 **Repositórios:**
 - Backend (este repo): https://github.com/Berg-2019/Chatbot-suporte-ti — branch atual `feature/chatbot-upgrade`
@@ -81,7 +81,8 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
 |---------|--------|
 | Estratégia: evoluir o backend atual (não recriar do zero) | ✅ |
 | **Remover GLPI** — substituir por CMDB nativo + SLA + License | ✅ |
-| **Remover bot legado** (`bot/`) — Hermes 100% no WhatsApp | ✅ |
+| **Remover bot legado** (`bot/`) — WhatsApp 100% no bot Baileys nativo | ✅ |
+| **Remover Hermes Agent** — bot Baileys nativo dentro do NestJS (2026-06-06) | ✅ |
 | Frontend único (`Frontend-chatbot`) servido em 3 subdomínios | ✅ |
 | SSO via cookie httpOnly em `.helpdeskmsm.com.br` | ✅ |
 | Sem Cloudflare — tudo local com Docker | ✅ |
@@ -99,8 +100,7 @@ Sistema de helpdesk corporativo com **frontend único multi-tenant servido em 3 
 | Frontend TI (Bun dev) | 5173 | `ti.helpdeskmsm.com.br` |
 | Frontend Elétrica (Bun dev) | 5174 | `eletrica.helpdeskmsm.com.br` |
 | Frontend Compras (Bun dev) | 5175 | `compras.helpdeskmsm.com.br` |
-| Hermes Agent | 3004 | Interno |
-| Hermes Tools (bridge) | 3003 | Interno |
+| WhatsApp bot (Baileys) | embutido no backend (3000) | embutido no backend |
 | nginx | — | 80/443 (wildcard `*.helpdeskmsm.com.br`) |
 | PostgreSQL | 5432 | Interno |
 | Redis | 6379 | Interno |
@@ -120,20 +120,14 @@ Chatbot-suporte-ti/                 ← este repo
 │   │   ├── application/             # use cases (a CRIAR — Fase 0/2/3/4)
 │   │   ├── domain/                  # entities, DTOs, interfaces
 │   │   └── infrastructure/          # Prisma, Redis, RabbitMQ, SLA, etc.
+│   │       └── whatsapp/            # bot Baileys nativo (substitui o Hermes)
+│   │           ├── baileys.service.ts        # conexão, QR, send/receive, consume outgoing
+│   │           ├── flow.service.ts           # state machine + intenção
+│   │           ├── conversation-ai.service.ts # respostas naturais (MiniMax)
+│   │           └── whatsapp.controller.ts    # GET /api/whatsapp/status, /qr; POST /disconnect, /restart
 │   └── prisma/schema.prisma         # ⚠️ fonte da verdade
 │
-├── hermes-agent/                    # Hermes (submodule)
-│   └── skills/
-├── hermes-integration/              # Bridge + skills custom
-│   ├── backend-tools/server.js      # Bridge HTTP
-│   ├── config/
-│   └── skills/
-│       ├── helpdesk-create-ticket/
-│       ├── helpdesk-check-status/
-│       ├── helpdesk-escalate/
-│       ├── helpdesk-faq/
-│       ├── helpdesk-reserve-equipment/
-│       └── helpdesk-conversation/   # ← a CRIAR (Fase 5)
+│   # hermes-agent/ e hermes-integration/ FORAM REMOVIDOS em 2026-06-06
 │
 ├── nginx/                           # vhosts ti.* / eletrica.* / compras.* / api.*
 ├── docker-compose.yml               # produção
@@ -175,12 +169,13 @@ Chatbot-suporte-ti/                 ← este repo
 - **PWA mobile-first** com Workbox (`vite-plugin-pwa`)
 
 ### Bot / IA
-- **Hermes Agent** = único brain conversacional do WhatsApp
-- WhatsApp via Baileys (dentro do Hermes)
-- Skills: `helpdesk-conversation` (orquestrador) + 5 skills atômicas
-- Bridge HTTP em `hermes-integration/backend-tools/server.js`
-- Provider: MiniMax (primário) → OpenRouter (fallback) → Ollama (failover)
+- **Bot WhatsApp nativo** dentro do backend NestJS (`backend/src/infrastructure/whatsapp/`) — sem containers extras
+- WhatsApp via **Baileys** direto (`BaileysService`); pareamento por QR em `GET /api/whatsapp/qr`
+- `FlowService` = state machine + classificação de intenção; `ConversationAIService` = respostas naturais
+- `BaileysService.consumeOutgoingMessages()` consome a fila `outgoing_messages` direto
+- Provider IA: MiniMax (primário) → Ollama/GLM (fallback) via `IntentService`
 - Idempotência WhatsApp via Redis (TTL 24h por `wa_message_id`)
+- Sessão persistida no volume `whatsapp_sessions:/app/sessions`
 
 ---
 
@@ -283,17 +278,17 @@ Set-Cookie: helpdesk_session=<jwt>;
 
 ## 🚀 Como Iniciar Desenvolvimento
 
-### 1. Backend + Hermes + infra
+### 1. Backend + infra (WhatsApp bot já vem embutido no backend)
 
 ```bash
-# Subir serviços principais (sem bot, sem glpi)
-docker compose -f docker-compose.dev.yml up -d postgres redis rabbitmq backend hermes hermes-tools
+# Subir serviços principais (sem hermes, sem glpi, sem bot legado)
+docker compose -f docker-compose.dev.yml up -d postgres redis rabbitmq backend
 
-# Logs
-docker logs -f helpdesk_hermes
+# Logs do backend (inclui logs do BaileysService)
+docker logs -f helpdesk_backend_dev
 
-# QR code WhatsApp (primeira vez)
-docker exec -it helpdesk_hermes hermes whatsapp
+# QR code WhatsApp (primeira vez): abrir GET http://localhost:3000/api/whatsapp/qr
+# ou: docker logs -f helpdesk_backend_dev | grep QR
 ```
 
 ### 2. Frontend (`Frontend-chatbot`, gitignored dentro deste repo)
@@ -325,25 +320,22 @@ docker compose -f docker-compose.staging.yml up
 
 ## 📝 Fluxo de Atendimento
 
-### Via WhatsApp (Hermes Agent)
+### Via WhatsApp (bot Baileys nativo)
 
 ```
-Cliente envia msg → Hermes (Baileys) → skill helpdesk-conversation
-    → Hermes consulta KB via captain-assistant (auto-resolve tier-1)
-    → Se não resolve: conversa para coletar dados
-    → Cria ticket via bridge (POST /api/tickets)
+Cliente envia msg → BaileysService.onMessage → FlowService
+    → IntentService classifica intenção (MiniMax)
+    → FAQService consulta KB (auto-resolve tier-1)
+    → Se não resolve: ConversationAIService conduz a conversa para coletar dados
+    → Cria ticket via TicketsService (in-process, sem HTTP)
     → Liga ticket ao Asset se reconhecer (escaneou QR ou citou patrimônio)
-    → SLA timer dispara → técnico recebe push + WhatsApp
+    → SLA timer dispara → técnico recebe push + WhatsApp (fila outgoing_messages)
 ```
 
-### Hermes Skills
+### Intenções suportadas (`IntentService`)
 
-- `helpdesk-conversation` — orquestrador (Fase 5, a criar)
-- `helpdesk-create-ticket` — atômica, cria ticket
-- `helpdesk-check-status` — atômica, status de ticket
-- `helpdesk-escalate` — atômica, escala
-- `helpdesk-faq` — atômica, busca KB
-- `helpdesk-reserve-equipment` — atômica, reserva equipamento
+`abrir_ticket_ti`, `abrir_ticket_eletrica`, `reservar_equipamento`, `consultar_faq`,
+`consultar_ticket`, `falar_tecnico`, `saudacao`, `avaliar_atendimento`, `outro`.
 
 **NÃO USA MENUS NUMERADOS** — conversa natural em português brasileiro.
 
@@ -379,7 +371,7 @@ Cliente envia msg → Hermes (Baileys) → skill helpdesk-conversation
 | **2** | CMDB nativo: Asset, AssetAssignment, License, LicenseAssignment | 1 sem |
 | **3** | SLA Engine: SlaPolicy, BusinessHours, SlaTimer, EscalationRule | 1 sem |
 | **4** | PurchaseRequest CRUD + workflow approve/reject | 1 sem |
-| **5** | Hermes orchestration: skill helpdesk-conversation + idempotência WA | 1 sem |
+| **5** | Bot WhatsApp nativo (Baileys + Flow + IA) + idempotência WA | 1 sem |
 | **6** | Frontend `Frontend-chatbot` + 3 subdomínios + PWA mobile | 2-3 sem |
 | | **Total** | **8-9 sem** |
 
@@ -394,7 +386,7 @@ Sequência **importa** — Fase 0 destrava todas as outras (rebase + segurança)
 - Modificar `schema.prisma` sem criar migration
 - Commitar `node_modules/`, `.env`, `dist/`
 - **Reintroduzir GLPI** ou referenciar `glpi.service.ts` em código novo
-- **Reintroduzir bot legado** ou rodar `bot/` junto com Hermes
+- **Reintroduzir bot legado** (`bot/`) ou **reintroduzir o Hermes** (removido em 2026-06-06)
 - Voltar a 3 frontends separados — é 1 código, 3 subdomínios
 - Aceitar `sector` como string livre — é enum em todos os lugares
 - Token em `localStorage` — é cookie httpOnly
@@ -432,10 +424,12 @@ COOKIE_DOMAIN=.helpdeskmsm.com.br      # PARENT domain — não esquecer o ponto
 COOKIE_SECURE=true                     # false só em dev local
 CORS_ORIGINS=https://ti.helpdeskmsm.com.br,https://eletrica.helpdeskmsm.com.br,https://compras.helpdeskmsm.com.br
 
-# Hermes / IA
-HERMES_API_KEY=...
+# IA (WhatsApp bot nativo)
 MINIMAX_API_KEY=...
-OPENROUTER_API_KEY=...
+ANTHROPIC_API_KEY=...            # opcional (análise avançada / Co-Pilot)
+
+# API interna (endpoints server-to-server protegidos por x-api-key)
+INTERNAL_API_KEY=...
 
 # Push (PWA)
 VAPID_PUBLIC_KEY=...
@@ -452,8 +446,8 @@ VAPID_SUBJECT=mailto:dev@helpdeskmsm.com.br
 | Documento | Descrição |
 |-----------|-----------|
 | [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) | **Plano vigente** — ler antes de começar qualquer fase |
-| `hermes-integration/README.md` | Guia da integração Hermes |
-| `hermes-integration/skills/helpdesk-conversation/SKILL.md` | Skill de conversa natural (a criar — Fase 5) |
+| `backend/src/infrastructure/whatsapp/` | Bot WhatsApp nativo (Baileys + Flow + IA) |
+| `~/.claude/plans/parsed-growing-glacier.md` | Plano da migração Hermes → bot nativo |
 | `nginx/sites-enabled/helpdeskmsm.conf` | Config dos 4 vhosts (a criar — Fase 6) |
 
 ---
@@ -462,7 +456,7 @@ VAPID_SUBJECT=mailto:dev@helpdeskmsm.com.br
 
 1. **Sempre consultar [IMPLEMENTATION_PLAN_V3.md](IMPLEMENTATION_PLAN_V3.md)** antes de implementar nova feature.
 2. **Filtro por sector é server-side** sempre — nunca confiar em query param do cliente.
-3. **Hermes Agent** é o único brain do WhatsApp — bot legado será deletado.
+3. **WhatsApp = bot Baileys nativo** dentro do backend (`WhatsAppModule`). Hermes e bot legado foram removidos — não reintroduzir.
 4. **GLPI é legado** — não criar dependência nova; remover na Fase 1.
 5. **Frontend é 1 código, 1 PWA, 3 subdomínios servem o mesmo build** — tema vem do **JWT** (`user.sector`), não do host (decisão 2026-05-10).
 6. **PWA mobile-first** — câmera, QR, push, offline real são requisitos da Fase 6, não nice-to-have.
