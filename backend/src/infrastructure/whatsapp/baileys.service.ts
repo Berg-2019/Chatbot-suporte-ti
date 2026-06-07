@@ -233,12 +233,45 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
       await this.rabbitmq.consume(
         RabbitMQService.QUEUES.OUTGOING_MESSAGES,
         async (data: any) => {
-          const { to, text, content, messageId, mediaUrl, mediaType } = data;
-          const message = text || content;
-          if (!to || !message) return;
+          const { to, text, content, messageId, mediaUrl, mediaType, filename } = data;
+          if (!to) return;
 
           const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-          const waId = await this.sendText(jid, message);
+          const caption = (text || content || '') as string;
+
+          let waId: string | null = null;
+
+          if (mediaUrl && mediaType) {
+            // RC#2: envio de mídia (imagem/áudio/vídeo/documento)
+            try {
+              // mediaUrl chega como "/uploads/messages/<arquivo>"
+              const urlStr = String(mediaUrl);
+              const fileNameOnDisk = decodeURIComponent(urlStr.split('/').pop() || '');
+              if (!fileNameOnDisk) {
+                this.logger.warn(`mediaUrl inválido (sem nome de arquivo): ${urlStr}`);
+                return;
+              }
+              const filePath = path.join(process.cwd(), 'uploads', 'messages', fileNameOnDisk);
+              if (!fs.existsSync(filePath)) {
+                this.logger.warn(`Mídia não encontrada em disco: ${filePath}`);
+                return;
+              }
+              const buffer = fs.readFileSync(filePath);
+              waId = await this.sendMedia(
+                jid,
+                buffer,
+                mediaType,
+                caption || undefined,
+                filename || fileNameOnDisk,
+              );
+            } catch (err: any) {
+              this.logger.error(`Erro ao enviar mídia outgoing: ${err.message}`);
+              return;
+            }
+          } else {
+            if (!caption) return; // texto vazio e sem mídia → nada a enviar
+            waId = await this.sendText(jid, caption);
+          }
 
           if (waId && messageId) {
             try {
