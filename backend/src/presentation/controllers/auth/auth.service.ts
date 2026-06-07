@@ -2,13 +2,13 @@
  * Auth Service
  */
 
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
-import { Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, GoneException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { redactEmail, redactName } from '../../../infrastructure/logger/redact';
+import { hashToken } from '../onboarding/user-onboarding.service';
 
 
 interface LoginDto {
@@ -145,6 +145,7 @@ export class AuthService {
         password: hashedPassword,
         name: dto.name,
         role: dto.role || 'AGENT',
+        activatedAt: new Date(), // cadastro direto via admin auth => já ativo
       },
     });
 
@@ -249,6 +250,55 @@ export class AuthService {
     await this.prisma.pushSubscription.deleteMany({ where: { userId } });
 
     return { success: true, message: 'Conta pseudonimizada com sucesso' };
+  }
+
+  // --------------------------------------------------------------------------
+  // Ativação de agente (link por email/WhatsApp)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Valida um token cru sem consumi-lo (GET /auth/activation/:token).
+   * - Token válido: retorna {name, email} para a página renderizar.
+   * - Token inválido/usado/expirado: lança GoneException com mensagem PT-BR.
+   */
+  async validateActivationToken(rawToken: string): Promise<{ name: string; email: string }> {
+    const token = await this.prisma.userActivationToken.findUnique({
+      where: { tokenHash: hashToken(rawToken) },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    if (!token || token.usedAt || token.expiresAt < new Date()) {
+      throw new GoneException('Link inválido ou expirado. Peça ao admin para reenviar.');
+    }
+    return { name: token.user.name, email: token.user.email };
+  }
+
+  /**
+   * Define a senha do agente e consome o token (POST /auth/activation/:token).
+   * - Revalida o token ( Race condition: entre GET e POST pode ter expirado).
+   * - Atualiza senha + activatedAt + token.usedAt numa transação.
+   */
+  async activateUser(rawToken: string, password: string): Promise<{ ok: true }> {
+    const tokenHash = hashToken(rawToken);
+    const token = await this.prisma.userActivationToken.findUnique({
+      where: { tokenHash },
+    });
+    if (!token || token.usedAt || token.expiresAt < new Date()) {
+      throw new GoneException('Link inválido ou expirado. Peça ao admin para reenviar.');
+    }
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: token.userId },
+        data: { password: hashedPassword, activatedAt: now },
+      }),
+      this.prisma.userActivationToken.update({
+        where: { id: token.id },
+        data: { usedAt: now },
+      }),
+    ]);
+    this.logger.log(`Usuário ativado: ${token.userId.slice(0, 8)}…`);
+    return { ok: true };
   }
 }
 

@@ -2,13 +2,14 @@
  * Auth Controller
  */
 
-import { Controller, Post, Get, Delete, Body, UseGuards, Request, Res, Req, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, UseGuards, Request, Res, Req, Param, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { IsEmail, IsString, IsOptional, MinLength } from 'class-validator';
 import { Response, Request as ExpressRequest } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
+import { SetPasswordDto } from './dto/activation.dto';
 
 class LoginDto {
   @IsEmail()
@@ -89,6 +90,25 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   async eraseAccount(@Request() req: any) {
     return this.authService.eraseAccount(req.user.id);
+  }
+
+  // --------------------------------------------------------------------------
+  // Ativação de agente (link por email/WhatsApp) — endpoints PÚBLICOS
+  // --------------------------------------------------------------------------
+
+  @Get('activation/:token')
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  async getActivation(@Param('token') token: string) {
+    return this.authService.validateActivationToken(token);
+  }
+
+  @Post('activation/:token')
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  async activate(
+    @Param('token') token: string,
+    @Body() dto: SetPasswordDto,
+  ) {
+    return this.authService.activateUser(token, dto.password);
   }
 
   @Post('logout')
