@@ -3,8 +3,8 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Instalar dependências do sistema
-RUN apk add --no-cache python3 make g++
+# Instalar dependências do sistema (ffmpeg: transcode de áudio webm→ogg/opus p/ WhatsApp)
+RUN apk add --no-cache python3 make g++ ffmpeg
 
 # Copiar package.json
 COPY package*.json ./

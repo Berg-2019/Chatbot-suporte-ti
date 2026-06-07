@@ -20,6 +20,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import pino from 'pino';
 import { randomUUID } from 'crypto';
+import { spawn } from 'child_process';
 import { WhatsAppStatus } from './whatsapp.types';
 import { SESSION_DIR, RECONNECT_DELAY, STATUS_KEY } from './whatsapp.constants';
 import { RedisService } from '../cache/redis.service';
@@ -284,6 +285,47 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Transcodifica um áudio (ex.: webm/opus do navegador) para ogg/opus,
+   * formato aceito pelo WhatsApp como nota de voz. Requer ffmpeg no PATH.
+   * Retorna null em falha (o chamador faz fallback para o buffer original).
+   */
+  private transcodeToOpusOgg(inputPath: string): Promise<Buffer | null> {
+    return new Promise((resolve) => {
+      try {
+        const ff = spawn('ffmpeg', [
+          '-i', inputPath,
+          '-vn',
+          '-c:a', 'libopus',
+          '-b:a', '32k',
+          '-ar', '48000',
+          '-ac', '1',
+          '-f', 'ogg',
+          'pipe:1',
+        ]);
+        const chunks: Buffer[] = [];
+        let stderr = '';
+        ff.stdout.on('data', (d: Buffer) => chunks.push(d));
+        ff.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+        ff.on('error', (e) => {
+          this.logger.warn(`ffmpeg indisponível: ${e.message}`);
+          resolve(null);
+        });
+        ff.on('close', (code) => {
+          if (code === 0 && chunks.length > 0) {
+            resolve(Buffer.concat(chunks));
+          } else {
+            this.logger.warn(`ffmpeg falhou (code ${code}): ${stderr.slice(-200)}`);
+            resolve(null);
+          }
+        });
+      } catch (e: any) {
+        this.logger.warn(`Erro ao transcodificar áudio: ${e.message}`);
+        resolve(null);
+      }
+    });
+  }
+
   async sendText(jid: string, text: string): Promise<string | null> {
     if (!this.sock || !this.isConnected) {
       this.logger.error('WhatsApp não conectado — mensagem não enviada');
@@ -359,7 +401,13 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
                 this.logger.warn(`Mídia não encontrada em disco: ${filePath}`);
                 return;
               }
-              const buffer = fs.readFileSync(filePath);
+              let buffer: Buffer = fs.readFileSync(filePath);
+              // Áudio: WhatsApp espera ogg/opus (nota de voz). O navegador grava
+              // webm/opus → transcodificar via ffmpeg. Se falhar, envia o original.
+              if (mediaType === 'audio' && !fileNameOnDisk.toLowerCase().endsWith('.ogg')) {
+                const ogg = await this.transcodeToOpusOgg(filePath);
+                if (ogg) buffer = ogg;
+              }
               waId = await this.sendMedia(
                 jid,
                 buffer,

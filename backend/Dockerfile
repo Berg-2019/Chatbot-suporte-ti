@@ -28,6 +28,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# ffmpeg: transcode de áudio webm→ogg/opus para notas de voz do WhatsApp
+RUN apk add --no-cache ffmpeg
+
 # Copiar arquivos necessários
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
