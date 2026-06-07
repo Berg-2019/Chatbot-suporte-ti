@@ -12,12 +12,14 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   WASocket,
   proto,
+  downloadMediaMessage,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import * as QRCode from 'qrcode';
 import * as fs from 'fs';
 import * as path from 'path';
 import pino from 'pino';
+import { randomUUID } from 'crypto';
 import { WhatsAppStatus } from './whatsapp.types';
 import { SESSION_DIR, RECONNECT_DELAY, STATUS_KEY } from './whatsapp.constants';
 import { RedisService } from '../cache/redis.service';
@@ -152,14 +154,30 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
         if (!from || from.endsWith('@g.us')) continue;
 
         const text = this.extractText(msg);
-        if (!text) continue;
+        const mediaInfo = this.detectMedia(msg);
+
+        // Sem texto E sem mídia → ignora
+        if (!text && !mediaInfo) continue;
 
         const phone = from.split('@')[0];
-        this.logger.debug(`📩 ${phone}: ${text.substring(0, 80)}`);
+        this.logger.debug(`📩 ${phone}: ${text?.substring(0, 80) ?? '[mídia]'}`);
+
+        // RC#3: baixar e persistir mídia em disco, se houver
+        let savedMedia: { mediaUrl: string; fileName: string } | null = null;
+        if (mediaInfo) {
+          savedMedia = await this.downloadAndSaveMedia(msg, mediaInfo);
+          if (!savedMedia) {
+            this.logger.warn(`Mídia detectada (${mediaInfo.type}) mas falhou ao salvar — descartando`);
+            // Continua: se houver texto (legenda), ainda assim processamos
+          }
+        }
 
         if (this.onMessageCallback) {
           try {
-            await this.onMessageCallback(from, text, msg);
+            const mediaParam = savedMedia
+              ? { type: mediaInfo!.type, mediaUrl: savedMedia.mediaUrl, fileName: savedMedia.fileName }
+              : undefined;
+            await this.onMessageCallback(from, text || '', msg, mediaParam);
           } catch (err: any) {
             this.logger.error(`Erro ao processar mensagem: ${err.message}`);
           }
@@ -179,6 +197,91 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
       m.documentMessage?.caption ||
       null
     );
+  }
+
+  /**
+   * Detecta o tipo de mídia em uma mensagem entrante (RC#3).
+   * Retorna UPPERCASE para casar com MessageType do Prisma.
+   */
+  private detectMedia(
+    msg: proto.IWebMessageInfo,
+  ): { type: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT'; mime?: string; fileName?: string } | null {
+    const m = msg.message;
+    if (!m) return null;
+    if (m.imageMessage) {
+      return { type: 'IMAGE', mime: m.imageMessage.mimetype || 'image/jpeg' };
+    }
+    if (m.audioMessage) {
+      return { type: 'AUDIO', mime: m.audioMessage.mimetype || 'audio/ogg; codecs=opus' };
+    }
+    if (m.videoMessage) {
+      return { type: 'VIDEO', mime: m.videoMessage.mimetype || 'video/mp4' };
+    }
+    if (m.documentMessage) {
+      return {
+        type: 'DOCUMENT',
+        mime: m.documentMessage.mimetype || 'application/octet-stream',
+        fileName: m.documentMessage.fileName || undefined,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Extrai extensão de arquivo a partir de um mimetype.
+   */
+  private extMime(mime?: string): string {
+    if (!mime) return 'bin';
+    if (mime.includes('jpeg')) return 'jpg';
+    if (mime.includes('png')) return 'png';
+    if (mime.includes('ogg')) return 'ogg';
+    if (mime.includes('mp4')) return 'mp4';
+    if (mime.includes('pdf')) return 'pdf';
+    if (mime.includes('webp')) return 'webp';
+    if (mime.includes('mpeg')) return 'mp3';
+    return (mime.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '') || 'bin';
+  }
+
+  /**
+   * Baixa mídia do WhatsApp via Baileys e salva em uploads/messages/.
+   * Retorna { mediaUrl, fileName } relativo para servir via estático.
+   */
+  private async downloadAndSaveMedia(
+    msg: proto.IWebMessageInfo,
+    media: { type: string; mime?: string; fileName?: string },
+  ): Promise<{ mediaUrl: string; fileName: string } | null> {
+    try {
+      if (!this.sock) return null;
+
+      // Cast necessário: IWebMessageInfo é structuralmente compatível com WAMessage,
+      // mas os tipos do Baileys não são idênticos (Key é nullable de um lado).
+      const buffer = (await downloadMediaMessage(
+        msg as any,
+        'buffer',
+        {},
+        {
+          logger: pino({ level: 'silent' }),
+          reuploadRequest: this.sock.updateMediaMessage,
+        },
+      )) as Buffer;
+
+      if (!buffer || buffer.length === 0) {
+        this.logger.warn('downloadMediaMessage retornou buffer vazio');
+        return null;
+      }
+
+      const dir = path.join(process.cwd(), 'uploads', 'messages');
+      fs.mkdirSync(dir, { recursive: true });
+
+      const fileName = media.fileName || `${randomUUID()}.${this.extMime(media.mime)}`;
+      fs.writeFileSync(path.join(dir, fileName), buffer);
+
+      this.logger.debug(`Mídia salva: ${fileName} (${buffer.length} bytes)`);
+      return { mediaUrl: `/uploads/messages/${fileName}`, fileName };
+    } catch (err: any) {
+      this.logger.error(`Falha ao baixar mídia: ${err.message}`);
+      return null;
+    }
   }
 
   async sendText(jid: string, text: string): Promise<string | null> {
