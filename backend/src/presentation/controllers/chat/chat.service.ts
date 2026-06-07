@@ -157,13 +157,22 @@ export class ChatService {
                     IMAGE: 'image', AUDIO: 'audio', VIDEO: 'video', DOCUMENT: 'document',
                 };
 
+                // Identifica o técnico para o usuário no WhatsApp (não para bot).
+                const senderLabel =
+                    msg.sender && msg.sender.role !== 'BOT' && msg.sender.name
+                        ? `*${msg.sender.name}*\n`
+                        : '';
+                const waText = input.content
+                    ? `${senderLabel}${input.content}`
+                    : input.content;
+
                 await this.rabbitmq.publishOutgoingMessage({
                     to: dest,
-                    text: input.content,
+                    text: waText,
                     ticketId: input.ticketId,
                     messageId: msg.id,
                     direction,
-                    content: input.content,
+                    content: waText,
                     mediaUrl: msg.mediaUrl || undefined,
                     mediaType: mediaTypeMap[type] || 'document',
                     filename: msg.fileName || undefined,
