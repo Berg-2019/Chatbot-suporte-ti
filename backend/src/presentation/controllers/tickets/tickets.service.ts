@@ -395,6 +395,39 @@ export class TicketsService {
     return ticket;
   }
 
+  /**
+   * Dispara a pesquisa CSAT no WhatsApp e cria a sessão de rating no Redis
+   * para o FlowService.handleRating capturar a resposta.
+   * Best-effort: falhas são logadas mas não propagam.
+   */
+  private async sendCsatSurvey(ticketId: string, phoneNumber: string): Promise<void> {
+    const phone = phoneNumber.split('@')[0];
+    const ticketNumber = ticketId.slice(0, 8).toUpperCase();
+    const csatMessage =
+      `Como você avalia o atendimento do chamado *#${ticketNumber}*?\n\n` +
+      `Responda com uma nota de *1* a *5*:\n` +
+      `1⭐ Péssimo\n2⭐ Ruim\n3⭐ Regular\n4⭐ Bom\n5⭐ Excelente`;
+    try {
+      await this.redis.set(
+        `wa:session:${phone}`,
+        JSON.stringify({
+          state: 'rating',
+          data: { ticketId, messageHistory: [] },
+          updatedAt: Date.now(),
+        }),
+        600,
+      );
+      await this.rabbitmq.publishOutgoingMessage({
+        to: phoneNumber,
+        text: csatMessage,
+        ticketId,
+      });
+      this.logger.log(`📊 CSAT enviado para ${phone} (ticket #${ticketNumber})`);
+    } catch (err: any) {
+      this.logger.warn(`Falha ao enviar CSAT: ${err.message}`);
+    }
+  }
+
   async updateStatus(id: string, status: TicketStatus) {
     const data: any = { status };
 
@@ -422,35 +455,9 @@ export class TicketsService {
         ticketId: id,
       });
 
-      // Enviar pesquisa CSAT após 5 segundos
+      // Enviar pesquisa CSAT após 5 segundos (DRY: usa sendCsatSurvey)
       const phoneForCsat = ticket.phoneNumber!;
-      const phone = phoneForCsat.split('@')[0];
-      setTimeout(async () => {
-        try {
-          const csatMessage = `Como você avalia o atendimento do chamado *#${ticketNumber}*?\n\nResponda com uma nota de *1* a *5*:\n1⭐ Péssimo\n2⭐ Ruim\n3⭐ Regular\n4⭐ Bom\n5⭐ Excelente`;
-
-          // Criar sessão RATING no Redis para o FlowService processar a resposta
-          await this.redis.set(
-            `wa:session:${phone}`,
-            JSON.stringify({
-              state: 'rating',
-              data: { ticketId: id, messageHistory: [] },
-              updatedAt: Date.now(),
-            }),
-            600,
-          );
-
-          await this.rabbitmq.publishOutgoingMessage({
-            to: phoneForCsat,
-            text: csatMessage,
-            ticketId: id,
-          });
-
-          this.logger.log(`📊 CSAT enviado para ${phone} (ticket #${ticketNumber})`);
-        } catch (err: any) {
-          this.logger.warn(`Falha ao enviar CSAT: ${err.message}`);
-        }
-      }, 5000);
+      setTimeout(() => this.sendCsatSurvey(id, phoneForCsat), 5000);
     }
 
     // Notificar painel para atualizar listas
