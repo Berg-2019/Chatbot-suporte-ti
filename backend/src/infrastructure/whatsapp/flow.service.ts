@@ -510,6 +510,13 @@ export class FlowService implements OnModuleInit {
             assignedToId: ticket?.assignedToId || null,
           },
         });
+        // Atualiza o ticket para a nota refletir no detalhe e no ranking
+        await this.prisma.ticket
+          .update({
+            where: { id: session.data.ticketId },
+            data: { rating: score, ratedAt: new Date(), awaitingRating: false },
+          })
+          .catch((err: any) => this.logger.warn(`Falha ao atualizar rating do ticket: ${err.message}`));
       }
       await this.send(from, MESSAGES.csatThanks(score));
       this.logger.log(`⭐ CSAT: ${score}/5 para ticket ${session.data.ticketId} (${phone})`);
