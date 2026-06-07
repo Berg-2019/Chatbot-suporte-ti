@@ -9,9 +9,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { Request } from 'express';
 import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
-import * as nodemailer from 'nodemailer';
+import { MailService } from '../../../infrastructure/mail/mail.service';
 
 class SendEmailDto {
   @IsEmail()
@@ -33,58 +32,15 @@ class SendEmailDto {
 /**
  * Notifications transactional (envio sob demanda).
  *
- * Usa SMTP real via nodemailer quando SMTP_HOST + SMTP_USER + SMTP_PASS estão
- * setados nas env vars. Caso contrário, cai em modo log-only (placeholder
- * pra dev local sem credenciais).
- *
- * Hostinger SMTP (típico):
- *   SMTP_HOST=smtp.hostinger.com
- *   SMTP_PORT=465
- *   SMTP_SECURE=true        # true=SSL/465, false=STARTTLS/587
- *   SMTP_USER=helpdesk@seudominio.com.br
- *   SMTP_PASS=<senha do email>
- *   SMTP_FROM="Helpdesk MSM <helpdesk@seudominio.com.br>"
+ * Delega para MailService (SMTP real via nodemailer ou log-only dev).
+ * Mantido por compatibilidade com o frontend/admin que já chamava este endpoint.
  */
 @Controller('notifications')
 @UseGuards(AuthGuard('jwt'))
 export class NotificationsController {
   private readonly logger = new Logger('Notifications');
-  private transporter: nodemailer.Transporter | null = null;
 
-  constructor() {
-    this.bootstrapTransporter();
-  }
-
-  private bootstrapTransporter() {
-    const host = process.env.SMTP_HOST;
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-    if (!host || !user || !pass) {
-      this.logger.warn(
-        'SMTP_HOST/SMTP_USER/SMTP_PASS não configurados — modo log-only',
-      );
-      return;
-    }
-    const port = parseInt(process.env.SMTP_PORT || '465', 10);
-    const secure = (process.env.SMTP_SECURE ?? 'true').toLowerCase() === 'true';
-    this.transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: { user, pass },
-    });
-    // Verificar conexão em background (não bloqueia boot)
-    this.transporter
-      .verify()
-      .then(() =>
-        this.logger.log(
-          `SMTP transporter conectado em ${host}:${port} (secure=${secure})`,
-        ),
-      )
-      .catch((err: any) =>
-        this.logger.error(`SMTP verify falhou: ${err.message}`),
-      );
-  }
+  constructor(private readonly mail: MailService) {}
 
   @Post('email')
   @HttpCode(202)
@@ -94,29 +50,22 @@ export class NotificationsController {
       (req.headers['x-request-id'] as string | undefined) || 'no-trace';
     const subjectShort = dto.subject.slice(0, 60);
 
-    if (!this.transporter) {
-      this.logger.log(
-        `email DRY-RUN (log-only) by=${requester} to=${dto.to} subject="${subjectShort}" reqId=${reqId}`,
-      );
-      return { queued: true, transport: 'log-only' };
-    }
-
-    const from =
-      process.env.SMTP_FROM ||
-      `Helpdesk MSM <${process.env.SMTP_USER}>`;
-
     try {
-      const info = await this.transporter.sendMail({
-        from,
+      const result = await this.mail.sendMail({
         to: dto.to,
         subject: dto.subject,
         text: dto.text,
         html: dto.html,
       });
       this.logger.log(
-        `email sent by=${requester} to=${dto.to} subject="${subjectShort}" messageId=${info.messageId} reqId=${reqId}`,
+        `email ${result.transport === 'log-only' ? 'DRY-RUN' : 'sent'} by=${requester} to=${dto.to} subject="${subjectShort}" reqId=${reqId}` +
+          (result.messageId ? ` messageId=${result.messageId}` : ''),
       );
-      return { queued: true, transport: 'smtp', messageId: info.messageId };
+      return {
+        queued: true,
+        transport: result.transport,
+        messageId: result.messageId,
+      };
     } catch (err: any) {
       this.logger.error(
         `email FALHOU by=${requester} to=${dto.to} subject="${subjectShort}" reqId=${reqId} err="${err.message}"`,
