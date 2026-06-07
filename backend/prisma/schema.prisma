@@ -124,6 +124,7 @@ model Ticket {
   status       TicketStatus @default(NEW)
   priority     Priority     @default(NORMAL)
   phoneNumber  String? // Telefone do cliente (opcional — tickets criados via web podem não ter)
+  waJid        String? // jid completo do WhatsApp de origem (suporta @lid). Usado para responder.
   customerName String? // Nome do cliente (coletado pelo bot)
   sector       Sector?
   category     String? // Categoria/tipo do problema

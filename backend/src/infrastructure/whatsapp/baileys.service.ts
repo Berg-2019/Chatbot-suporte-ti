@@ -35,7 +35,18 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private enabled: boolean;
 
-  private onMessageCallback: ((from: string, text: string, msg: proto.IWebMessageInfo) => Promise<void>) | null = null;
+  /**
+   * Mídia de entrada (RC#3): quando a mensagem recebida contém imagem/áudio/vídeo/doc,
+   * o BaileysService baixa e emite este payload ao callback junto com text (legenda).
+   */
+  private onMessageCallback:
+    | ((
+        from: string,
+        text: string,
+        msg: proto.IWebMessageInfo,
+        media?: { type: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT'; mediaUrl: string; fileName: string },
+      ) => Promise<void>)
+    | null = null;
 
   constructor(
     private config: ConfigService,
@@ -59,7 +70,14 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
     await this.disconnect();
   }
 
-  onMessage(callback: (from: string, text: string, msg: proto.IWebMessageInfo) => Promise<void>) {
+  onMessage(
+    callback: (
+      from: string,
+      text: string,
+      msg: proto.IWebMessageInfo,
+      media?: { type: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT'; mediaUrl: string; fileName: string },
+    ) => Promise<void>,
+  ) {
     this.onMessageCallback = callback;
   }
 

@@ -146,16 +146,19 @@ export class ChatService {
         if (direction === 'OUTGOING' && !input.isInternal) {
             const ticket = await this.prisma.ticket.findUnique({
                 where: { id: input.ticketId },
-                select: { phoneNumber: true },
+                select: { phoneNumber: true, waJid: true },
             });
 
-            if (ticket?.phoneNumber) {
+            // RC#1: preferir o jid completo (waJid) quando disponível — suporta LID.
+            // Cai para phoneNumber para tickets criados via web (sem origem WhatsApp).
+            const dest = ticket?.waJid ?? ticket?.phoneNumber;
+            if (dest) {
                 const mediaTypeMap: Record<string, 'image' | 'audio' | 'video' | 'document'> = {
                     IMAGE: 'image', AUDIO: 'audio', VIDEO: 'video', DOCUMENT: 'document',
                 };
 
                 await this.rabbitmq.publishOutgoingMessage({
-                    to: ticket.phoneNumber,
+                    to: dest,
                     text: input.content,
                     ticketId: input.ticketId,
                     messageId: msg.id,

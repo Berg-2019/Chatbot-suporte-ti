@@ -19,6 +19,8 @@ interface CreateMessageDto {
   waMessageId?: string;
   isInternal?: boolean;
   mentions?: string[];
+  mediaUrl?: string;
+  fileName?: string;
 }
 
 @Injectable()
@@ -53,6 +55,8 @@ export class MessagesService {
         waMessageId: dto.waMessageId,
         isInternal: dto.isInternal || false,
         mentions: dto.mentions || [],
+        mediaUrl: dto.mediaUrl ?? null,
+        fileName: dto.fileName ?? null,
       },
       include: {
         sender: { select: { id: true, name: true } },
@@ -206,8 +210,10 @@ export class MessagesService {
   async createFromWhatsApp(
     ticketId: string,
     content: string,
-    waMessageId: string,
-    type: MessageType = 'TEXT'
+    waMessageId: string | undefined,
+    type: MessageType = 'TEXT',
+    mediaUrl?: string,
+    fileName?: string,
   ) {
     // Evitar duplicações se tiver ID válido
     if (waMessageId && waMessageId !== 'UNKNOWN_WA_ID') {
@@ -227,6 +233,8 @@ export class MessagesService {
       direction: 'INCOMING',
       waMessageId,
       type,
+      mediaUrl,
+      fileName,
     });
 
     // 🤖 Trigger automation: message_received

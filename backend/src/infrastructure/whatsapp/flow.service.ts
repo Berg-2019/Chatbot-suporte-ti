@@ -13,6 +13,16 @@ import { FlowState, ConversationSession } from './whatsapp.types';
 import { MESSAGES, SESSION_TTL, SESSION_PREFIX } from './whatsapp.constants';
 import { Sector, TicketStatus } from '@prisma/client';
 
+/**
+ * Mídia recebida do WhatsApp (saída do BaileysService → FlowService).
+ * `type` é UPPERCASE para casar com o enum `MessageType` do Prisma.
+ */
+export interface IncomingMedia {
+  type: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
+  mediaUrl: string; // path relativo: /uploads/messages/<file>
+  fileName: string;
+}
+
 @Injectable()
 export class FlowService implements OnModuleInit {
   private readonly logger = new Logger(FlowService.name);
@@ -32,17 +42,32 @@ export class FlowService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.baileys.onMessage(async (from, text, msg) => {
+    this.baileys.onMessage(async (from, text, msg, media) => {
       const waMessageId = msg.key?.id || undefined;
-      await this.handleMessage(from, text, waMessageId);
+      await this.handleMessage(from, text, waMessageId, media);
     });
     this.logger.log('FlowService registrado como handler de mensagens');
   }
 
-  async handleMessage(from: string, text: string, waMessageId?: string) {
+  async handleMessage(from: string, text: string, waMessageId?: string, media?: IncomingMedia) {
     const phone = from.split('@')[0];
     const jid = from;
-    const normalized = text.trim();
+    const normalized = (text || '').trim();
+
+    // Auto-cura: atualiza o jid de resposta de tickets abertos deste contato.
+    // Corrige tickets antigos criados antes do RC#1 (sem waJid ou com jid diferente).
+    if (jid.includes('@')) {
+      this.prisma.ticket
+        .updateMany({
+          where: {
+            phoneNumber: phone,
+            status: { not: 'CLOSED' },
+            OR: [{ waJid: null }, { waJid: { not: jid } }],
+          },
+          data: { waJid: jid },
+        })
+        .catch(() => undefined);
+    }
 
     // Upsert contato
     try {
@@ -54,6 +79,35 @@ export class FlowService implements OnModuleInit {
       }
     } catch (err: any) {
       this.logger.debug(`Contact upsert skip: ${err.message}`);
+    }
+
+    // ---------------------------------------------------------------------
+    // Mídia recebida (RC#3): se houver mídia, registrar no ticket aberto
+    // e notificar o agente. A legenda (text) cai como conteúdo; sem legenda,
+    // usamos um placeholder. O fluxo conversacional só roda se houver texto.
+    // ---------------------------------------------------------------------
+    if (media) {
+      try {
+        const ticket = await this.findOpenTicket(phone);
+        if (ticket) {
+          const contentForMsg = normalized || (media.type === 'AUDIO' ? '[áudio]' : '[mídia]');
+          const msg = await this.messages.createFromWhatsApp(
+            ticket.id,
+            contentForMsg,
+            waMessageId,
+            media.type,
+            media.mediaUrl,
+            media.fileName,
+          );
+          // notifica agente em tempo real
+          this.events.server?.to(`ticket:${ticket.id}`).emit('message:received', msg);
+          this.logger.log(`Mídia recebida (${media.type}) anexada ao ticket ${ticket.id}`);
+        }
+      } catch (err: any) {
+        this.logger.warn(`Falha ao registrar mídia recebida: ${err.message}`);
+      }
+      // Mesmo com mídia, se houver texto, continua o fluxo abaixo
+      if (!normalized) return;
     }
 
     let session = await this.getSession(phone);
@@ -303,6 +357,7 @@ export class FlowService implements OnModuleInit {
             title: `[${session.data.sector}] ${(session.data.problem || '').substring(0, 60)}`,
             description: session.data.problem || '',
             phoneNumber: phone,
+            waJid: from, // jid completo (suporta @lid) — usado para responder
             customerName: session.data.customerName || phone,
             sector: (session.data.sector as Sector) || 'TI',
             status: 'NEW',
@@ -549,6 +604,20 @@ export class FlowService implements OnModuleInit {
 
   private async send(jid: string, text: string) {
     await this.baileys.sendText(jid, text);
+  }
+
+  /**
+   * Localiza ticket aberto do contato (para anexar mídia recebida via WhatsApp).
+   * "Aberto" = status não final; ordenado pela criação mais recente.
+   */
+  private async findOpenTicket(phone: string) {
+    return this.prisma.ticket.findFirst({
+      where: {
+        phoneNumber: phone,
+        status: { notIn: ['RESOLVED', 'CLOSED'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   private statusLabel(status: string): string {
