@@ -299,6 +299,88 @@ git commit -m "fix(whatsapp): receber e persistir mídia de entrada (imagem/áud
 
 ---
 
+## ✅ Status QA (validado por Claude em 2026-06-07)
+Tasks 1–3 do GLM **funcionam**: RC#1 (responder ao `waJid`/`@lid`) confirmada entregando no WhatsApp real; RC#2 (sendMedia) envia mídia em tickets com `waJid`; RC#3 baixa/salva/serve mídia de entrada. As 3 pendências abaixo (Tasks 5–6) saíram do teste prático.
+
+---
+
+## Task 5: Frontend — renderizar mídia do backend + exibir nome do técnico
+
+**Files:** Modify `Frontend-chatbot/src/routes/_authed/chat.$ticketId.tsx`
+
+**Problema:** o componente faz `setMessages(res.data)` sem mapear e o render usa `msg.content` como URL da mídia. Como o backend manda a URL em `mediaUrl` (`/chat/media/:id`) e `content` = `[mídia]`/`[áudio]`, a mídia **vinda do servidor** não carrega (aparece o texto/placeholder). O nome do remetente (`senderName`) nunca é exibido.
+
+- [ ] **Step 1: Adicionar `mediaUrl` ao tipo `Message`**
+
+No `type Message` (~linha 48-57), adicionar:
+```typescript
+  mediaUrl?: string | null;
+```
+
+- [ ] **Step 2: Helper de URL absoluta da mídia**
+
+No topo do componente (ou util):
+```typescript
+const API_BASE = (import.meta as any).env?.VITE_API_URL || "";
+const mediaSrc = (m: Message) => (m.mediaUrl ? `${API_BASE}${m.mediaUrl}` : m.content);
+```
+> `m.mediaUrl` vem como `/chat/media/:id`. Em produção (mesmo origin via nginx) o cookie httpOnly é enviado no `<img>/<audio>` normalmente. Em dev com `VITE_API_URL` apontando para outra origem (`:3000`), requisições de `<img>` não mandam o cookie cross-site — usar mesmo-origin (nginx) para testar mídia carregada.
+
+- [ ] **Step 3: Render usar `mediaSrc(msg)` em vez de `msg.content`**
+
+No `MessageBody`/render de mídia (~linhas 597-628), trocar `src={msg.content}` por `src={mediaSrc(msg)}` para image/video/audio/file. (O `content` continua sendo usado só no caso `text`.) Mensagens **otimistas** do próprio agente (blob local) continuam funcionando: elas não têm `mediaUrl`, então `mediaSrc` cai em `content` (o blob).
+
+- [ ] **Step 4: Exibir o nome do técnico acima da mensagem**
+
+No render (~linha 349), para o primeiro item de um grupo (`!grouped`) de mensagens do técnico/bot (`!mine` é o cliente; queremos mostrar o nome do **técnico**, lado `mine`), adicionar um rótulo com `msg.senderName` acima da bolha. Ex.: quando `mine && !grouped && msg.senderName && msg.senderName !== 'Você'`, renderizar:
+```tsx
+<span className="text-[10px] text-muted-foreground px-1 mb-0.5 block text-right">{msg.senderName}</span>
+```
+(Posicionar fora/above da bolha; ajustar à UI existente. O objetivo é o cliente/agente identificar QUEM respondeu.)
+
+- [ ] **Step 5: Build + commit (no repo Frontend-chatbot)**
+
+```bash
+cd Frontend-chatbot && bun run build
+git add src/routes/_authed/chat.\$ticketId.tsx
+git commit -m "fix(chat): renderizar mídia via mediaUrl + exibir nome do técnico"
+```
+
+---
+
+## Task 6: Backend — identificar o técnico nas mensagens enviadas ao WhatsApp
+
+**Files:** Modify `backend/src/presentation/controllers/chat/chat.service.ts`
+
+**Objetivo:** quando o agente responde, o usuário no WhatsApp deve ver quem está atendendo (ex.: `*Matheus (TI):*` antes da mensagem).
+
+- [ ] **Step 1: Prefixar texto/legenda com o nome do técnico no publish**
+
+No bloco de publish OUTGOING ([chat.service.ts:146-170](backend/src/presentation/controllers/chat/chat.service.ts#L146)), montar o texto com o nome do remetente quando houver `msg.sender?.name` e **não** for bot:
+```typescript
+const senderLabel = msg.sender && msg.sender.role !== 'BOT' && msg.sender.name
+  ? `*${msg.sender.name}*\n`
+  : '';
+const waText = input.content ? `${senderLabel}${input.content}` : input.content;
+```
+Usar `waText` nos campos `text` e `content` do `publishOutgoingMessage`. (Para mídia, `waText` vira a legenda — o nome aparece junto da imagem/áudio.)
+> Garanta que o `select`/`include` do `msg` traga `sender { name, role }` (o `create` já inclui `sender: { select: { id, name, role } }`). Não prefixar mensagens internas (`isInternal`) — essas nem vão ao WhatsApp.
+
+- [ ] **Step 2: Typecheck + commit**
+
+```bash
+cd backend && npx tsc --noEmit --incremental false && npm test
+git add src/presentation/controllers/chat/chat.service.ts
+git commit -m "feat(whatsapp): identificar o técnico (nome) nas mensagens enviadas ao usuário"
+```
+
+- [ ] **Step 3: Verificação E2E**
+- Responder pelo chat (texto e imagem) num ticket WhatsApp → no celular do usuário a mensagem vem com `*Nome do técnico*` no topo/legenda.
+- No chat do sistema, o nome do técnico aparece acima das mensagens dele.
+- Mídia recebida do usuário (imagem/áudio) renderiza no chat (não mais `[mídia]`/`[áudio]`).
+
+---
+
 ## Notas para o worker
 - **Não** remontar `<num>@s.whatsapp.net` quando houver jid original — sempre preferir `waJid`.
 - Mídia em disco vive em `uploads/messages/`; manter esse padrão para entrada e saída.
