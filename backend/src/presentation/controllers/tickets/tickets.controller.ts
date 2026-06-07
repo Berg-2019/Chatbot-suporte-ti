@@ -201,6 +201,7 @@ export class TicketsController {
         unitCost: number;
         purchased?: boolean;
       }>;
+      responseMessage?: string;
     },
   ) {
     return this.ticketsService.close(id, closeData, (req.user as AuthUser)?.id);

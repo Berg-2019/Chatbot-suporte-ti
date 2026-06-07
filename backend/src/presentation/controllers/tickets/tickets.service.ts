@@ -529,6 +529,8 @@ export class TicketsService {
       contactName?: string;
       contactDepartment?: string;
       contactRamal?: string;
+      // Mensagem personalizada do técnico ao usuário (opcional)
+      responseMessage?: string;
     },
     userId?: string,
   ) {
@@ -619,30 +621,26 @@ export class TicketsService {
     if (ticket.phoneNumber) {
       const technicianName = ticket.assignedTo?.name || 'Suporte';
 
-      let closeMessage = `✅ *Chamado Encerrado*\n\n`;
-
-      if (closeData?.solution) {
-        closeMessage += `📝 *Solução:* ${closeData.solution}\n\n`;
-      }
-
-      if (partUsages.length > 0) {
-        closeMessage += `🔧 *Peças utilizadas:*\n`;
-        for (const pu of partUsages) {
-          closeMessage += `• ${pu.quantity}x ${pu.partName}\n`;
+      let closeMessage: string;
+      if (closeData?.responseMessage?.trim()) {
+        closeMessage = closeData.responseMessage.trim();
+      } else {
+        // Padrão (sem prompt de avaliação — o CSAT é enviado em mensagem separada)
+        closeMessage = `✅ *Chamado Encerrado*\n\n`;
+        if (closeData?.solution) closeMessage += `📝 *Solução:* ${closeData.solution}\n\n`;
+        if (partUsages.length > 0) {
+          closeMessage += `🔧 *Peças utilizadas:*\n`;
+          for (const pu of partUsages) closeMessage += `• ${pu.quantity}x ${pu.partName}\n`;
+          closeMessage += `\n`;
         }
-        closeMessage += `\n`;
+        if (closeData?.timeWorked) {
+          const hours = Math.floor(closeData.timeWorked / 60);
+          const minutes = closeData.timeWorked % 60;
+          const timeStr = hours > 0 ? `${hours}h${minutes > 0 ? minutes + 'min' : ''}` : `${minutes}min`;
+          closeMessage += `⏱️ *Tempo:* ${timeStr}\n`;
+        }
+        closeMessage += `👤 *Técnico:* ${technicianName}`;
       }
-
-      if (closeData?.timeWorked) {
-        const hours = Math.floor(closeData.timeWorked / 60);
-        const minutes = closeData.timeWorked % 60;
-        const timeStr = hours > 0 ? `${hours}h${minutes > 0 ? minutes + 'min' : ''}` : `${minutes}min`;
-        closeMessage += `⏱️ *Tempo:* ${timeStr}\n`;
-      }
-
-      closeMessage += `👤 *Técnico:* ${technicianName}\n\n`;
-      closeMessage += `⭐ *Por favor, avalie nosso atendimento de 1 a 5:*\n`;
-      closeMessage += `_(1 = Ruim, 5 = Excelente)_`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: ticket.phoneNumber,
@@ -655,6 +653,9 @@ export class TicketsService {
         where: { id },
         data: { awaitingRating: true },
       });
+
+      // Pesquisa de satisfação (mensagem separada + sessão de rating no Redis)
+      setTimeout(() => this.sendCsatSurvey(id, ticket.phoneNumber!), 5000);
     }
 
     // Notificar painel
