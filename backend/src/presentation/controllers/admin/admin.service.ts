@@ -1,10 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { UserOnboardingService } from '../onboarding/user-onboarding.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly onboarding: UserOnboardingService,
+  ) {}
 
   async getUsers() {
     return this.prisma.user.findMany({
@@ -16,6 +21,7 @@ export class AdminService {
         sector: true,
         active: true,
         phoneNumber: true,
+        activatedAt: true,
         createdAt: true,
         lastSeenAt: true,
       },
@@ -23,9 +29,23 @@ export class AdminService {
     });
   }
 
-  async createUser(dto: { email: string; password: string; name: string; role?: string; sector?: string; phoneNumber?: string }) {
-    const hashedPassword = await bcrypt.hash(dto.password, 12);
-    return this.prisma.user.create({
+  async createUser(dto: {
+    email: string;
+    password?: string;
+    name: string;
+    role?: string;
+    sector?: string;
+    phoneNumber?: string;
+  }) {
+    // Verifica duplicidade explicitamente para feedback claro
+    const existing = await this.prisma.user.findFirst({ where: { email: dto.email } });
+    if (existing) throw new BadRequestException('E-mail já está em uso');
+
+    const usesActivation = !dto.password;
+    const rawPassword = dto.password ?? randomBytes(32).toString('hex');
+    const hashedPassword = await bcrypt.hash(rawPassword, 12);
+
+    const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         password: hashedPassword,
@@ -33,6 +53,7 @@ export class AdminService {
         role: (dto.role || 'AGENT') as any,
         sector: (dto.sector || 'TI') as any,
         phoneNumber: dto.phoneNumber,
+        activatedAt: usesActivation ? null : new Date(),
       },
       select: {
         id: true,
@@ -41,8 +62,25 @@ export class AdminService {
         role: true,
         sector: true,
         active: true,
+        phoneNumber: true,
+        activatedAt: true,
       },
     });
+
+    if (usesActivation) {
+      try {
+        await this.onboarding.generateAndSend({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+        });
+      } catch {
+        // best-effort: admin pode reenviar via POST /users/:id/resend-activation
+      }
+    }
+
+    return user;
   }
 
   async updateUser(id: string, dto: { name?: string; role?: string; sector?: string; phoneNumber?: string; active?: boolean }) {

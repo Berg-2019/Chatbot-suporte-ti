@@ -3,13 +3,19 @@
  */
 
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { UserOnboardingService } from '../onboarding/user-onboarding.service';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private prisma: PrismaService) { }
+  constructor(
+    private prisma: PrismaService,
+    private readonly onboarding: UserOnboardingService,
+  ) { }
 
   async findAll() {
     return this.prisma.user.findMany({
@@ -21,6 +27,7 @@ export class UsersService {
         active: true,
         createdAt: true,
         phoneNumber: true,
+        activatedAt: true,
       } as any,
       orderBy: { name: 'asc' },
     });
@@ -73,8 +80,6 @@ export class UsersService {
 
     // Hash password if provided
     if (data.password) {
-       
-      const bcrypt = require('bcryptjs');
       updateData.password = await bcrypt.hash(data.password, 12);
     }
 
@@ -103,7 +108,6 @@ export class UsersService {
     const newPassword = Math.random().toString(36).slice(2, 10) +
       Math.random().toString(36).slice(2, 6).toUpperCase();
 
-    const bcrypt = require('bcryptjs');
     const hashed = await bcrypt.hash(newPassword, 12);
 
     await this.prisma.user.update({
@@ -114,6 +118,26 @@ export class UsersService {
     return { password: newPassword };
   }
 
+  /**
+   * Reenvio de ativação (admin).
+   * - Usuário já ativado → 409 (não há o que reenviar)
+   * - Caso contrário → invalida tokens anteriores e dispara novo onboarding
+   */
+  async resendActivation(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+    if (user.activatedAt) {
+      throw new BadRequestException('Usuário já está ativado');
+    }
+    await this.onboarding.generateAndSend({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+    });
+    return { ok: true };
+  }
+
   async createLocal(data: {
     name: string;
     email: string;
@@ -121,6 +145,7 @@ export class UsersService {
     role?: 'ADMIN' | 'AGENT' | 'ADMIN_TI' | 'ADMIN_ELECTRIC' | 'ADMIN_COMPRAS';
     sector?: 'TI' | 'ELECTRIC' | 'COMPRAS';
     active?: boolean;
+    phoneNumber?: string;
   }) {
     // 1. Verify email uniqueness
     const existing = await this.prisma.user.findFirst({
@@ -131,16 +156,14 @@ export class UsersService {
       throw new BadRequestException('E-mail já está em uso');
     }
 
-    // 2. Hash password
-    let hashedPassword = '';
-    if (data.password) {
-
-      const bcrypt = require('bcryptjs');
-      hashedPassword = await bcrypt.hash(data.password, 12);
-    }
+    // 2. Senha: se não informada, gerar hash aleatório inutilizável
+    //    (agente precisa usar o link de ativação para definir a própria senha)
+    const usesActivation = !data.password;
+    const rawPassword = data.password ?? randomBytes(32).toString('hex');
+    const hashedPassword = await bcrypt.hash(rawPassword, 12);
 
     // 3. Create user (sector default = TI quando não informado)
-    return this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
@@ -148,6 +171,9 @@ export class UsersService {
         role: data.role || 'AGENT',
         sector: data.sector || 'TI',
         active: data.active ?? true,
+        phoneNumber: data.phoneNumber,
+        // Sem senha => ativação pendente; com senha => já ativo
+        activatedAt: usesActivation ? null : new Date(),
       },
       select: {
         id: true,
@@ -156,9 +182,31 @@ export class UsersService {
         role: true,
         sector: true,
         active: true,
+        phoneNumber: true,
+        activatedAt: true,
         createdAt: true,
       },
     });
+
+    // 4. Se entrou no fluxo de ativação, dispara onboarding (best-effort)
+    if (usesActivation) {
+      try {
+        await this.onboarding.generateAndSend({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+        });
+      } catch (err: unknown) {
+        // Onboarding já é best-effort internamente; este catch é belt-and-suspenders.
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(
+          `Falha no onboarding de ${user.email}: ${msg} — agente pode ser reenviado pelo admin`,
+        );
+      }
+    }
+
+    return user;
   }
 
   /**

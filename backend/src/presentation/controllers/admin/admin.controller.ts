@@ -9,9 +9,11 @@ class CreateUserDto {
   @IsEmail()
   email: string;
 
+  // Senha é opcional: se omitida, agente recebe link de ativação por email/WhatsApp.
+  @IsOptional()
   @IsString()
   @MinLength(6)
-  password: string;
+  password?: string;
 
   @IsString()
   name: string;

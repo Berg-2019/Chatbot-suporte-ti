@@ -54,6 +54,7 @@ export class UsersController {
       role?: 'ADMIN' | 'AGENT' | 'ADMIN_TI' | 'ADMIN_ELECTRIC' | 'ADMIN_COMPRAS';
       sector?: 'TI' | 'ELECTRIC' | 'COMPRAS';
       active?: boolean;
+      phoneNumber?: string;
     },
     @Request() req: any,
   ) {
@@ -61,8 +62,9 @@ export class UsersController {
       throw new ForbiddenException('Apenas admins');
     }
 
-    if (!data.name || !data.email || !data.password) {
-      throw new BadRequestException('Nome, e-mail e senha são obrigatórios');
+    // Senha é opcional: se omitida, agente recebe link de ativação por email/WhatsApp.
+    if (!data.name || !data.email) {
+      throw new BadRequestException('Nome e e-mail são obrigatórios');
     }
 
     return this.usersService.createLocal(data);
@@ -128,5 +130,14 @@ export class UsersController {
       throw new ForbiddenException('Apenas admins');
     }
     return this.usersService.resetPassword(id);
+  }
+
+  @Post(':id/resend-activation')
+  @Roles('ADMIN')
+  async resendActivation(@Param('id') id: string, @Request() req: any) {
+    if (req.user.role !== 'ADMIN') {
+      throw new ForbiddenException('Apenas admins');
+    }
+    return this.usersService.resendActivation(id);
   }
 }
