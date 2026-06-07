@@ -62,6 +62,11 @@ class EnvironmentVariables {
   @IsOptional()
   FRONTEND_URL: string = 'http://localhost:5173';
 
+  // URL pública do frontend para montar links de ativação (email/WhatsApp)
+  @IsString()
+  @IsOptional()
+  APP_PUBLIC_URL: string = 'http://localhost:5173';
+
   // Backend
   @IsString()
   @IsOptional()
