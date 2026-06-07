@@ -24,7 +24,15 @@
 
 ---
 
-## Task 0: Confirmar o LID (causa raiz #1) — instrumentação mínima
+## Task 0: Confirmar o LID (causa raiz #1) — ✅ JÁ CONFIRMADO (2026-06-07)
+
+> **Resultado da verificação (pode PULAR esta task):** log do `remoteJid` cru com mensagens reais de teste confirmou:
+> ```
+> remoteJid=126087875031102@lid | tipos=extendedTextMessage   (texto)
+> remoteJid=126087875031102@lid | tipos=imageMessage          (imagem)
+> remoteJid=126087875031102@lid | tipos=audioMessage          (áudio)
+> ```
+> → **RC#1 confirmada:** jid é `@lid`. **RC#3 confirmada:** imagem=`imageMessage`, áudio=`audioMessage` (sem caso no `extractText`). Siga direto para a Task 1. (Passos abaixo mantidos só como referência caso precise reproduzir.)
 
 **Files:** Modify `backend/src/infrastructure/whatsapp/baileys.service.ts`
 
