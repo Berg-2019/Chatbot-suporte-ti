@@ -287,7 +287,7 @@ export class TicketsService {
       const message = `✅ *Ótima notícia!*\n\nSeu chamado *#${ticket.id.slice(-6)}* foi atribuído ao técnico *${technician?.name || 'Suporte'}*.\n\nEle entrará em contato em breve para resolver seu problema.`;
 
       await this.rabbitmq.publishOutgoingMessage({
-        to: ticket.phoneNumber,
+        to: ticket.waJid ?? ticket.phoneNumber,
         text: message,
         ticketId: id,
       });
@@ -362,7 +362,7 @@ export class TicketsService {
       const message = `🔄 *Transferência de atendimento*\n\nSeu chamado foi transferido de *${currentUser?.name || 'Técnico'}* para *${newUser?.name || 'Outro técnico'}*.\n\nO novo responsável entrará em contato em breve.`;
 
       await this.rabbitmq.publishOutgoingMessage({
-        to: ticket.phoneNumber,
+        to: ticket.waJid ?? ticket.phoneNumber,
         text: message,
         ticketId: id,
       });
@@ -444,20 +444,21 @@ export class TicketsService {
     });
 
     // Se fechou, enviar mensagem ao cliente + pesquisa CSAT
-    if (status === 'CLOSED' && ticket.phoneNumber) {
+    // RC#1: responder ao jid completo (waJid, suporta @lid); cair para phoneNumber.
+    const dest = ticket.waJid ?? ticket.phoneNumber;
+    if (status === 'CLOSED' && dest) {
       const technicianName = ticket.assignedTo?.name || 'Suporte';
       const ticketNumber = id.slice(0, 8).toUpperCase();
       const closeMessage = `✅ *Chamado #${ticketNumber} Encerrado*\n\nSeu chamado foi finalizado por *${technicianName}*.\n\nSe precisar de mais ajuda, é só enviar uma nova mensagem!`;
 
       await this.rabbitmq.publishOutgoingMessage({
-        to: ticket.phoneNumber,
+        to: dest,
         text: closeMessage,
         ticketId: id,
       });
 
       // Enviar pesquisa CSAT após 5 segundos (DRY: usa sendCsatSurvey)
-      const phoneForCsat = ticket.phoneNumber!;
-      setTimeout(() => this.sendCsatSurvey(id, phoneForCsat), 5000);
+      setTimeout(() => this.sendCsatSurvey(id, dest), 5000);
     }
 
     // Notificar painel para atualizar listas
@@ -618,7 +619,9 @@ export class TicketsService {
     }
 
     // Enviar mensagem ao cliente via WhatsApp
-    if (ticket.phoneNumber) {
+    // RC#1: responder ao jid completo (waJid, suporta @lid); cair para phoneNumber.
+    const dest = ticket.waJid ?? ticket.phoneNumber;
+    if (dest) {
       const technicianName = ticket.assignedTo?.name || 'Suporte';
 
       let closeMessage: string;
@@ -643,7 +646,7 @@ export class TicketsService {
       }
 
       await this.rabbitmq.publishOutgoingMessage({
-        to: ticket.phoneNumber,
+        to: dest,
         text: closeMessage,
         ticketId: id,
       });
@@ -655,7 +658,7 @@ export class TicketsService {
       });
 
       // Pesquisa de satisfação (mensagem separada + sessão de rating no Redis)
-      setTimeout(() => this.sendCsatSurvey(id, ticket.phoneNumber!), 5000);
+      setTimeout(() => this.sendCsatSurvey(id, dest), 5000);
     }
 
     // Notificar painel
@@ -761,7 +764,7 @@ export class TicketsService {
     if (ticket?.phoneNumber) {
       // Publicar na fila para o bot enviar via WhatsApp
       await this.rabbitmq.publishOutgoingMessage({
-        to: ticket.phoneNumber,
+        to: ticket.waJid ?? ticket.phoneNumber,
         ticketId,
         mediaUrl,
         mediaType,
