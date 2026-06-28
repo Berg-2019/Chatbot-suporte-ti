@@ -46,7 +46,9 @@ export class AuthController {
   ) {}
 
   @Post('login')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  // Limite anti-brute-force: 5/min em produção. Configurável p/ E2E (que loga
+  // muitas vezes) via LOGIN_THROTTLE_LIMIT — NÃO setar em produção.
+  @Throttle({ default: { ttl: 60000, limit: Number(process.env.LOGIN_THROTTLE_LIMIT) || 5 } })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto);
 

@@ -194,7 +194,7 @@ export class LiveViewService {
     /**
      * Get agent activity (who's handling what)
      */
-    async getAgentActivity() {
+    async getAgentActivity(sector?: string) {
         const now = new Date();
         const thresholdTime = new Date(now.getTime() - this.ACTIVE_THRESHOLD_MINUTES * 60 * 1000);
 
@@ -202,6 +202,7 @@ export class LiveViewService {
             where: {
                 active: true,
                 role: { in: ['AGENT', 'ADMIN'] },
+                ...(sector ? { sector: sector as any } : {}),
             },
             select: {
                 id: true,
@@ -273,12 +274,13 @@ export class LiveViewService {
     /**
      * Get unassigned tickets (waiting for assignment)
      */
-    async getUnassignedTickets() {
+    async getUnassignedTickets(sector?: string) {
         const now = new Date();
         const tickets = await this.prisma.ticket.findMany({
             where: {
                 assignedToId: null,
                 status: 'NEW',
+                ...(sector ? { sector: sector as any } : {}),
             },
             orderBy: { createdAt: 'asc' },
             take: 50,

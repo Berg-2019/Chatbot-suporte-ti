@@ -6,6 +6,7 @@ import { v4 as uuid } from 'uuid';
 import { TechnicalReportsController } from './technical-reports.controller';
 import { TechnicalReportsService } from './technical-reports.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { UPLOAD_LIMITS, uploadFileFilter } from '../../../common/upload/upload.config';
 
 @Module({
   imports: [
@@ -17,11 +18,8 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
           cb(null, `${uuid()}${ext}`);
         },
       }),
-      limits: { fileSize: 25 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        const ok = /^(image|video)\//.test(file.mimetype);
-        cb(ok ? null : new Error('Tipo de arquivo não permitido'), ok);
-      },
+      limits: UPLOAD_LIMITS,
+      fileFilter: uploadFileFilter,
     }),
   ],
   controllers: [TechnicalReportsController],

@@ -192,14 +192,6 @@ export class ChatService {
         return { ok: true };
     }
 
-    async setWaMessageId(messageId: string, waMessageId: string) {
-        await this.prisma.message.update({
-            where: { id: messageId },
-            data: { waMessageId },
-        });
-        return { ok: true };
-    }
-
     private normalize(m: any) {
         return {
             id: m.id,
@@ -231,7 +223,4 @@ export class ChatService {
         });
     }
 
-    async getMessageById(messageId: string) {
-        return this.prisma.message.findUnique({ where: { id: messageId } });
-    }
 }

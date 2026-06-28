@@ -32,13 +32,13 @@ services:
     image: redis:7-alpine
     container_name: helpdesk_redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     networks:
       - helpdesk_network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -79,13 +79,16 @@ services:
       DATABASE_URL: postgresql://helpdesk:${POSTGRES_PASSWORD:-helpdesk123}@postgres:5432/helpdesk
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-helpdesk}:${RABBITMQ_PASSWORD:-helpdesk123}@rabbitmq:5672
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       # 1 domínio único (sector vem do JWT, não do host). Proxy reverso externo
       # finaliza SSL e reescreve Host; aqui no compose interno é localhost.
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost,http://localhost:80,http://localhost:5173,http://nginx}
+      # Base p/ o link de ativação enviado por email/WhatsApp no onboarding de agentes.
+      # DEVE apontar para o domínio público do PWA (ex.: https://ti.helpdeskmsm.com.br).
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://ti.helpdeskmsm.com.br}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:dev@helpdeskmsm.com.br}
     volumes:
       - backend_logs:/app/logs

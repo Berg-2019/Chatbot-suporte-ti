@@ -88,19 +88,19 @@ export class EventsGateway
         this.logger.debug(`WebSocket evento: ${data.type} ticket ${data.ticketId}`);
         switch (data.type) {
           case 'ticket_created':
-            this.server.emit('ticket:created', data.payload);
+            this.emitToSector(data.payload?.sector, 'ticket:created', data.payload);
             break;
           case 'ticket_assigned':
-            this.server.emit('ticket:assigned', data.payload);
+            this.emitToSector(data.payload?.sector, 'ticket:assigned', data.payload);
             break;
           case 'ticket_updated':
-            this.server.emit('ticket:updated', data.payload);
+            this.emitToSector(data.payload?.sector, 'ticket:updated', data.payload);
             break;
           case 'new_message':
             this.server.to(`ticket:${data.ticketId}`).emit('message:new', data.payload);
             break;
           case 'human_requested':
-            this.server.emit('human:requested', data.payload);
+            this.emitToSector(data.payload?.sector, 'human:requested', data.payload);
             break;
         }
       },
@@ -117,7 +117,31 @@ export class EventsGateway
     }
 
     (client as any).user = user;
+
+    // Sala por setor para eventos de ticket (isolamento multi-tenant).
+    // ADMIN global é cross-sector → entra em todas; demais só no próprio setor.
+    if (user.role === 'ADMIN') {
+      for (const s of ['TI', 'ELECTRIC', 'COMPRAS']) client.join(`sector:${s}`);
+    } else if (user.sector) {
+      client.join(`sector:${user.sector}`);
+    }
+
+    // Sala pessoal — entrega de mensagens do messenger (grupos + DMs).
+    client.join(`user:${user.id}`);
+
     this.logger.log(`cliente conectado: ${client.id} user=${user.id} sector=${user.sector}`);
+  }
+
+  /**
+   * Emite um evento apenas para os clientes do setor (room `sector:<setor>`).
+   * Sem setor no payload, não faz broadcast global (evita vazamento cross-tenant).
+   */
+  private emitToSector(sector: string | undefined, event: string, payload: any) {
+    if (!sector) {
+      this.logger.warn(`evento ${event} sem sector no payload — não emitido (evita broadcast global)`);
+      return;
+    }
+    this.server.to(`sector:${sector}`).emit(event, payload);
   }
 
   async handleDisconnect(client: Socket) {
@@ -156,43 +180,59 @@ export class EventsGateway
     client.leave(`ticket:${ticketId}`);
   }
 
-  @SubscribeMessage('team:join')
-  handleJoinTeamChat(client: Socket) {
-    const user: WsUser | undefined = (client as any).user;
-    if (user) {
-      client.join(`team-chat:${user.sector}`);
-      this.logger.debug(`cliente ${client.id} entrou no team-chat:${user.sector}`);
-    }
-  }
-
-  @SubscribeMessage('team:message')
-  async handleTeamMessage(client: Socket, payload: { content: string; senderId: string }) {
+  // Messenger interno (grupos de setor + DMs). Entrega nas salas `user:<id>`
+  // de todos os participantes (remetente inclusive → sem optimistic no front).
+  @SubscribeMessage('chat:send')
+  async handleChatSend(client: Socket, payload: { conversationId: string; content: string }) {
     const user: WsUser | undefined = (client as any).user;
     if (!user) return;
+    const content = (payload?.content || '').trim();
+    const conversationId = payload?.conversationId;
+    if (!content || !conversationId) return;
 
     try {
-      const message = await this.prisma.teamMessage.create({
-        data: {
-          content: payload.content,
-          senderId: user.id,
-        },
-        include: {
-          sender: { select: { id: true, name: true, role: true } },
-        },
+      // Anti-IDOR: só participa quem está na conversa.
+      const part = await this.prisma.chatParticipant.findUnique({
+        where: { conversationId_userId: { conversationId, userId: user.id } },
+      });
+      if (!part) return;
+
+      const message = await this.prisma.chatMessage.create({
+        data: { conversationId, senderId: user.id, content },
+        include: { sender: { select: { id: true, name: true } } },
+      });
+      await this.prisma.chatConversation.update({
+        where: { id: conversationId },
+        data: { lastMessageAt: message.createdAt },
       });
 
-      this.server.to(`team-chat:${user.sector}`).emit('team:message', message);
+      const participants = await this.prisma.chatParticipant.findMany({
+        where: { conversationId },
+        select: { userId: true },
+      });
+      const summary = {
+        conversationId,
+        lastMessage: {
+          content: message.content,
+          senderName: message.sender?.name ?? null,
+          createdAt: message.createdAt,
+        },
+      };
+      for (const p of participants) {
+        this.server.to(`user:${p.userId}`).emit('chat:message', message);
+        this.server.to(`user:${p.userId}`).emit('chat:conversation', summary);
+      }
     } catch (error) {
-      this.logger.error('Erro ao salvar mensagem do time', error);
+      this.logger.error('Erro ao enviar mensagem do messenger', error);
     }
   }
 
   emitTicketCreated(ticket: any) {
-    this.server.emit('ticket:created', ticket);
+    this.emitToSector(ticket?.sector, 'ticket:created', ticket);
   }
 
   emitTicketAssigned(ticket: any) {
-    this.server.emit('ticket:assigned', ticket);
+    this.emitToSector(ticket?.sector, 'ticket:assigned', ticket);
   }
 
   emitNewMessage(ticketId: string, message: any) {

@@ -22,6 +22,7 @@ import pino from 'pino';
 import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import { WhatsAppStatus } from './whatsapp.types';
+import { resolveOutgoingMediaPath } from '../../common/upload/media-path.util';
 import { SESSION_DIR, RECONNECT_DELAY, STATUS_KEY } from './whatsapp.constants';
 import { RedisService } from '../cache/redis.service';
 import { RabbitMQService } from '../messaging/rabbitmq.service';
@@ -389,18 +390,17 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
           if (mediaUrl && mediaType) {
             // RC#2: envio de mídia (imagem/áudio/vídeo/documento)
             try {
-              // mediaUrl chega como "/uploads/messages/<arquivo>"
-              const urlStr = String(mediaUrl);
-              const fileNameOnDisk = decodeURIComponent(urlStr.split('/').pop() || '');
-              if (!fileNameOnDisk) {
-                this.logger.warn(`mediaUrl inválido (sem nome de arquivo): ${urlStr}`);
+              // mediaUrl é um caminho relativo dentro de uploads/ (messages/ ou attachments/).
+              const filePath = resolveOutgoingMediaPath(String(mediaUrl));
+              if (!filePath) {
+                this.logger.warn(`mediaUrl inválido ou fora de uploads/: ${mediaUrl}`);
                 return;
               }
-              const filePath = path.join(process.cwd(), 'uploads', 'messages', fileNameOnDisk);
               if (!fs.existsSync(filePath)) {
                 this.logger.warn(`Mídia não encontrada em disco: ${filePath}`);
                 return;
               }
+              const fileNameOnDisk = path.basename(filePath);
               let buffer: Buffer = fs.readFileSync(filePath);
               // Áudio: WhatsApp espera ogg/opus (nota de voz). O navegador grava
               // webm/opus → transcodificar via ffmpeg. Se falhar, envia o original.

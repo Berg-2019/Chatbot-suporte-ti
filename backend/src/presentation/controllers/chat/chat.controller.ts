@@ -6,10 +6,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { existsSync, statSync, createReadStream } from 'fs';
-import { join } from 'path';
-import { ApiKeyGuard } from '../../../common/guards/api-key.guard';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './chat.dto';
+import { resolveOutgoingMediaPath } from '../../../common/upload/media-path.util';
 
 @Controller('chat')
 export class ChatController {
@@ -22,7 +21,10 @@ export class ChatController {
     @Get('conversations')
     @UseGuards(AuthGuard('jwt'))
     async getConversations(@Req() req: any, @Query('sector') sector?: string) {
-        const userSector = sector || req.user.sector || 'TI';
+        // Sector vem do JWT (isolamento multi-tenant). Apenas ADMIN global pode
+        // filtrar outro setor via query; demais ficam travados no próprio setor.
+        const isGlobalAdmin = req.user?.role === 'ADMIN';
+        const userSector = isGlobalAdmin ? (sector || req.user.sector) : req.user.sector;
         return this.service.getConversations(userSector);
     }
 
@@ -68,12 +70,6 @@ export class ChatController {
         return this.service.markAsRead(messageId, req.user.id);
     }
 
-    @Patch('messages/:id/wa-id')
-    @UseGuards(ApiKeyGuard)
-    async setWaId(@Param('id') id: string, @Body('waMessageId') waMessageId: string) {
-        return this.service.setWaMessageId(id, waMessageId);
-    }
-
     @Get('media/:messageId')
     @UseGuards(AuthGuard('jwt'))
     async getMedia(@Param('messageId') messageId: string, @Req() req: any, @Res() res: Response) {
@@ -91,30 +87,8 @@ export class ChatController {
             throw new NotFoundException('Esta mensagem não tem mídia');
         }
 
-        const filePath = join(process.cwd(), 'uploads', 'messages', message.mediaUrl.split('/').pop()!);
-        if (!existsSync(filePath)) {
-            throw new NotFoundException('Arquivo não encontrado');
-        }
-
-        this.streamFile(filePath, message.fileName, res);
-    }
-
-    @Get('media-internal/:messageId')
-    @UseGuards(ApiKeyGuard)
-    async getMediaInternal(@Param('messageId') messageId: string, @Res() res: Response) {
-        this.logger.debug(`[getMediaInternal] called with messageId=${messageId}`);
-        const message = await this.service.getMessageById(messageId);
-
-        if (!message) {
-            throw new NotFoundException('Mensagem não encontrada');
-        }
-
-        if (!message.mediaUrl) {
-            throw new NotFoundException('Esta mensagem não tem mídia');
-        }
-
-        const filePath = join(process.cwd(), 'uploads', 'messages', message.mediaUrl.split('/').pop()!);
-        if (!existsSync(filePath)) {
+        const filePath = resolveOutgoingMediaPath(message.mediaUrl);
+        if (!filePath || !existsSync(filePath)) {
             throw new NotFoundException('Arquivo não encontrado');
         }
 

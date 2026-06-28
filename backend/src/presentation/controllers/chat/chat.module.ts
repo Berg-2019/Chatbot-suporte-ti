@@ -7,6 +7,7 @@ import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { PushModule } from '../push/push.module';
+import { UPLOAD_LIMITS, uploadFileFilter } from '../../../common/upload/upload.config';
 
 @Module({
   imports: [
@@ -19,11 +20,8 @@ import { PushModule } from '../push/push.module';
           cb(null, `${uuid()}${ext}`);
         },
       }),
-      limits: { fileSize: 25 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        const ok = /^(image|video|audio|application)\//.test(file.mimetype);
-        cb(ok ? null : new Error('Tipo de arquivo não permitido'), ok);
-      },
+      limits: UPLOAD_LIMITS,
+      fileFilter: uploadFileFilter,
     }),
   ],
   controllers: [ChatController],

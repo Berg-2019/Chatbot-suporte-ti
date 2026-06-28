@@ -17,8 +17,43 @@ A migração Hermes → bot WhatsApp nativo está **concluída e o Hermes foi de
 - Verificado: backend bota limpo (0 erros TS, sem DI errors), rotas `/api/hermes/*` retornam 404, `/api/whatsapp/*` mapeadas, 61/61 testes unitários, smoke test verde
 
 **Pendências de limpeza (não bloqueantes):**
-- 4 endpoints internos guardados por `ApiKeyGuard` (`tickets/by-phone`, attachment file, `chat/messages/:id/wa-id`, `chat/media-internal`) eram a ponte do Hermes — hoje provavelmente mortos (bot é in-process). Remover quando confirmado.
-- Frontend (`Frontend-chatbot`) tem refs mortas: `AssistantPanel.tsx` (modo demo) e `notificationService.ts` chama `/hermes/send` (inexistente).
+- ~~4 endpoints internos guardados por `ApiKeyGuard`~~ — **resolvido 2026-06-10:** removidos 3 confirmados mortos (`tickets/by-phone`, `chat/messages/:id/wa-id`, `chat/media-internal`) + métodos órfãos (`findByPhone`, `setWaMessageId`, `getMessageById`). **`tickets/attachments/:id/file` (serveAttachment) MANTIDO.** O bug de mídia outgoing que o motivava foi **corrigido em 2026-06-15** (ver §🔒 e [DIARIO_PROGRESSO.md](DIARIO_PROGRESSO.md) item 7): `addAttachment` agora publica caminho relativo `/uploads/attachments/<f>` + seta a coluna `mediaUrl`; bot e `getMedia` usam um resolver comum seguro. Também removidos os shims de compat do Hermes (`HERMES_API_KEY`, header `x-hermes-api-key`).
+- Frontend (`Frontend-chatbot`) tem refs mortas: `AssistantPanel.tsx` (modo demo) e `notificationService.ts` chama `/hermes/send` (inexistente). **(ainda pendente — não tocado.)**
+- **Onboarding de agentes** (criar usuário + login via email/WhatsApp): ✅ implementado e verificado E2E. Ver [`ONBOARDING_AGENTES.md`](ONBOARDING_AGENTES.md). **Config obrigatória:** `APP_PUBLIC_URL` (agora repassada nos 2 compose) + SMTP.
+- **Escalonamento horizontal:** diagnóstico em [`ESCALONAMENTO.md`](ESCALONAMENTO.md) — backend é instância única hoje (Baileys + crons + Socket.IO sem Redis adapter). Não implementado.
+- **Domínio de teste `dev.helpdeskmsm.com.br`** (2026-06-26, ver [DIARIO_PROGRESSO.md](DIARIO_PROGRESSO.md) item 11): VM nginx reverse (SSL) → `:80` desta máquina (nginx interno serve SPA + `/api` + `/socket.io`, mesma origem). Frontend servido pelo `docker-compose.yml` (serviço `frontend` builda com `VITE_API_URL=/api` → volume `frontend_dist` → nginx). **Rebuild do front:** `docker compose -f docker-compose.yml build frontend && up -d frontend`.
+- **PWA Service Worker:** `vite-plugin-pwa` NÃO emite `sw.js` no build do TanStack Start. Solução vigente: SW manual em [`Frontend-chatbot/public/sw.js`](Frontend-chatbot/public/sw.js) + registro em `__root.tsx` (PROD). Push usa ícone por setor.
+
+---
+
+## 🔒 Correções de segurança (2026-06-10)
+
+Triagem de um relatório de auditoria externo (22 achados) **verificada contra o código**. Aplicados os fixes confirmados; falsos positivos descartados com evidência.
+
+**✅ Corrigido + verificado (typecheck 0 erros, 100/100 testes, runtime):**
+- **CS-IDOR-003** — `GET /chat/conversations` pegava `sector` do query param → vazava conversas cross-setor. Agora vem do JWT; só `ADMIN` global pode filtrar via query. [chat.controller.ts](backend/src/presentation/controllers/chat/chat.controller.ts)
+- **CS-IDOR-004** — `GET /live-view/{conversations,stats,agents,unassigned}` idem (query param + `agents`/`unassigned` sem filtro). Controller agora usa `scopeSector()` role-aware; service filtra por setor. [live-view.controller.ts](backend/src/presentation/controllers/live-view/live-view.controller.ts) + [.service.ts](backend/src/presentation/controllers/live-view/live-view.service.ts)
+- **CS-BROADCAST-001** — gateway fazia `server.emit('ticket:created'/...)` **global** → todo setor recebia eventos de todos. Agora emite para room `sector:<setor>` (clientes entram na sala do próprio setor no connect; `ADMIN` global em todas). [events.gateway.ts](backend/src/presentation/websockets/events.gateway.ts)
+- **CS-IDOR-001** — `contacts` `upsert`/`spam-score`/`spam/detect`/`is-blocked` eram **públicos** (`isPublic`+`@UseGuards()` vazio, resíduo da ponte Hermes). Agora exigem JWT (verificado: 401 sem auth). Bot usa `ContactService` in-process. [contacts.controller.ts](backend/src/presentation/controllers/contacts/contacts.controller.ts)
+- **CS-IDOR-002** — `POST /tickets/:id/rate` público sem validação → agora exige JWT + valida range 1-5 (401 sem auth). CSAT via WhatsApp segue in-process. [tickets.controller.ts](backend/src/presentation/controllers/tickets/tickets.controller.ts)
+
+**❌ Falsos positivos / superestimados (NÃO exigem ação):**
+- CS-AUTH-002 (JWT nunca expira) — **falso**, há `expiresIn: '7d'` em [auth.module.ts](backend/src/presentation/controllers/auth/auth.module.ts).
+- CS-SECRETS-001 (vaza via git) — **superestimado**, `.env` é gitignored e nunca foi commitado.
+- CS-AUTH-001 (default admin123) — **mitigado**, código lança em produção se `ADMIN_PASSWORD` ausente; admin123 é só dev.
+- CS-CORS-001 — **enganoso**, CORS é imposto pelo browser (não protege contra curl).
+- CS-PATH-001 — **baixo/teórico**, `.split('/').pop()` remove `..` e `mediaUrl` é gerado pelo servidor.
+
+**✅ Hardening aplicado (2026-06-11):**
+- **Upload** (CS-UPLOAD-001 — o relatório superestimou: `chat`/`technical-reports` já tinham filtro; só `tickets` não). Criado helper compartilhado [common/upload/upload.config.ts](backend/src/common/upload/upload.config.ts) com allowlist de MIME + **bloqueio de extensão perigosa mesmo com MIME forjado** (exe/sh/html/svg/…) + `limits` (25MB, 1 arquivo). Aplicado nos 3 módulos (tickets/chat/technical-reports). Rejeição retorna **400** limpo. Verificado runtime: `.exe`→400, `.png` passa o filtro.
+- **Body parser** (CS-BODY-001): `50mb`→**`2mb`** em [main.ts](backend/src/main.ts) (uploads vão por multer, não pelo parser). Verificado: 3MB→413.
+- **Redis** (CS-REDIS-001): `--requirepass ${REDIS_PASSWORD}` + healthcheck autenticado + `REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379` em [docker-compose.yml](docker-compose.yml) (prod) + `REDIS_PASSWORD` no `.env.example`. **Dev deixado sem senha de propósito** (rede interna; evita quebrar a stack rodando).
+
+**⏳ Pendentes (reais, não atacados ainda):**
+- **Menores**: `live-view/timeline/:id` sem checagem de setor; `agent:status`/`bot:status` ainda globais no gateway (presença, baixa sensibilidade); `users/technicians` sem filtro de setor; login timing (enumeração de email).
+- **Nuance**: JWT TTL `7d` > cookie `8h` — considerar reduzir o `expiresIn`.
+- **Bloqueadores pré-prod não-segurança** (do topo do arquivo): forward-merge com `main`, smoke mobile. _(O bug de mídia outgoing do WhatsApp foi corrigido em 2026-06-15.)_
+- **Suíte Playwright E2E: VERDE e canônica (2026-06-25, ver [DIARIO_PROGRESSO.md](DIARIO_PROGRESSO.md) item 10).** Canônico = `Frontend-chatbot/e2e/` (localhost, turnkey: `cd Frontend-chatbot && npm run test:e2e` → seed + sobe app + 12/12 passam). `backend/e2e/` (stale) **removido**. Usuários de teste: `npm run seed:e2e` no backend (cria ti/electric/compras + `e2e_admin`, senha `password123`). O processo pegou+corrigiu 5 bugs reais (CORS header, soft-delete 500, priority enum, ticket sem setor, rate-limit de login configurável).
 
 ---
 

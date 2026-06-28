@@ -68,6 +68,10 @@ export class TicketsService {
     type?: TicketType;
     sector?: Sector;
     isAdmin?: boolean;
+    // 'active' = abertos + em atendimento + resolvidos/fechados nas últimas 24h.
+    view?: 'active' | 'all';
+    // Busca textual (nº do chamado/id, título e relato/descrição).
+    search?: string;
   }) {
     const page = filters?.page || 1;
     const limit = filters?.limit || 50;
@@ -85,6 +89,36 @@ export class TicketsService {
     if (!filters?.isAdmin && filters?.sector) {
       where.sector = filters.sector;
     }
+
+    const and: any[] = [];
+
+    // Lista "ativos": não acumula histórico — esconde resolvidos/fechados com mais de 24h.
+    if (filters?.view === 'active') {
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      and.push({
+        OR: [
+          { status: { notIn: ['RESOLVED', 'CLOSED'] } },
+          {
+            status: { in: ['RESOLVED', 'CLOSED'] },
+            updatedAt: { gte: dayAgo },
+          },
+        ],
+      });
+    }
+
+    // Busca por número/id, título ou relato (descrição).
+    const term = filters?.search?.trim();
+    if (term) {
+      and.push({
+        OR: [
+          { id: { contains: term, mode: 'insensitive' } },
+          { title: { contains: term, mode: 'insensitive' } },
+          { description: { contains: term, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (and.length) where.AND = and;
 
     const [tickets, total] = await Promise.all([
       this.prisma.ticket.findMany({
@@ -706,21 +740,6 @@ export class TicketsService {
     return ticket;
   }
 
-  async findByPhone(phone: string) {
-    // Buscar último ticket do telefone
-    const ticket = await this.prisma.ticket.findFirst({
-      where: {
-        phoneNumber: { contains: phone },
-      },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        assignedTo: { select: { id: true, name: true } },
-      },
-    });
-
-    return ticket;
-  }
-
   async addAttachment(ticketId: string, file: any, senderId?: string) {
     const attachment = await this.prisma.attachment.create({
       data: {
@@ -742,19 +761,22 @@ export class TicketsService {
     else if (mt.startsWith('audio/')) { mediaType = 'audio'; messageType = 'AUDIO'; }
     else if (mt.startsWith('video/')) { mediaType = 'video'; messageType = 'DOCUMENT'; }
 
-    // URL pública/interna para o bot baixar o arquivo
-    const baseUrl = process.env.INTERNAL_BACKEND_URL || 'http://backend:3000';
-    const mediaUrl = `${baseUrl}/api/tickets/attachments/${attachment.id}/file`;
+    // Caminho relativo servido estaticamente, na mesma convenção do fluxo de chat:
+    // o bot lê do disco (resolveOutgoingMediaPath) e a UI exibe via /chat/media/:id.
+    const mediaUrl = `/uploads/attachments/${file.filename}`;
 
     // Criar Message no banco para aparecer no chat (OUTGOING)
     const message = await this.prisma.message.create({
       data: {
         ticketId,
-        content: mediaUrl,
+        content: '',
         type: messageType,
         direction: 'OUTGOING',
         senderId: senderId || null,
         isInternal: false,
+        mediaUrl,
+        fileName: file.originalname,
+        fileSize: file.size,
       },
     });
 
@@ -766,6 +788,7 @@ export class TicketsService {
       await this.rabbitmq.publishOutgoingMessage({
         to: ticket.waJid ?? ticket.phoneNumber,
         ticketId,
+        messageId: message.id,
         mediaUrl,
         mediaType,
         mimeType: file.mimetype,

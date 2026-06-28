@@ -13,13 +13,11 @@
     "test:unit": "jest --config ./jest.config.js --no-coverage",
     "test:watch": "jest --config ./jest.config.js --watch",
     "test:cov": "jest --coverage",
-    "test:e2e": "playwright test",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "npx tsx prisma/seed.ts",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed"
+    "seed:e2e": "npx tsx prisma/seeds/e2e-users.seed.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

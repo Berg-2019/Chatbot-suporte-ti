@@ -14,7 +14,6 @@ import {
   UseGuards,
   Request,
   Res,
-  SetMetadata,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
@@ -100,6 +99,8 @@ export class TicketsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('type') type?: TicketType,
+    @Query('view') view?: 'active' | 'all',
+    @Query('search') search?: string,
   ) {
     const user = req.user as AuthUser;
     return this.ticketsService.findAll({
@@ -109,6 +110,8 @@ export class TicketsController {
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
       type,
+      view,
+      search,
       sector: user.sector as Sector,
       isAdmin: user.role.startsWith('ADMIN_'),
     });
@@ -122,6 +125,8 @@ export class TicketsController {
     @Query('category') category?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('view') view?: 'active' | 'all',
+    @Query('search') search?: string,
   ) {
     const user = req.user as AuthUser;
     return this.ticketsService.findAll({
@@ -129,6 +134,8 @@ export class TicketsController {
       category,
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
+      view,
+      search,
       sector: user.sector as Sector,
       assignedToId: user.id,
     });
@@ -150,8 +157,12 @@ export class TicketsController {
   }
 
   @Post()
-  async create(@Body() dto: CreateTicketDto) {
-    return this.ticketsService.create(dto);
+  async create(@Body() dto: CreateTicketDto, @Request() req: any) {
+    // Sector vem do JWT do criador (regra: validar server-side, ignorar o
+    // que o cliente mandar). Sem isto o ticket fica com sector nulo e some
+    // das listas filtradas por setor.
+    const user = req.user as AuthUser;
+    return this.ticketsService.create({ ...dto, sector: user.sector as Sector });
   }
 
   @Post(':id/notes')
@@ -207,22 +218,17 @@ export class TicketsController {
     return this.ticketsService.close(id, closeData, (req.user as AuthUser)?.id);
   }
 
-  // === Novos endpoints para bot ===
-
   @Post(':id/rate')
-  @SetMetadata('isPublic', true)
   async rateTicket(
     @Param('id') id: string,
     @Body('rating') rating: number,
   ) {
+    // CSAT via WhatsApp é gravado in-process pelo bot; este endpoint web exige JWT
+    // e valida o range para não enviesar métricas.
+    if (typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new BadRequestException('rating deve ser um inteiro entre 1 e 5');
+    }
     return this.ticketsService.rate(id, rating);
-  }
-
-  @Get('by-phone/:phone')
-  @SetMetadata('isPublic', true)
-  @UseGuards(ApiKeyGuard)
-  async findByPhone(@Param('phone') phone: string) {
-    return this.ticketsService.findByPhone(phone);
   }
 
   @Post(':id/attachments')

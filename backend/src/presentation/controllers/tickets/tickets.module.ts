@@ -16,6 +16,7 @@ import { StockModule } from '../stock/stock.module';
 import { ChatModule } from '../chat/chat.module';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RedisModule } from '../../../infrastructure/cache/redis.module';
+import { UPLOAD_LIMITS, uploadFileFilter } from '../../../common/upload/upload.config';
 
 @Module({
   imports: [
@@ -35,9 +36,8 @@ import { RedisModule } from '../../../infrastructure/cache/redis.module';
           callback(null, filename);
         },
       }),
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB
-      },
+      limits: UPLOAD_LIMITS,
+      fileFilter: uploadFileFilter,
     }),
   ],
   controllers: [TicketsController],

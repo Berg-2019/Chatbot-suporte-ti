@@ -30,9 +30,10 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  // Increase payload limit
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ extended: true, limit: '50mb' }));
+  // Limite de payload JSON/urlencoded. Uploads de arquivo passam por multer
+  // (não por estes parsers), então 2mb é suficiente e corta superfície de DoS.
+  app.use(json({ limit: '2mb' }));
+  app.use(urlencoded({ extended: true, limit: '2mb' }));
 
   // Security headers with Helmet
   // CSP estrita: bloqueia plugins, frames, base hijacking e form hijacking.
@@ -108,7 +109,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Frontend-Sector', 'X-Request-ID', 'x-api-key', 'x-hermes-api-key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Frontend-Sector', 'X-Request-ID', 'x-api-key'],
     exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
   });
 

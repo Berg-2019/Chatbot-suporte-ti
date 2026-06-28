@@ -9,7 +9,6 @@ import {
     Body,
     Query,
     UseGuards,
-    SetMetadata,
     HttpCode,
     HttpStatus,
 } from '@nestjs/common';
@@ -59,8 +58,6 @@ export class ContactsController {
     }
 
     @Get('jid/:jid/is-blocked')
-    @SetMetadata('isPublic', true)
-    @UseGuards()
     async isBlocked(@Param('jid') jid: string) {
         const blocked = await this.contactService.isBlocked(decodeURIComponent(jid));
         return { jid, isBlocked: blocked };
@@ -103,8 +100,6 @@ export class ContactsController {
     }
 
     @Post('upsert')
-    @SetMetadata('isPublic', true)
-    @UseGuards()
     async upsert(@Body() dto: UpsertContactDto) {
         const { jid, ...contactData } = dto;
         return this.contactService.upsertByJid(jid, contactData as any);
@@ -129,8 +124,6 @@ export class ContactsController {
     }
 
     @Post('spam/detect')
-    @SetMetadata('isPublic', true)
-    @UseGuards()
     async detectSpam(@Body() body: DetectSpamDto) {
         return this.contactService.detectSpamPatterns(body.message);
     }
@@ -154,8 +147,6 @@ export class ContactsController {
     }
 
     @Patch('jid/:jid/spam-score')
-    @SetMetadata('isPublic', true)
-    @UseGuards()
     async incrementSpamScore(@Param('jid') jid: string, @Body() body: IncrementSpamScoreDto) {
         return this.contactService.incrementSpamScore(decodeURIComponent(jid), body.points || 10);
     }

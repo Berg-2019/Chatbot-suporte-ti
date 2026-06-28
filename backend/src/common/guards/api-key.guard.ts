@@ -9,8 +9,7 @@ import { ConfigService } from '@nestjs/config';
 
 /**
  * Protege endpoints internos consumidos por integrações server-to-server
- * via header `x-api-key`. Lê INTERNAL_API_KEY (com fallback a HERMES_API_KEY
- * por compatibilidade com deploys existentes).
+ * via header `x-api-key`. Lê INTERNAL_API_KEY.
  */
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
@@ -18,10 +17,7 @@ export class ApiKeyGuard implements CanActivate {
   private readonly apiKey: string;
 
   constructor(private configService: ConfigService) {
-    this.apiKey =
-      this.configService.get<string>('INTERNAL_API_KEY') ||
-      this.configService.get<string>('HERMES_API_KEY') ||
-      '';
+    this.apiKey = this.configService.get<string>('INTERNAL_API_KEY') || '';
 
     if (!this.apiKey) {
       this.logger.warn('INTERNAL_API_KEY nao definida! Endpoints internos estao desprotegidos.');
@@ -30,7 +26,7 @@ export class ApiKeyGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
-    const providedKey = request.headers['x-api-key'] || request.headers['x-hermes-api-key'];
+    const providedKey = request.headers['x-api-key'];
 
     if (!providedKey) {
       this.logger.warn(`Acesso a endpoint interno sem API Key de ${request.ip}`);

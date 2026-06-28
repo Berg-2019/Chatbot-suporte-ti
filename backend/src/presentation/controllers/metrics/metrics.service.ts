@@ -3,7 +3,41 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { Sector } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+
+export interface AgentPerformance {
+    id: string;
+    name: string;
+    level: string;
+    sector: string;
+    ticketsResolved: number;
+    avgResolutionMinutes: number;
+    avgCsat: number | null;
+    slaCompliance: number | null;
+    slaTracked: number;
+    status: string;
+}
+
+export interface ManagementDashboard {
+    sector: string | null;
+    period: 'today' | '7d' | '30d';
+    range: { start: string; end: string };
+    kpis: {
+        totalTickets: number;
+        openTickets: number;
+        resolvedTickets: number;
+        avgResolutionMinutes: number;
+        slaCompliance: number;
+    };
+    sla: { active: number; responseBreached: number; resolutionBreached: number; warnings: number };
+    charts: {
+        timeline: { day: string; open: number; closed: number }[];
+        byStatus: { name: string; value: number }[];
+        byPriority: { name: string; value: number }[];
+    };
+    agents: AgentPerformance[];
+}
 
 export interface TechnicianMetrics {
     id: string;
@@ -132,7 +166,12 @@ export class MetricsService {
     /**
      * Métricas gerais do setor
      */
-    async getSectorMetrics(startDate?: Date, endDate?: Date): Promise<SectorMetrics> {
+    async getSectorMetrics(
+        startDate?: Date,
+        endDate?: Date,
+        sector?: Sector,
+        timelineDays = 30,
+    ): Promise<SectorMetrics> {
         const now = new Date();
         const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1);
         const end = endDate || now;
@@ -143,6 +182,7 @@ export class MetricsService {
                     gte: start,
                     lte: end,
                 },
+                ...(sector ? { sector } : {}),
             },
             include: {
                 assignedTo: {
@@ -184,7 +224,7 @@ export class MetricsService {
         }
 
         const timeline: { day: string; total: number; open: number; closed: number }[] = [];
-        for (let i = 29; i >= 0; i--) {
+        for (let i = timelineDays - 1; i >= 0; i--) {
             const date = new Date(now);
             date.setDate(date.getDate() - i);
             const dateStr = date.toISOString().split('T')[0];
@@ -262,5 +302,186 @@ export class MetricsService {
             pendingTickets: totalPending,
             avgResolutionMinutes: avgResolution._avg.timeWorked || 0,
         };
+    }
+
+    /**
+     * Dashboard de gestão do setor (tempo real, escopado por setor).
+     * sector undefined = consolidado (todos os setores).
+     */
+    async getManagementDashboard(input: {
+        sector?: Sector;
+        period: 'today' | '7d' | '30d';
+    }): Promise<ManagementDashboard> {
+        const { sector, period } = input;
+        const now = new Date();
+        let start: Date;
+        let timelineDays: number;
+        if (period === 'today') {
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            timelineDays = 1;
+        } else if (period === '30d') {
+            start = new Date(now.getTime() - 30 * 86400000);
+            timelineDays = 30;
+        } else {
+            start = new Date(now.getTime() - 7 * 86400000);
+            timelineDays = 7;
+        }
+        const end = now;
+
+        const [sectorMetrics, perf, sla] = await Promise.all([
+            this.getSectorMetrics(start, end, sector, timelineDays),
+            this.getAgentPerformance(start, end, sector),
+            this.getSlaHealth(sector),
+        ]);
+
+        return {
+            sector: sector ?? null,
+            period,
+            range: { start: start.toISOString(), end: end.toISOString() },
+            kpis: {
+                totalTickets: sectorMetrics.totalTickets,
+                openTickets: sectorMetrics.openTickets,
+                resolvedTickets: sectorMetrics.closedTickets,
+                avgResolutionMinutes: sectorMetrics.avgResolutionTime,
+                slaCompliance:
+                    perf.slaTracked > 0
+                        ? Math.round((perf.slaMet / perf.slaTracked) * 100)
+                        : 100,
+            },
+            sla,
+            charts: {
+                timeline: sectorMetrics.ticketsByDay.map((d) => ({
+                    day: d.day,
+                    open: d.open,
+                    closed: d.closed,
+                })),
+                byStatus: Object.entries(sectorMetrics.byStatus).map(([name, value]) => ({ name, value })),
+                byPriority: Object.entries(sectorMetrics.byPriority).map(([name, value]) => ({ name, value })),
+            },
+            agents: perf.agents,
+        };
+    }
+
+    /**
+     * Ranking de agentes em tempo real (resolvidos, tempo médio, CSAT, % SLA, status ao vivo).
+     * Sem N+1: 3 queries (tickets+sla, nomes, status).
+     */
+    private async getAgentPerformance(
+        start: Date,
+        end: Date,
+        sector?: Sector,
+    ): Promise<{ agents: AgentPerformance[]; slaMet: number; slaTracked: number }> {
+        const tickets = await this.prisma.ticket.findMany({
+            where: {
+                assignedToId: { not: null },
+                status: { in: ['RESOLVED', 'CLOSED'] },
+                closedAt: { gte: start, lte: end },
+                ...(sector ? { sector } : {}),
+            },
+            select: {
+                assignedToId: true,
+                createdAt: true,
+                closedAt: true,
+                rating: true,
+                slaTimer: { select: { resolutionBreached: true } },
+            },
+        });
+
+        type Acc = {
+            resolved: number;
+            resMs: number;
+            csatSum: number;
+            csatCount: number;
+            slaMet: number;
+            slaTracked: number;
+        };
+        const map = new Map<string, Acc>();
+        let slaMet = 0;
+        let slaTracked = 0;
+        for (const t of tickets) {
+            if (!t.assignedToId) continue;
+            const a =
+                map.get(t.assignedToId) ??
+                { resolved: 0, resMs: 0, csatSum: 0, csatCount: 0, slaMet: 0, slaTracked: 0 };
+            a.resolved++;
+            if (t.closedAt) a.resMs += t.closedAt.getTime() - t.createdAt.getTime();
+            if (t.rating != null) {
+                a.csatSum += t.rating;
+                a.csatCount++;
+            }
+            if (t.slaTimer) {
+                a.slaTracked++;
+                slaTracked++;
+                if (!t.slaTimer.resolutionBreached) {
+                    a.slaMet++;
+                    slaMet++;
+                }
+            }
+            map.set(t.assignedToId, a);
+        }
+
+        // Info dos resolvedores + agentes ativos do setor (status ao vivo).
+        const resolverIds = [...map.keys()];
+        const [resolvers, statusRows] = await Promise.all([
+            resolverIds.length
+                ? this.prisma.user.findMany({
+                      where: { id: { in: resolverIds } },
+                      select: { id: true, name: true, sector: true, technicianLevel: true },
+                  })
+                : Promise.resolve([] as { id: string; name: string; sector: Sector; technicianLevel: string }[]),
+            this.prisma.user.findMany({
+                where: { active: true, role: 'AGENT', ...(sector ? { sector } : {}) },
+                select: { id: true, name: true, sector: true, technicianLevel: true, status: true },
+            }),
+        ]);
+
+        const info = new Map<string, { name: string; sector: string; level: string }>();
+        for (const r of resolvers) info.set(r.id, { name: r.name, sector: r.sector, level: r.technicianLevel });
+        const statusById = new Map<string, string>();
+        for (const s of statusRows) {
+            info.set(s.id, { name: s.name, sector: s.sector, level: s.technicianLevel });
+            statusById.set(s.id, s.status);
+        }
+
+        const allIds = new Set<string>([...map.keys(), ...statusRows.map((s) => s.id)]);
+        const agents: AgentPerformance[] = [...allIds]
+            .map((id) => {
+                const m = map.get(id);
+                const i = info.get(id);
+                const avgCsat = m && m.csatCount > 0 ? Math.round((m.csatSum / m.csatCount) * 10) / 10 : null;
+                const slaCompliance = m && m.slaTracked > 0 ? Math.round((m.slaMet / m.slaTracked) * 100) : null;
+                return {
+                    id,
+                    name: i?.name ?? '—',
+                    level: i?.level ?? 'N1',
+                    sector: i?.sector ?? '',
+                    ticketsResolved: m?.resolved ?? 0,
+                    avgResolutionMinutes: m && m.resolved > 0 ? Math.round(m.resMs / m.resolved / 60000) : 0,
+                    avgCsat,
+                    slaCompliance,
+                    slaTracked: m?.slaTracked ?? 0,
+                    status: statusById.get(id) ?? 'OFFLINE',
+                };
+            })
+            .sort((a, b) => b.ticketsResolved - a.ticketsResolved);
+
+        return { agents, slaMet, slaTracked };
+    }
+
+    /**
+     * Saúde de SLA escopada por setor (via relação SlaTimer→Ticket.sector).
+     */
+    private async getSlaHealth(sector?: Sector) {
+        const base = sector ? { ticket: { sector } } : {};
+        const warnAt = new Date(Date.now() + 30 * 60000);
+        const [active, responseBreached, resolutionBreached, warnings] = await Promise.all([
+            this.prisma.slaTimer.count({ where: { ...base, resolutionMetAt: null } }),
+            this.prisma.slaTimer.count({ where: { ...base, responseBreached: true, responseMetAt: null } }),
+            this.prisma.slaTimer.count({ where: { ...base, resolutionBreached: true, resolutionMetAt: null } }),
+            this.prisma.slaTimer.count({
+                where: { ...base, resolutionBreached: false, resolutionMetAt: null, resolutionDueAt: { lt: warnAt } },
+            }),
+        ]);
+        return { active, responseBreached, resolutionBreached, warnings };
     }
 }

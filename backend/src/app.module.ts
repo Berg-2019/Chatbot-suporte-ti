@@ -30,7 +30,7 @@ import { PartsModule } from './presentation/controllers/parts/parts.module';
 import { FaqModule } from './presentation/controllers/faq/faq.module';
 import { MetricsModule } from './presentation/controllers/metrics/metrics.module';
 import { ContactsModule } from './presentation/controllers/contacts/contacts.module';
-import { TeamChatModule } from './presentation/controllers/team-chat.module';
+import { MessengerModule } from './presentation/controllers/messenger/messenger.module';
 import { ChatModule } from './presentation/controllers/chat/chat.module';
 import { PurchasesModule } from './presentation/controllers/purchases/purchases.module';
 import { PurchaseRequestsModule } from './presentation/controllers/purchase-requests/purchase-requests.module';
@@ -113,7 +113,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     FaqModule,
     MetricsModule,
     ContactsModule,
-    TeamChatModule,
+    MessengerModule,
     ChatModule,
     PurchasesModule,
     PurchaseRequestsModule,

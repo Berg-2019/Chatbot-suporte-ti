@@ -53,3 +53,8 @@ nginx/*.key
 
 # Frontend (clone do repo Berg-2019/Frontend-chatbot — gerenciado separadamente)
 Frontend-chatbot/
+# Runtime / local — não versionar
+backend/uploads/
+/helpdesk_backup_*.sql
+materio-mui-nextjs-admin-template-free/
+.claude/

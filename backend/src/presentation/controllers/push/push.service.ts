@@ -87,10 +87,23 @@ export class PushService implements OnModuleInit {
     return this.prisma.pushSubscription.findMany({ where: { userId } });
   }
 
+  /** Ícone da notificação por setor (cai no padrão se setor desconhecido). */
+  private iconForSector(sector?: string): string {
+    const s = (sector ?? '').toLowerCase();
+    if (s === 'ti' || s === 'electric' || s === 'compras') {
+      return `/icons/${s}/icon-192.png`;
+    }
+    return '/icons/icon-192.png';
+  }
+
   async sendToUser(userId: string, payload: PushPayloadInput) {
     const subscriptions = await this.getUserSubscriptions(userId);
     if (subscriptions.length === 0) return { sent: 0, failed: 0, skipped: 0 };
-    return this.sendToSubscriptions(subscriptions, payload);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { sector: true },
+    });
+    return this.sendToSubscriptions(subscriptions, payload, user?.sector ?? undefined);
   }
 
   async sendToSector(sector: string, payload: PushPayloadInput) {
@@ -98,24 +111,26 @@ export class PushService implements OnModuleInit {
       where: { user: { sector: sector as any, active: true } },
     });
     if (subscriptions.length === 0) return { sent: 0, failed: 0, skipped: 0 };
-    return this.sendToSubscriptions(subscriptions, payload);
+    return this.sendToSubscriptions(subscriptions, payload, sector);
   }
 
   private async sendToSubscriptions(
     subscriptions: { id: string; endpoint: string; p256dh: string; auth: string }[],
     payload: PushPayloadInput,
+    sector?: string,
   ) {
     if (!this.vapidConfigured) {
       this.logger.warn(`Push skipped (VAPID off) — title="${payload.title}"`);
       return { sent: 0, failed: 0, skipped: subscriptions.length };
     }
 
+    const icon = this.iconForSector(sector);
     const body = JSON.stringify({
       title: payload.title,
       body: payload.body,
       url: payload.url ?? '/',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      icon,
+      badge: icon,
       data: payload.data ?? {},
     });
 

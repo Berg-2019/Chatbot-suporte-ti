@@ -446,6 +446,8 @@ VAPID_SUBJECT=mailto:dev@helpdeskmsm.com.br
 | Documento | Descrição |
 |-----------|-----------|
 | [`IMPLEMENTATION_PLAN_V3.md`](IMPLEMENTATION_PLAN_V3.md) | **Plano vigente** — ler antes de começar qualquer fase |
+| [`DIARIO_PROGRESSO.md`](DIARIO_PROGRESSO.md) | **Diário de progresso** — registro cronológico das sessões (o que/por quê/verificação) |
+| [`ONBOARDING_AGENTES.md`](ONBOARDING_AGENTES.md) | **Onboarding de agentes** — criar usuário + enviar login (email/WhatsApp), ativação por token, config `APP_PUBLIC_URL`/SMTP |
 | `backend/src/infrastructure/whatsapp/` | Bot WhatsApp nativo (Baileys + Flow + IA) |
 | `~/.claude/plans/parsed-growing-glacier.md` | Plano da migração Hermes → bot nativo |
 | `nginx/sites-enabled/helpdeskmsm.conf` | Config dos 4 vhosts (a criar — Fase 6) |
