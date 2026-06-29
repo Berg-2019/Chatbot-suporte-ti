@@ -173,7 +173,7 @@ Chatbot-suporte-ti/                 ← este repo
 - WhatsApp via **Baileys** direto (`BaileysService`); pareamento por QR em `GET /api/whatsapp/qr`
 - `FlowService` = state machine + classificação de intenção; `ConversationAIService` = respostas naturais
 - `BaileysService.consumeOutgoingMessages()` consome a fila `outgoing_messages` direto
-- Provider IA: MiniMax (primário) → Ollama/GLM (fallback) via `IntentService`
+- Provider IA: MiniMax (primário) → GLM (fallback) via `IntentService` (Ollama/Anthropic removidos em 2026-06-29)
 - Idempotência WhatsApp via Redis (TTL 24h por `wa_message_id`)
 - Sessão persistida no volume `whatsapp_sessions:/app/sessions`
 

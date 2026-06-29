@@ -1,9 +1,9 @@
 /**
  * Intent Detection Service
- * Classifica intenções de mensagens usando LLM local via Ollama (GLM, Qwen, Llama, etc.)
+ * Classifica intenções de mensagens via LLM cloud: MiniMax (primário) → GLM-4 (fallback).
  */
 
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import axios from 'axios';
 import { redactPII } from '../../../infrastructure/logger/redact';
@@ -29,113 +29,36 @@ export interface ClassificationResult {
 }
 
 @Injectable()
-export class IntentService implements OnModuleInit {
+export class IntentService {
   private readonly logger = new Logger(IntentService.name);
-  private ollamaUrl: string;
-  private ollamaModel: string;
-  private minimaxApiKey: string; // Provider cloud principal
-  private glmApiKey: string; // Provider cloud alternativo (quando disponível)
+  private minimaxApiKey: string; // Provider cloud primário
+  private glmApiKey: string; // Provider cloud de fallback
   private enabled: boolean = false;
 
-  constructor(
-    private prisma: PrismaService,
-  ) {
-    this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
-    this.ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5:3b'; // ou 'chatglm3:6b', 'llama3.2:3b'
-
-    // MiniMax como fallback cloud principal
+  constructor(private prisma: PrismaService) {
     this.minimaxApiKey = process.env.MINIMAX_API_KEY || '';
-
-    // GLM-4 como alternativa cloud (opcional)
     this.glmApiKey = process.env.GLM_API_KEY || '';
+    this.enabled = !!this.minimaxApiKey || !!this.glmApiKey;
   }
 
   /**
-   * Executado após módulo inicializar - verifica Ollama
-   */
-  async onModuleInit() {
-    await this.checkOllamaAvailability();
-  }
-
-  /**
-   * Verifica se Ollama está rodando
-   */
-  private async checkOllamaAvailability() {
-    try {
-      const response = await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 3000 });
-
-      if (response.status === 200) {
-        this.enabled = true;
-        const models = response.data.models?.map((m: any) => m.name) || [];
-        this.logger.log(`✅ Ollama disponível em ${this.ollamaUrl}`);
-        this.logger.log(`📦 Modelos instalados: ${models.join(', ') || 'nenhum'}`);
-
-        if (!models.includes(this.ollamaModel)) {
-          this.logger.warn(`⚠️ Modelo ${this.ollamaModel} não encontrado. Execute: ollama pull ${this.ollamaModel}`);
-          this.enabled = false;
-        }
-      }
-    } catch (error: any) {
-      this.logger.warn(
-        `⚠️ Ollama não disponível em ${this.ollamaUrl}. Intent Detection desabilitado.`,
-      );
-      this.logger.warn(`💡 Para habilitar, instale Ollama: https://ollama.com/download`);
-      this.logger.warn(`💡 Depois execute: ollama pull ${this.ollamaModel}`);
-      this.enabled = false;
-    }
-  }
-
-  /**
-   * Classifica intenção de mensagem do usuário
+   * Classifica intenção de mensagem do usuário.
+   * MiniMax como provider primário; GLM-4 como fallback.
    */
   async classify(userMessage: string, phoneNumber?: string): Promise<ClassificationResult> {
     const startTime = Date.now();
 
     try {
-      let result;
+      let result: Omit<ClassificationResult, 'processingTime'>;
       let usedProvider = 'minimax';
-      let usedModel = 'MiniMax-M2.5';
+      let usedModel = 'MiniMax-M2';
 
-      // 🚀 MiniMax como provider PRIMÁRIO (mais humanizado e fluido)
       if (this.minimaxApiKey) {
         try {
-          this.logger.log(`🤖 Usando MiniMax (MiniMax-M2.5) como provider primário...`);
           result = await this.classifyWithMiniMax(userMessage);
         } catch (error) {
-          this.logger.warn(`MiniMax falhou, tentando Ollama como fallback...`);
-
-          // Fallback para Ollama se disponível
-          if (this.enabled) {
-            try {
-              result = await this.classifyWithOllama(userMessage);
-              usedProvider = 'ollama';
-              usedModel = this.ollamaModel;
-            } catch (ollamaError) {
-              this.logger.warn(`Ollama falhou, tentando GLM-4...`);
-              if (this.glmApiKey) {
-                result = await this.classifyWithGLM(userMessage);
-                usedProvider = 'glm';
-                usedModel = 'glm-4-flash';
-              } else {
-                throw error;
-              }
-            }
-          } else if (this.glmApiKey) {
-            result = await this.classifyWithGLM(userMessage);
-            usedProvider = 'glm';
-            usedModel = 'glm-4-flash';
-          } else {
-            throw error;
-          }
-        }
-      } else if (this.enabled) {
-        // Ollama como segunda opção se MiniMax não configurado
-        try {
-          result = await this.classifyWithOllama(userMessage);
-          usedProvider = 'ollama';
-          usedModel = this.ollamaModel;
-        } catch (error) {
           if (this.glmApiKey) {
+            this.logger.warn('MiniMax falhou, tentando GLM-4 como fallback...');
             result = await this.classifyWithGLM(userMessage);
             usedProvider = 'glm';
             usedModel = 'glm-4-flash';
@@ -211,26 +134,23 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
   }
 
   /**
-   * Classifica usando GLM-4 (Zhipu AI) via API
-   * Modelo recomendado: glm-4-flash (rápido e barato) ou glm-4 (mais preciso)
+   * Classifica usando GLM-4 (Zhipu AI) via API — fallback.
+   * Modelo: glm-4-flash (rápido e barato) ou glm-4 (mais preciso).
    */
   private async classifyWithGLM(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
     const prompt = this.getPrompt(userMessage);
 
     try {
       const response = await axios.post(
-        'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        process.env.GLM_API_URL || 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
         {
-          model: 'glm-4-flash', // Ou 'glm-4' para mais precisão
+          model: process.env.GLM_MODEL || 'glm-4-flash',
           messages: [
             {
               role: 'system',
-              content: 'Você é um classificador de intenções para helpdesk. Responda APENAS com JSON válido, sem explicações adicionais.'
+              content: 'Você é um classificador de intenções para helpdesk. Responda APENAS com JSON válido, sem explicações adicionais.',
             },
-            {
-              role: 'user',
-              content: prompt
-            }
+            { role: 'user', content: prompt },
           ],
           temperature: 0.1,
           top_p: 0.9,
@@ -238,32 +158,26 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.glmApiKey}`,
-            'Content-Type': 'application/json'
+            Authorization: `Bearer ${this.glmApiKey}`,
+            'Content-Type': 'application/json',
           },
-          timeout: 15000
-        }
+          timeout: 15000,
+        },
       );
 
-      // GLM-4 usa formato OpenAI-compatible
       const responseText = response.data.choices[0].message.content.trim();
-
       if (!responseText) {
         this.logger.error('GLM-4 retornou resposta vazia');
         throw new Error('Resposta vazia do GLM-4');
       }
 
-      // Extrair JSON
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-
       if (!jsonMatch) {
         this.logger.error(`GLM-4 não retornou JSON válido: ${responseText}`);
         throw new Error('Resposta inválida do GLM-4');
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
-
-      // Validar intenção
       const validIntents = Object.values(Intent);
       if (!validIntents.includes(parsed.intent)) {
         this.logger.warn(`Intenção inválida do GLM-4: ${parsed.intent}`);
@@ -285,64 +199,51 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
   }
 
   /**
-   * Classifica usando MiniMax AI via API
-   * Provider cloud principal (fallback quando Ollama offline)
+   * Classifica usando MiniMax AI via API — provider primário.
    */
   private async classifyWithMiniMax(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
     const prompt = this.getPrompt(userMessage);
 
     try {
-      // MiniMax agora usa formato OpenAI-compatible
       const response = await axios.post(
         'https://api.minimax.io/v1/text/chatcompletion_v2',
         {
           model: 'MiniMax-M2', // non-reasoning model (M2.5 gasta tokens pensando)
           messages: [
-            {
-              role: 'system',
-              content: 'Assistente helpdesk. Retorne apenas JSON compacto.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
+            { role: 'system', content: 'Assistente helpdesk. Retorne apenas JSON compacto.' },
+            { role: 'user', content: prompt },
           ],
           temperature: 0.2,
           top_p: 0.95,
-          max_tokens: 300
+          max_tokens: 300,
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.minimaxApiKey}`,
-            'Content-Type': 'application/json'
+            Authorization: `Bearer ${this.minimaxApiKey}`,
+            'Content-Type': 'application/json',
           },
-          timeout: 15000
-        }
+          timeout: 15000,
+        },
       );
 
-      // Verificar se há erro da API
       if (response.data.base_resp && response.data.base_resp.status_code !== 0) {
         this.logger.error(`MiniMax API error: ${response.data.base_resp.status_msg}`);
         throw new Error(`MiniMax API error: ${response.data.base_resp.status_msg}`);
       }
 
-      // MiniMax retorna no formato OpenAI-compatible agora
       const responseText = response.data.choices?.[0]?.message?.content?.trim() || response.data.reply?.trim();
-
       if (!responseText) {
         this.logger.error('MiniMax retornou resposta vazia');
         throw new Error('Resposta vazia do MiniMax');
       }
 
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-
       if (!jsonMatch) {
-         this.logger.error(`MiniMax não retornou JSON válido: ${responseText}`);
-         throw new Error('Resposta inválida do MiniMax');
+        this.logger.error(`MiniMax não retornou JSON válido: ${responseText}`);
+        throw new Error('Resposta inválida do MiniMax');
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
-
       const validIntents = Object.values(Intent);
       if (!validIntents.includes(parsed.intent)) {
         this.logger.warn(`Intenção inválida do MiniMax: ${parsed.intent}`);
@@ -355,60 +256,9 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
         entities: parsed.entities || {},
       };
     } catch (error: any) {
-      this.logger.error(`MiniMax fallback failed: ${error.message}`);
+      this.logger.error(`MiniMax classification failed: ${error.message}`);
       if (error.response?.data) {
         this.logger.error(`MiniMax error details: ${redactPII(JSON.stringify(error.response.data))}`);
-      }
-      throw error;
-    }
-  }
-
-  private async classifyWithOllama(userMessage: string): Promise<Omit<ClassificationResult, 'processingTime'>> {
-    const prompt = this.getPrompt(userMessage);
-
-    try {
-      // Chamar API do Ollama
-      const response = await axios.post(
-        `${this.ollamaUrl}/api/generate`,
-        {
-          model: this.ollamaModel,
-          prompt,
-          stream: false,
-          options: {
-            temperature: 0.3, // Baixa temperatura para respostas mais consistentes
-            num_predict: 200, // Limitar tokens de resposta
-          },
-        },
-        { timeout: 30000 }, // 30 segundos timeout
-      );
-
-      const responseText = response.data.response.trim();
-
-      // Extrair JSON da resposta (alguns modelos adicionam texto extra)
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-
-      if (!jsonMatch) {
-        this.logger.error(`Ollama não retornou JSON válido: ${responseText}`);
-        throw new Error('Resposta inválida do Ollama');
-      }
-
-      const parsed = JSON.parse(jsonMatch[0]);
-
-      // Validar intenção
-      const validIntents = Object.values(Intent);
-      if (!validIntents.includes(parsed.intent)) {
-        this.logger.warn(`Intenção inválida retornada: ${parsed.intent}, usando 'outro'`);
-        parsed.intent = Intent.OTHER;
-      }
-
-      return {
-        intent: parsed.intent || Intent.OTHER,
-        confidence: parsed.confidence || 0.5,
-        entities: parsed.entities || {},
-      };
-    } catch (error: any) {
-      if (error.code === 'ECONNREFUSED') {
-        this.logger.error('Ollama não está rodando. Execute: ollama serve');
       }
       throw error;
     }
@@ -428,30 +278,22 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
     }
 
     const [total, byIntent, avgConfidence, avgProcessingTime] = await Promise.all([
-      // Total de classificações
       this.prisma.intentClassification.count({ where }),
-
-      // Distribuição por intenção
       this.prisma.intentClassification.groupBy({
         by: ['intent'],
         where,
         _count: true,
       }),
-
-      // Confiança média
       this.prisma.intentClassification.aggregate({
         where,
         _avg: { confidence: true },
       }),
-
-      // Tempo médio de processamento
       this.prisma.intentClassification.aggregate({
         where,
         _avg: { processingTime: true },
       }),
     ]);
 
-    // Distribuição formatada
     const distribution = byIntent.map((item) => ({
       intent: item.intent,
       count: item._count,
@@ -463,8 +305,7 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
       averageConfidence: avgConfidence._avg.confidence || 0,
       averageProcessingTime: avgProcessingTime._avg.processingTime || 0,
       distribution,
-      provider: 'ollama',
-      model: this.ollamaModel,
+      provider: this.minimaxApiKey ? 'minimax' : this.glmApiKey ? 'glm' : 'none',
       enabled: this.enabled,
     };
   }
@@ -492,7 +333,6 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
 
   /**
    * Sugestão de resposta baseada na intenção
-   * (pode ser usado pelo bot para decidir próximo passo)
    */
   getSuggestedAction(intent: string): string {
     const actions: Record<string, string> = {
@@ -516,9 +356,7 @@ JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
   async getStatus() {
     return {
       enabled: this.enabled,
-      provider: 'ollama',
-      url: this.ollamaUrl,
-      model: this.ollamaModel,
+      provider: this.minimaxApiKey ? 'minimax' : this.glmApiKey ? 'glm' : 'none',
     };
   }
 }

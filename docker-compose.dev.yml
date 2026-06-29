@@ -94,8 +94,10 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-internal_dev_key_change_me}
       MINIMAX_API_KEY: ${MINIMAX_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      GLM_API_KEY: ${GLM_API_KEY:-}
+      GLM_API_URL: ${GLM_API_URL:-https://open.bigmodel.cn/api/paas/v4/chat/completions}
+      GLM_MODEL: ${GLM_MODEL:-glm-4-flash}
+      REPORT_AI_PROVIDER: ${REPORT_AI_PROVIDER:-minimax}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@helpdeskmsm.com.br}

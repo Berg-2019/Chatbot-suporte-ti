@@ -138,6 +138,19 @@ Faltava um jeito persistente de instalar o PWA (área de trabalho no PC / tela i
 - **[InstallPwaPrompt.tsx](Frontend-chatbot/src/components/InstallPwaPrompt.tsx)** refatorado pra usar o hook (fonte única); removido o render duplicado em `_authed` (ficava 2×).
 - Manifest já tinha ícones 192/512/maskable + `display: standalone` (instalável). Verificado: card renderiza; ao disparar `beforeinstallprompt` o botão "Instalar" aparece. tsc 0 · E2E 12/12 · build+deploy.
 
+### 17. Relatório de desempenho de agentes em PDF + análise por IA (2026-06-29)
+Admin extrai relatório de desempenho dos agentes em PDF (estatística do período + análise comportamental por IA).
+- **Backend** ([controllers/reports/](backend/src/presentation/controllers/reports/)): `pdfmake@0.2.20` (fontes Roboto via `vfs_fonts`, sem Chromium). `agent-report.service` agrega o período em tempo real (volume, tempos, % SLA, CSAT médio + distribuição + comentários, distribuição por prioridade/categoria/tipo). `report-ai.service` chama **MiniMax** (trocável por `REPORT_AI_PROVIDER=glm`) e devolve `{pontosPositivos, pontosAtencao, dicaCrescimento}` — **fallback gracioso** se a IA falhar. `agent-report-pdf.service` monta o PDF. Endpoints: `GET /reports/agent/:id/pdf`, `GET /reports/agents/pdf` (consolidado), `GET /reports/agents` (lista p/ seletor). Setor forçado pelo JWT (anti-IDOR).
+- **Frontend** ([admin/reports.tsx](Frontend-chatbot/src/routes/_authed/admin/reports.tsx)): página no painel (nav "Relatórios") com período (30/60/90d), seletor de setor (admin global) e de agente, e botões de download (blob). `reportsService` + `downloadBlob` no [api.ts](Frontend-chatbot/src/lib/api.ts).
+- **Verificado:** curl → PDF 200 `%PDF` (agente e consolidado); **AGENT → 403**; **cross-setor → 403**; sector-admin ignora `?sector` alheio. Download real no navegador OK. tsc 0 (front+back) · jest 107/107 · E2E 12/12 · build+deploy. **Obs:** MiniMax com plano suspenso → análise usa o fallback até reativar.
+
+### 18. Limpeza de provedores de IA — só MiniMax + GLM (2026-06-29)
+A pedido: manter só **MiniMax (primário) + GLM (fallback)**, removendo Ollama e Anthropic.
+- [intent.service.ts](backend/src/presentation/controllers/intent/intent.service.ts): removido todo o Ollama (`checkOllamaAvailability`, `classifyWithOllama`, `onModuleInit`, envs `OLLAMA_*`); fluxo agora é **MiniMax → GLM → default `outro`**. `getStatistics`/`getStatus` refletem o provider ativo.
+- Removida a dep **`@anthropic-ai/sdk`** (não era usada em lugar nenhum) do `backend/package.json`.
+- `.env.example`: fora `OLLAMA_*`/`ANTHROPIC_*`; entram `GLM_API_KEY`/`GLM_API_URL`/`GLM_MODEL` + `REPORT_AI_PROVIDER`. CLAUDE.md atualizado.
+- Verificado: backend sobe limpo, tsc 0, jest 107/107. (MiniMax com plano suspenso → intent cai no fallback/`outro` até reativar.)
+
 ---
 
 ## ⏭️ Pendentes para "pronto pra produção" pleno (não-segurança)
