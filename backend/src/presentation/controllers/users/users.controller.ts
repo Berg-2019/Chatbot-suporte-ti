@@ -55,6 +55,7 @@ export class UsersController {
       sector?: 'TI' | 'ELECTRIC' | 'COMPRAS';
       active?: boolean;
       phoneNumber?: string;
+      creaNumber?: string;
     },
     @Request() req: any,
   ) {
@@ -102,7 +103,7 @@ export class UsersController {
   @Roles('ADMIN')
   async update(
     @Param('id') id: string,
-    @Body() data: { name?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; email?: string; department?: string; permissions?: string[] },
+    @Body() data: { name?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; email?: string; department?: string; permissions?: string[]; creaNumber?: string },
     @Request() req: any,
   ) {
     if (req.user.role !== 'ADMIN') {

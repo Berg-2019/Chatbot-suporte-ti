@@ -1,7 +1,18 @@
 # HANDOFF.md — Chatbot-suporte-ti
 
 > 🚨 **LEIA PRIMEIRO ESTE ARQUIVO** antes de qualquer ação neste repo.
-> Atualizado: 2026-06-06 · Branch: `feature/chatbot-upgrade`
+> Atualizado: 2026-06-30 · Branch: `develop` (= `feature/chatbot-upgrade`, ver item 19 do [DIARIO_PROGRESSO.md](DIARIO_PROGRESSO.md))
+
+---
+
+## 🚀 EM PRODUÇÃO: `https://helpdeskmsm.support` (2026-06-30)
+
+Cutover completo pra esse domínio — `helpdeskmsm.com.br` **não é mais usado**. GLPI foi **descomissionado** (backup em `backups/`, containers removidos). Detalhes completos: [DIARIO_PROGRESSO.md](DIARIO_PROGRESSO.md) item 19.
+
+- Nginx interno (containerizado, `nginx/sites-enabled/helpdeskmsm.conf`) na porta `127.0.0.1:8080`, atrás do nginx de sistema (SSL via certbot). **Sempre que o container `backend` for recriado, reinicie o `nginx` também** (`docker compose restart nginx`) — senão ele cacheia o IP antigo e dá 502.
+- 191 tickets + 1452 mensagens migrados do banco antigo via ETL (`backend/prisma/migrations-data/migrate-tickets-from-prod.ts`). Usuários **não** foram migrados (recriados do zero). ~172 tickets ficaram sem `sector` (não mapeava pra TI/ELECTRIC/COMPRAS) — decisão consciente, dado preservado mesmo assim.
+- WhatsApp precisou de QR novo (sessão não sobreviveu à troca de volume).
+- Pendente, planejado mas não implementado: [PLANO_DURACAO_SESSAO.md](PLANO_DURACAO_SESSAO.md) (duração de sessão configurável + "deslogar todos" pelo console `/dev`).
 
 ---
 

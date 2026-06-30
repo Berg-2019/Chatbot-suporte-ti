@@ -24,9 +24,11 @@ export class UsersService {
         email: true,
         name: true,
         role: true,
+        sector: true,
         active: true,
         createdAt: true,
         phoneNumber: true,
+        creaNumber: true,
         activatedAt: true,
       } as any,
       orderBy: { name: 'asc' },
@@ -55,8 +57,10 @@ export class UsersService {
         email: true,
         name: true,
         role: true,
+        sector: true,
         active: true,
         createdAt: true,
+        creaNumber: true,
       },
     });
 
@@ -67,7 +71,7 @@ export class UsersService {
     return user;
   }
 
-  async update(id: string, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; department?: string; permissions?: string[] }) {
+  async update(id: string, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; department?: string; permissions?: string[]; creaNumber?: string }) {
     // Prepare data for update
     const updateData: Record<string, unknown> = {};
 
@@ -77,6 +81,7 @@ export class UsersService {
     if (data.active !== undefined) updateData.active = data.active;
     if (data.phone !== undefined) updateData.phoneNumber = data.phone;
     if (data.department !== undefined) updateData.department = data.department;
+    if (data.creaNumber !== undefined) updateData.creaNumber = data.creaNumber;
 
     // Hash password if provided
     if (data.password) {
@@ -146,6 +151,7 @@ export class UsersService {
     sector?: 'TI' | 'ELECTRIC' | 'COMPRAS';
     active?: boolean;
     phoneNumber?: string;
+    creaNumber?: string;
   }) {
     // 1. Verify email uniqueness
     const existing = await this.prisma.user.findFirst({
@@ -172,6 +178,7 @@ export class UsersService {
         sector: data.sector || 'TI',
         active: data.active ?? true,
         phoneNumber: data.phoneNumber,
+        creaNumber: data.creaNumber,
         // Sem senha => ativação pendente; com senha => já ativo
         activatedAt: usesActivation ? null : new Date(),
       },
@@ -183,6 +190,7 @@ export class UsersService {
         sector: true,
         active: true,
         phoneNumber: true,
+        creaNumber: true,
         activatedAt: true,
         createdAt: true,
       },

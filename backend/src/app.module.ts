@@ -104,7 +104,8 @@ import { HealthController } from './presentation/controllers/health.controller';
 
     // Features
     AuthModule,
-    DevModule,
+    // Endpoint de auditoria de tentativas de login do console dev — não roda em produção
+    ...(process.env.NODE_ENV !== 'production' ? [DevModule] : []),
     NotificationsModule,
     TicketsModule,
     MessagesModule,

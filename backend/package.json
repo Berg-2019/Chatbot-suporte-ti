@@ -16,11 +16,12 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "npx tsx prisma/seed.ts",
-    "seed:e2e": "npx tsx prisma/seeds/e2e-users.seed.ts"
+    "prisma:seed": "npx tsx prisma/seeds/settings.seed.ts",
+    "seed:e2e": "npx tsx prisma/seeds/e2e-users.seed.ts",
+    "migrate:tickets": "npx tsx prisma/migrations-data/migrate-tickets-from-prod.ts"
   },
   "prisma": {
-    "seed": "npx tsx prisma/seed.ts"
+    "seed": "npx tsx prisma/seeds/settings.seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

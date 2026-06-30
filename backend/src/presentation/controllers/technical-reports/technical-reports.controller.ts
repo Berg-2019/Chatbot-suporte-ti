@@ -214,6 +214,7 @@ export class TechnicalReportsController {
       file,
       dto,
       req.user.id ?? null,
+      req.user.role,
       ip,
       req.user.sector as Sector,
     );

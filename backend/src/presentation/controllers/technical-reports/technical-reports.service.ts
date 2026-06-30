@@ -313,15 +313,49 @@ export class TechnicalReportsService {
     return sig;
   }
 
+  // Setor → role de admin do setor, único habilitado a assinar como ENGINEER
+  // (a tela rotula esse mesmo campo "Analista" para TI, mas é o mesmo SignerRole).
+  private static readonly SECTOR_ENGINEER_ROLE: Record<Sector, string> = {
+    TI: 'ADMIN_TI',
+    ELECTRIC: 'ADMIN_ELECTRIC',
+    COMPRAS: 'ADMIN_COMPRAS',
+  };
+
   async addSignature(
     reportId: string,
     file: Express.Multer.File,
     input: { role: SignerRole; signerName: string },
     userId: string | null,
+    userRole: string | undefined,
     ip: string | undefined,
     sector: Sector,
   ) {
     await this.findById(reportId, sector);
+
+    let creaNumber: string | null = null;
+    if (input.role === SignerRole.ENGINEER) {
+      const requiredRole = TechnicalReportsService.SECTOR_ENGINEER_ROLE[sector];
+      if (userRole !== requiredRole && userRole !== 'ADMIN') {
+        throw new ForbiddenException(
+          'Somente o responsável (admin) do setor pode assinar como Engenheiro/Analista',
+        );
+      }
+
+      if (sector === Sector.ELECTRIC) {
+        const user = userId
+          ? await this.prisma.user.findUnique({
+              where: { id: userId },
+              select: { creaNumber: true },
+            })
+          : null;
+        if (!user?.creaNumber) {
+          throw new BadRequestException(
+            'Cadastre seu número de CREA antes de assinar laudos elétricos',
+          );
+        }
+        creaNumber = user.creaNumber;
+      }
+    }
 
     if (file.mimetype !== 'image/png') {
       await fs.unlink(file.path).catch(() => undefined);
@@ -346,6 +380,7 @@ export class TechnicalReportsService {
         role: input.role,
         imagePath: targetPath,
         ip: ip ?? null,
+        creaNumber,
       },
     });
   }

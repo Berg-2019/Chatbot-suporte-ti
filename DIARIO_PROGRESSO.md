@@ -151,14 +151,48 @@ A pedido: manter só **MiniMax (primário) + GLM (fallback)**, removendo Ollama 
 - `.env.example`: fora `OLLAMA_*`/`ANTHROPIC_*`; entram `GLM_API_KEY`/`GLM_API_URL`/`GLM_MODEL` + `REPORT_AI_PROVIDER`. CLAUDE.md atualizado.
 - Verificado: backend sobe limpo, tsc 0, jest 107/107. (MiniMax com plano suspenso → intent cai no fallback/`outro` até reativar.)
 
+### 19. Fase C — corte de produção pro sistema novo, domínio `helpdeskmsm.support` (2026-06-30)
+Produção desta VM rodava uma cópia desatualizada (`develop`, 20 commits atrás de `feature/chatbot-upgrade`). Virada completa pro sistema real (227 commits), seguindo o `PLANO_ATUALIZACAO_PRODUCAO.md`.
+- **`develop` resetada** (`git reset --hard origin/feature/chatbot-upgrade`) — os 3 commits exclusivos de `develop` eram descartáveis (tocavam `frontend/`/`bot/` que não existem mais na branch nova). Nada disso tinha sido enviado a `origin/develop`.
+- **`Frontend-chatbot` clonado** nesta VM (repo separado, `Berg-2019/Frontend-chatbot`, branch `feature/chatbot-upgrade` — atenção: o clone inicial veio em `main` por engano, corrigido depois).
+- **Limpeza Fase A** (a doc dizia "✅ feito" mas não estava no código): `DevModule` gateado por `NODE_ENV !== 'production'` em [app.module.ts](backend/src/app.module.ts); `backend/prisma/seed.ts.disabled` e `backend/test-intent-bot-integration.ts` removidos; script `prisma:seed` repontado pra `seeds/settings.seed.ts`.
+- **ETL de tickets** ([migrate-tickets-from-prod.ts](backend/prisma/migrations-data/migrate-tickets-from-prod.ts)) — não existia (doc errada de novo), escrito do zero: lê o banco antigo via SQL bruto, migra **tickets + mensagens** preservando `id`/`glpiId`, mapeia `sector` String→enum (TI/ELECTRIC/COMPRAS; resto fica `NULL` — decisão consciente, ~172 dos 191 tickets ficaram sem setor), `assignedToId`/`senderId` sempre `null` (usuários não migrados). `--dry-run` suportado, idempotente via upsert por `id`.
+- **2 bugs de migration pré-existentes corrigidos** (achados rodando `prisma migrate deploy` contra banco vazio, nunca tinha sido testado assim): `20260504170000_add_message_media_and_reads` quebrava (faltava `DROP DEFAULT` antes de trocar enum + usava `UUID` nativo onde o resto do schema usa `TEXT`); `User.deletedAt` no schema sem migration (resolvido com `db push --accept-data-loss` num banco ainda vazio, sem risco).
+- **GLPI descomissionado**: backup do banco (76MB) + arquivos (93MB) em `backups/`, containers `helpdesk_glpi`/`helpdesk_mysql` parados e removidos, vhost `glpi.helpdeskmsm.com.br` removido do nginx.
+- **Domínio novo `helpdeskmsm.support`** substitui `helpdeskmsm.com.br` por completo: nginx interno (containerizado, já vinha no repo) na porta 8080 (só loopback) por trás do nginx de sistema, que termina SSL (Let's Encrypt via certbot) e faz proxy. **Achado:** toda vez que o container `backend` é recriado, o `nginx` (interno) precisa reiniciar também — ele cacheia o IP antigo do backend e passa a dar 502.
+- **`.env` de produção** remontado do zero (segredos do ambiente de teste reaproveitados: MiniMax, SMTP Hostinger `adm-msm@helpdeskmsm.com.br`, VAPID; `REDIS_PASSWORD` e `ADMIN_PASSWORD` novos gerados).
+- Sessão do WhatsApp **não sobreviveu** à troca de volume (`bot_sessions` → `whatsapp_sessions`) — precisou de QR novo.
+- Verificado: 191 tickets / 1452 mensagens migrados (contagem bate); login funcionando; smoke test via loopback com `Host` header (curl direto pro domínio público falha **dessa VM** por hairpin NAT — confirmado que não é bug real porque o desafio HTTP-01 do certbot, validado por servidor externo do Let's Encrypt, passou).
+
+### 20. Categoria "Engenheiro" (setor elétrico) + CREA em laudos (2026-06-30)
+Pedido: usuário "Engenheiro" administra o setor elétrico e assina laudos técnicos — precisa de permissão especial.
+- **Decisão:** reaproveitar o papel `ADMIN_ELECTRIC` já existente (já dava acesso ao portal `/engineer`) em vez de criar papel novo.
+- **Bug de segurança corrigido**: `POST /technical-reports/:id/sign` aceitava qualquer `AGENT`/admin assinando como `ENGINEER` — travado em [technical-reports.service.ts](backend/src/presentation/controllers/technical-reports/technical-reports.service.ts) `addSignature()`: só o admin do mesmo setor do laudo (`ADMIN_ELECTRIC`/`ADMIN_TI`/`ADMIN_COMPRAS` conforme o setor, ou `ADMIN` global) pode assinar como `ENGINEER`.
+- **Campo `creaNumber`** adicionado em `User` e `TechnicalReportSignature` (migration `20260630120000_add_crea_number`, aditiva). Laudos do setor `ELECTRIC` exigem CREA cadastrado pra assinar como engenheiro (snapshot gravado na assinatura, não referência viva).
+- **Frontend**: opção "Engenheiro (Elétrica)" no formulário de criação de usuário, campo CREA condicional, exibido na assinatura do laudo.
+- Verificado com usuários de teste reais (criados e removidos depois): AGENT tentando assinar → 403; engenheiro sem CREA → 400; engenheiro com CREA → 201 com CREA gravado; assinatura TECHNICIAN sem regressão.
+
+### 21. Guia interativo de primeiro acesso (tour estilo jogo) (2026-06-30)
+Tour com **driver.js** cobrindo navegação (adaptada por setor/cargo, reaproveitando a lógica do [BottomNav.tsx](Frontend-chatbot/src/components/BottomNav.tsx)) + botões-chave das telas principais (Chamados, Chat, Relatórios, Ativos, Compras, Painel do Engenheiro).
+- [lib/tour.ts](Frontend-chatbot/src/lib/tour.ts): motor com fila sequencial (**bug real encontrado e corrigido**: os 2 tours automáticos de uma mesma página colidiam — a segunda chamada sobrescrevia a instância do driver.js da primeira e um dos dois sumia silenciosamente), flags em `localStorage`, kill-switch global (`tour_disabled_all`).
+- Botão flutuante "?" ([TourHelpButton.tsx](Frontend-chatbot/src/components/TourHelpButton.tsx)): refazer tour do menu, refazer tour da tela atual, "não mostrar guias automaticamente".
+- Verificado **com Playwright real** (login via cookie httpOnly, navegação, clique nos elementos) — fila sequencial sem colisão, flags persistem entre reloads, conteúdo muda corretamente por setor (testado TI e Compras lado a lado).
+
+### 22. Deslogar todos + plano de duração de sessão configurável (2026-06-30)
+Sem nenhuma forma de revogar sessão no sistema (JWT stateless, sem blocklist), pedido pra deslogar todo mundo agora.
+- **Feito**: `JWT_SECRET` rotacionado + backend reiniciado — invalida todos os tokens emitidos com o segredo antigo (confirmado: token antigo → 401 depois do restart).
+- **Planejado, não implementado** ([PLANO_DURACAO_SESSAO.md](PLANO_DURACAO_SESSAO.md), na raiz do repo): painel no console `/dev` pra configurar a duração da sessão (`auth.session.duration_hours`, reaproveitando o sistema de Settings já existente — sem migration nova) + botão "Deslogar todos agora" (`auth.session.invalidated_at`). A validação roda em `JwtStrategy.validate()` comparando `iat` contra essas duas configs lidas do banco a cada request — diferente do `exp` fixo do token, isso permite que mudar a duração afete sessões **já existentes**, não só logins futuros.
+
 ---
 
 ## ⏭️ Pendentes para "pronto pra produção" pleno (não-segurança)
 1. ~~Atualizar a suíte E2E~~ — **feito 2026-06-25 (item 10): verde, turnkey, canônico em `Frontend-chatbot/e2e/`.**
-2. **Forward-merge com `origin/main`** (branch ~165 commits à frente) + smoke test mobile do PWA.
+2. ~~Forward-merge com `origin/main`~~ — **feito 2026-06-30 (item 19): reset completo de `develop` pra `feature/chatbot-upgrade`, cutover em produção.**
 3. **Higiene de secrets**: rotacionar/gerir os valores reais do `.env` fora do repo no deploy.
-4. **Menores de segurança** (backlog em [HANDOFF.md](HANDOFF.md) §🔒): `live-view/timeline/:id` sem checagem de setor; `agent:status`/`bot:status` ainda globais; `users/technicians` sem filtro de setor; login timing; JWT TTL 7d > cookie 8h.
-5. **Escalonamento horizontal** ([ESCALONAMENTO.md](ESCALONAMENTO.md)) se o volume exigir N réplicas.
+4. **Duração de sessão configurável + deslogar todos** — planejado em [PLANO_DURACAO_SESSAO.md](PLANO_DURACAO_SESSAO.md) (item 22), não implementado.
+5. **Menores de segurança** (backlog em [HANDOFF.md](HANDOFF.md) §🔒): `live-view/timeline/:id` sem checagem de setor; `agent:status`/`bot:status` ainda globais; `users/technicians` sem filtro de setor; login timing.
+6. **Escalonamento horizontal** ([ESCALONAMENTO.md](ESCALONAMENTO.md)) se o volume exigir N réplicas.
+7. **Sessão WhatsApp precisa de novo QR code** — não sobreviveu à virada de volume do cutover (item 19).
 
 ## Veredito de prontidão (2026-06-15)
 **Função principal (onboarding): pronta** para produção assim que `APP_PUBLIC_URL` apontar para o domínio real (default de prod já configurado). **Sistema como um todo: quase** — faltam itens 1-2 acima (E2E + merge) antes de um deploy tranquilo. Os bloqueadores de segurança críticos (IDOR cross-tenant) e o bug de mídia **estão resolvidos**.

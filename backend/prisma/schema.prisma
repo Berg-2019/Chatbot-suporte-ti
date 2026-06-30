@@ -42,6 +42,9 @@ model User {
   receiveAlerts Boolean @default(true)
   sector        Sector  @default(TI)
 
+  // Registro profissional (ex: CREA do engenheiro responsável — ADMIN_ELECTRIC)
+  creaNumber String?
+
   // Notification Preferences (Phase 5)
   notificationSound String  @default("default") // default, bell, chime, ping, custom
   customSoundUrl    String? // URL to custom sound file
@@ -1914,6 +1917,7 @@ model TechnicalReportSignature {
   imagePath  String // PNG salvo em /uploads/reports/signatures/
   ip         String?
   signedAt   DateTime   @default(now())
+  creaNumber String? // snapshot do CREA do signer no momento (role ENGINEER), não referência viva
 
   report TechnicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
   signer User?           @relation(fields: [signerId], references: [id])

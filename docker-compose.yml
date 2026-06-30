@@ -144,7 +144,7 @@ services:
     container_name: helpdesk_nginx
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./nginx/sites-enabled:/etc/nginx/conf.d:ro
       - frontend_dist:/usr/share/nginx/html:ro
