@@ -23,6 +23,7 @@ export class UsersService {
         id: true,
         email: true,
         name: true,
+        nickname: true,
         role: true,
         sector: true,
         active: true,
@@ -56,10 +57,12 @@ export class UsersService {
         id: true,
         email: true,
         name: true,
+        nickname: true,
         role: true,
         sector: true,
         active: true,
         createdAt: true,
+        phoneNumber: true,
         creaNumber: true,
       },
     });
@@ -69,6 +72,25 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  /**
+   * Autoatendimento: usuário edita só o próprio apelido. Escopo mínimo de
+   * propósito — não passa por aqui role/active/email/senha.
+   */
+  async updateOwnProfile(userId: string, data: { nickname?: string }) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.nickname !== undefined ? { nickname: data.nickname || null } : {}),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        nickname: true,
+      },
+    });
   }
 
   async update(id: string, data: { name?: string; email?: string; password?: string; role?: 'ADMIN' | 'AGENT'; active?: boolean; phone?: string; department?: string; permissions?: string[]; creaNumber?: string }) {
@@ -97,6 +119,9 @@ export class UsersService {
         name: true,
         role: true,
         active: true,
+        phoneNumber: true,
+        sector: true,
+        creaNumber: true,
       },
     });
   }

@@ -7,6 +7,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Param,
   Body,
@@ -69,6 +70,14 @@ export class UsersController {
     }
 
     return this.usersService.createLocal(data);
+  }
+
+  // --- Autoatendimento (qualquer usuário autenticado edita só a si mesmo;
+  //     escopo deliberadamente mínimo — não passa por role/active/email) ---
+
+  @Patch('me')
+  async updateMe(@Body() data: { nickname?: string }, @Request() req: any) {
+    return this.usersService.updateOwnProfile(req.user.id, data);
   }
 
   // --- Agent Status Endpoints (MUST be before :id routes) ---

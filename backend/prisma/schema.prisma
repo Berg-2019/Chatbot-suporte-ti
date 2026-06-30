@@ -45,6 +45,9 @@ model User {
   // Registro profissional (ex: CREA do engenheiro responsável — ADMIN_ELECTRIC)
   creaNumber String?
 
+  // Apelido exibido no chat (em vez do nome completo) — autoatendimento via PATCH /users/me
+  nickname String?
+
   // Notification Preferences (Phase 5)
   notificationSound String  @default("default") // default, bell, chime, ping, custom
   customSoundUrl    String? // URL to custom sound file

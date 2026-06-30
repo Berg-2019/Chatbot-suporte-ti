@@ -73,7 +73,7 @@ export class ChatService {
             where: { ticketId },
             orderBy: { createdAt: 'asc' },
             include: {
-                sender: { select: { id: true, name: true, role: true } },
+                sender: { select: { id: true, name: true, nickname: true, role: true } },
                 reads: true,
             },
         });
@@ -112,7 +112,7 @@ export class ChatService {
                 duration: input.duration ?? null,
             },
             include: {
-                sender: { select: { id: true, name: true, role: true } },
+                sender: { select: { id: true, name: true, nickname: true, role: true } },
             },
         });
 
@@ -158,9 +158,10 @@ export class ChatService {
                 };
 
                 // Identifica o técnico para o usuário no WhatsApp (não para bot).
+                const technicianLabel = msg.sender?.nickname || msg.sender?.name;
                 const senderLabel =
-                    msg.sender && msg.sender.role !== 'BOT' && msg.sender.name
-                        ? `*${msg.sender.name}*\n`
+                    msg.sender && msg.sender.role !== 'BOT' && technicianLabel
+                        ? `*${technicianLabel}*\n`
                         : '';
                 const waText = input.content
                     ? `${senderLabel}${input.content}`
@@ -202,7 +203,8 @@ export class ChatService {
             fileSize: m.fileSize,
             duration: m.duration,
             sender: this.deriveSenderType(m),
-            senderName: m.sender?.name ?? (m.direction === 'INCOMING' ? 'Cliente' : 'Sistema'),
+            senderId: m.senderId ?? null,
+            senderName: m.sender?.nickname || m.sender?.name || (m.direction === 'INCOMING' ? 'Cliente' : 'Sistema'),
             isInternal: m.isInternal,
             createdAt: m.createdAt,
             status: 'sent' as const,
