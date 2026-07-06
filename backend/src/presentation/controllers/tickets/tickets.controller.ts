@@ -113,7 +113,7 @@ export class TicketsController {
       view,
       search,
       sector: user.sector as Sector,
-      isAdmin: user.role.startsWith('ADMIN_'),
+      isAdmin: user.role === 'ADMIN', // só o super-admin global vê todos os setores
     });
   }
 
@@ -138,6 +138,7 @@ export class TicketsController {
       search,
       sector: user.sector as Sector,
       assignedToId: user.id,
+      isAdmin: user.role === 'ADMIN',
     });
   }
 
