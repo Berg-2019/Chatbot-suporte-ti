@@ -7,6 +7,7 @@ dist/
 build/
 .next/
 out/
+*.tsbuildinfo
 
 # Environment files
 .env
@@ -58,3 +59,6 @@ backend/uploads/
 /helpdesk_backup_*.sql
 materio-mui-nextjs-admin-template-free/
 .claude/
+
+# Backups locais (dumps de banco, .env antigos, tarballs) — nunca versionar
+backups/
