@@ -1,4 +1,5 @@
 export const SESSION_TTL = 600; // 10 minutes
+export const SESSION_WARN_MS = 8 * 60 * 1000; // 8 min — avisa antes do Redis expirar a sessão (SESSION_TTL=600s)
 export const SESSION_PREFIX = 'wa:session:';
 export const STATUS_KEY = 'wa:bot:status';
 export const RECONNECT_DELAY = 5000;
@@ -12,6 +13,10 @@ Como posso te ajudar hoje? Descreva seu problema ou dúvida que vou te direciona
   askProblem: 'Me conte mais detalhes sobre o problema que está enfrentando:',
 
   askLocation: '📍 Em qual setor/sala você está localizado?',
+
+  askSector: 'Qual setor? Responda *TI* ou *Elétrica*.',
+
+  reservationNotSupported: 'No momento não faço reservas de equipamento por aqui. Fale com a equipe de TI/Facilities para agendar. 🙏',
 
   confirmTicket: (data: { sector: string; problem: string; location: string }) =>
     `Vou criar seu chamado com os seguintes dados:

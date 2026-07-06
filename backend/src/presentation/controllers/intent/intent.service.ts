@@ -113,22 +113,28 @@ export class IntentService {
 "${userMessage}"
 
 Intenções:
-1. abrir_ticket_ti - Usuário RELATA problema técnico concreto
-   ✅ Exemplos: "sem internet", "PC não liga", "impressora quebrou", "sistema lento", "erro"
+1. abrir_ticket_ti - Usuário relata problema técnico OU pede uma ação de TI (criar, resetar, instalar, liberar acesso)
+   ✅ Falha: "sem internet", "PC não liga", "impressora quebrou", "sistema lento", "erro"
+   ✅ Solicitação de serviço: "preciso que criem um e-mail corporativo", "preciso resetar minha senha",
+      "preciso instalar o Excel", "preciso de acesso à pasta compartilhada", "quero um usuário novo no sistema"
 
-2. abrir_ticket_eletrica - Usuário RELATA problema elétrico concreto
-   ✅ Exemplos: "sem luz", "tomada quebrada", "AC parou"
+2. abrir_ticket_eletrica - Usuário relata problema elétrico OU pede uma ação da equipe elétrica
+   ✅ Falha: "sem luz", "tomada quebrada", "AC parou"
+   ✅ Solicitação de serviço: "preciso instalar uma tomada nova", "preciso trocar uma lâmpada queimada"
 
 3. falar_tecnico - APENAS pede falar com alguém, SEM descrever problema
    ✅ Exemplos: "quero falar com técnico" (sem mencionar problema)
-   ❌ NÃO use se descreve problema técnico!
+   ❌ NÃO use se descreve problema técnico ou pede uma ação de TI/elétrica!
 
 4. reservar_equipamento - Quer reservar equipamento
 5. consultar_ticket - Quer saber status
 6. saudacao - Só cumprimento
 7. outro - Nada acima
 
-REGRA CRÍTICA: Menciona problema concreto (internet, PC, erro, etc) = SEMPRE abrir_ticket!
+REGRA CRÍTICA: Qualquer pedido que exige ação da equipe de TI/Elétrica (consertar, criar, resetar,
+instalar, liberar acesso) = SEMPRE abrir_ticket_ti/eletrica, mesmo que não seja uma "falha".
+Só use "outro" se o usuário pedir para ELE MESMO fazer algo passo a passo
+("como eu resolvo sozinho", "tem tutorial?").
 
 JSON: {"intent":"nome","confidence":0.95,"entities":{}}`;
   }

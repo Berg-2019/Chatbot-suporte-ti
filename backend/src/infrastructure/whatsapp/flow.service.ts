@@ -10,7 +10,7 @@ import { EventsGateway } from '../../presentation/websockets/events.gateway';
 import { BaileysService } from './baileys.service';
 import { ConversationAIService } from './conversation-ai.service';
 import { FlowState, ConversationSession } from './whatsapp.types';
-import { MESSAGES, SESSION_TTL, SESSION_PREFIX } from './whatsapp.constants';
+import { MESSAGES, SESSION_TTL, SESSION_PREFIX, SESSION_WARN_MS } from './whatsapp.constants';
 import { Sector, TicketStatus } from '@prisma/client';
 
 /**
@@ -112,6 +112,11 @@ export class FlowService implements OnModuleInit {
 
     let session = await this.getSession(phone);
 
+    if (session && session.state !== FlowState.IDLE && Date.now() - session.updatedAt > SESSION_WARN_MS) {
+      await this.send(from, MESSAGES.timeout);
+      session = null;
+    }
+
     if (!session || session.state === FlowState.IDLE) {
       session = this.newSession();
 
@@ -157,6 +162,46 @@ export class FlowService implements OnModuleInit {
     }
   }
 
+  // Heurística leve (sem chamada de IA) para detectar local já mencionado na mesma mensagem.
+  private static readonly LOCATION_HINT_RE =
+    /\b(sala|bloco|andar|setor|pr[eé]dio|laborat[oó]rio|recep[cç][aã]o|almoxarifado)\s*[:\-]?\s*[\wÀ-ÿ]+/i;
+
+  private guessLocation(text: string): string | undefined {
+    return text.match(FlowService.LOCATION_HINT_RE)?.[0]?.trim();
+  }
+
+  /** Fecha a coleta: se já tem local, vai para confirmação; senão pergunta o local (1x). */
+  private async finalizeProblemCapture(from: string, phone: string, session: ConversationSession) {
+    if (session.data.location) {
+      session.state = FlowState.CONFIRM_TICKET;
+      await this.saveSession(phone, session);
+      await this.send(from, MESSAGES.confirmTicket({
+        sector: session.data.sector || 'TI',
+        problem: session.data.problem || '',
+        location: session.data.location,
+      }));
+    } else {
+      session.state = FlowState.COLLECT_LOCATION;
+      await this.saveSession(phone, session);
+      await this.send(from, MESSAGES.askLocation);
+    }
+  }
+
+  /** Caminho rápido para intenção explícita (setor já conhecido pelo classificador). */
+  private async resolveTicketFromText(
+    from: string,
+    phone: string,
+    text: string,
+    session: ConversationSession,
+    sector: Sector,
+  ) {
+    session.data.sector = sector;
+    session.data.problem = text; // nunca descarta o relato original — corrige o bug de perguntar 2x
+    const guessedLocation = this.guessLocation(text);
+    if (guessedLocation) session.data.location = guessedLocation;
+    await this.finalizeProblemCapture(from, phone, session);
+  }
+
   private async routeByIntent(
     from: string,
     phone: string,
@@ -169,17 +214,16 @@ export class FlowService implements OnModuleInit {
 
     switch (intent) {
       case Intent.OPEN_TICKET_IT:
-        session.data.sector = 'TI' as Sector;
-        session.state = FlowState.COLLECT_PROBLEM;
-        await this.saveSession(phone, session);
-        await this.send(from, MESSAGES.askProblem);
+        await this.resolveTicketFromText(from, phone, text, session, 'TI' as Sector);
         break;
 
       case Intent.OPEN_TICKET_ELECTRIC:
-        session.data.sector = 'ELECTRIC' as Sector;
-        session.state = FlowState.COLLECT_PROBLEM;
-        await this.saveSession(phone, session);
-        await this.send(from, MESSAGES.askProblem);
+        await this.resolveTicketFromText(from, phone, text, session, 'ELECTRIC' as Sector);
+        break;
+
+      case Intent.RESERVE_EQUIPMENT:
+        await this.send(from, MESSAGES.reservationNotSupported);
+        await this.clearSession(phone);
         break;
 
       case Intent.CONSULT_TICKET:
@@ -212,25 +256,19 @@ export class FlowService implements OnModuleInit {
         if (confidence >= 0.6 && text.length > 10) {
           // Alta confiança + texto descritivo → extrair entidades e avançar
           const entities = await this.conversationAI.extractEntities(text);
-          if (entities.sector === 'TI' || entities.sector === 'ELECTRIC') {
-            session.data.sector = entities.sector as Sector;
-          } else {
-            session.data.sector = 'TI' as Sector;
-          }
           session.data.problem = entities.problemSummary || text;
           if (entities.location) {
             session.data.location = entities.location;
           }
-          session.state = entities.location ? FlowState.CONFIRM_TICKET : FlowState.COLLECT_LOCATION;
-          await this.saveSession(phone, session);
-          if (entities.location) {
-            await this.send(from, MESSAGES.confirmTicket({
-              sector: session.data.sector || 'TI',
-              problem: session.data.problem || '',
-              location: session.data.location || '',
-            }));
+
+          if (entities.sector === 'TI' || entities.sector === 'ELECTRIC') {
+            session.data.sector = entities.sector as Sector;
+            await this.finalizeProblemCapture(from, phone, session);
           } else {
-            await this.send(from, MESSAGES.askLocation);
+            // Setor realmente ambíguo: pergunta em vez de assumir TI silenciosamente.
+            session.state = FlowState.COLLECT_SECTOR;
+            await this.saveSession(phone, session);
+            await this.send(from, MESSAGES.askSector);
           }
         } else if (confidence < 0.6 && text.length > 5) {
           // Baixa confiança → usar IA conversacional para guiar
@@ -243,6 +281,11 @@ export class FlowService implements OnModuleInit {
           session.state = FlowState.GREETING;
           await this.saveSession(phone, session);
           await this.send(from, response.text);
+        } else if (session.data.messageHistory.length > 1) {
+          // Conversa já em andamento + resposta curta não reconhecida ("Ok", "Blz"...):
+          // nunca reenviar a saudação completa — evita a sensação de "reinício".
+          await this.saveSession(phone, session);
+          await this.send(from, MESSAGES.invalidOption);
         } else {
           session.state = FlowState.GREETING;
           await this.saveSession(phone, session);
@@ -263,12 +306,12 @@ export class FlowService implements OnModuleInit {
     } else if (lower.includes('elétric') || lower.includes('eletric') || lower.includes('luz') || lower.includes('energia')) {
       session.data.sector = 'ELECTRIC' as Sector;
     } else {
-      await this.send(from, 'Qual setor? Responda *TI* ou *Elétrica*.');
+      await this.send(from, MESSAGES.askSector);
       return;
     }
-    session.state = FlowState.COLLECT_PROBLEM;
-    await this.saveSession(phone, session);
-    await this.send(from, MESSAGES.askProblem);
+    // Invariante: só se entra em COLLECT_SECTOR quando session.data.problem já foi
+    // capturado (ver branch `default` de routeByIntent) — nunca voltar a perguntar o problema aqui.
+    await this.finalizeProblemCapture(from, phone, session);
   }
 
   private async handleCollectProblem(from: string, phone: string, text: string, session: ConversationSession) {
