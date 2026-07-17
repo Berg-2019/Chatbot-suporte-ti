@@ -98,12 +98,16 @@ export class ReportsController {
         const { start, end } = this.parsePeriod(startDate, endDate);
         const agents = await this.agentReport.listAgents(sector);
 
-        const bundles: AgentReportBundle[] = [];
-        for (const a of agents) {
-            const data = await this.agentReport.getAgentReport(a.id, start, end);
-            const analysis = await this.reportAi.analyze(data);
-            bundles.push({ data, analysis });
-        }
+        // Roda em paralelo: sequencial multiplicava a latência pelo nº de
+        // agentes (cada análise de IA leva até 20s), estourando o timeout
+        // do client antes do backend terminar.
+        const bundles: AgentReportBundle[] = await Promise.all(
+            agents.map(async (a) => {
+                const data = await this.agentReport.getAgentReport(a.id, start, end);
+                const analysis = await this.reportAi.analyze(data);
+                return { data, analysis };
+            }),
+        );
 
         const sectorLabel = sector ? SECTOR_LABEL[sector] : 'Todos';
         const buffer = await this.agentPdf.buildConsolidatedPdf(bundles, sectorLabel, { start, end });
