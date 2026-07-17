@@ -12,6 +12,8 @@ import { ConversationAIService } from './conversation-ai.service';
 import { FlowState, ConversationSession } from './whatsapp.types';
 import { MESSAGES, SESSION_TTL, SESSION_PREFIX, SESSION_WARN_MS } from './whatsapp.constants';
 import { Sector, TicketStatus } from '@prisma/client';
+import { createWithTicketNumber } from '../../common/utils/ticket-number.util';
+import { SlaService } from '../../presentation/controllers/sla/sla.service';
 
 /**
  * Mídia recebida do WhatsApp (saída do BaileysService → FlowService).
@@ -37,19 +39,20 @@ export class FlowService implements OnModuleInit {
     private alert: AlertService,
     private events: EventsGateway,
     private conversationAI: ConversationAIService,
+    private sla: SlaService,
     @Inject(forwardRef(() => BaileysService))
     private baileys: BaileysService,
   ) {}
 
   onModuleInit() {
-    this.baileys.onMessage(async (from, text, msg, media) => {
+    this.baileys.onMessage(async (from, text, msg, media, pushName) => {
       const waMessageId = msg.key?.id || undefined;
-      await this.handleMessage(from, text, waMessageId, media);
+      await this.handleMessage(from, text, waMessageId, media, pushName);
     });
     this.logger.log('FlowService registrado como handler de mensagens');
   }
 
-  async handleMessage(from: string, text: string, waMessageId?: string, media?: IncomingMedia) {
+  async handleMessage(from: string, text: string, waMessageId?: string, media?: IncomingMedia, pushName?: string) {
     const phone = from.split('@')[0];
     const jid = from;
     const normalized = (text || '').trim();
@@ -72,7 +75,7 @@ export class FlowService implements OnModuleInit {
     // Upsert contato
     try {
       const contactData = await this.contact.upsertByPhone(phone, {
-        name: phone,
+        name: pushName,
       });
       if (contactData) {
         this.logger.debug(`Contato upserted: ${phone}`);
@@ -119,6 +122,10 @@ export class FlowService implements OnModuleInit {
 
     if (!session || session.state === FlowState.IDLE) {
       session = this.newSession();
+      // Salva imediatamente para bloquear execuções concorrentes (race condition)
+      session.state = FlowState.GREETING;
+      if (pushName) session.data.suggestedName = pushName;
+      await this.saveSession(phone, session);
 
       const classification = await this.intent.classify(normalized, phone);
       this.logger.debug(`Intent: ${classification.intent} (${classification.confidence})`);
@@ -139,6 +146,9 @@ export class FlowService implements OnModuleInit {
         break;
       case FlowState.COLLECT_LOCATION:
         await this.handleCollectLocation(from, phone, normalized, session);
+        break;
+      case FlowState.COLLECT_NAME:
+        await this.handleCollectName(from, phone, normalized, session);
         break;
       case FlowState.CHECK_FAQ:
         await this.handleCheckFaq(from, phone, normalized, session);
@@ -170,21 +180,29 @@ export class FlowService implements OnModuleInit {
     return text.match(FlowService.LOCATION_HINT_RE)?.[0]?.trim();
   }
 
-  /** Fecha a coleta: se já tem local, vai para confirmação; senão pergunta o local (1x). */
+  /** Fecha a coleta: pede local e nome (se faltarem, 1x cada) antes de ir para confirmação. */
   private async finalizeProblemCapture(from: string, phone: string, session: ConversationSession) {
-    if (session.data.location) {
-      session.state = FlowState.CONFIRM_TICKET;
-      await this.saveSession(phone, session);
-      await this.send(from, MESSAGES.confirmTicket({
-        sector: session.data.sector || 'TI',
-        problem: session.data.problem || '',
-        location: session.data.location,
-      }));
-    } else {
+    if (!session.data.location) {
       session.state = FlowState.COLLECT_LOCATION;
       await this.saveSession(phone, session);
       await this.send(from, MESSAGES.askLocation);
+      return;
     }
+
+    if (!session.data.customerName) {
+      session.state = FlowState.COLLECT_NAME;
+      await this.saveSession(phone, session);
+      await this.send(from, MESSAGES.askName(session.data.suggestedName));
+      return;
+    }
+
+    session.state = FlowState.CONFIRM_TICKET;
+    await this.saveSession(phone, session);
+    await this.send(from, MESSAGES.confirmTicket({
+      sector: session.data.sector || 'TI',
+      problem: session.data.problem || '',
+      location: session.data.location,
+    }));
   }
 
   /** Caminho rápido para intenção explícita (setor já conhecido pelo classificador). */
@@ -243,7 +261,14 @@ export class FlowService implements OnModuleInit {
         break;
 
       case Intent.GREETING:
+        // Evitar reenvio de saudação se já enviamos nesta sessão
+        if (session.data.messageHistory.some(m => m.role === 'bot')) {
+          await this.send(from, MESSAGES.invalidOption);
+          await this.saveSession(phone, session);
+          break;
+        }
         session.state = FlowState.GREETING;
+        session.data.messageHistory.push({ role: 'bot', content: MESSAGES.greeting });
         await this.saveSession(phone, session);
         await this.send(from, MESSAGES.greeting);
         break;
@@ -288,6 +313,7 @@ export class FlowService implements OnModuleInit {
           await this.send(from, MESSAGES.invalidOption);
         } else {
           session.state = FlowState.GREETING;
+          session.data.messageHistory.push({ role: 'bot', content: MESSAGES.greeting });
           await this.saveSession(phone, session);
           await this.send(from, MESSAGES.greeting);
         }
@@ -345,6 +371,25 @@ export class FlowService implements OnModuleInit {
 
   private async handleCollectLocation(from: string, phone: string, text: string, session: ConversationSession) {
     session.data.location = text;
+    await this.finalizeProblemCapture(from, phone, session);
+  }
+
+  private async handleCollectName(from: string, phone: string, text: string, session: ConversationSession) {
+    const lower = text.trim().toLowerCase();
+    const affirmative = ['sim', 's', 'yes', 'pode', 'correto', 'isso'].includes(lower);
+    const negative = ['não', 'nao', 'n', 'no'].includes(lower);
+
+    if (affirmative && session.data.suggestedName) {
+      session.data.customerName = session.data.suggestedName;
+    } else if (!negative) {
+      session.data.customerName = text.trim().slice(0, 80);
+    }
+    // "não" sem nome alternativo: segue sem customerName (ticket cai no fallback do telefone)
+
+    if (session.data.customerName) {
+      this.contact.upsertByPhone(phone, { name: session.data.customerName }).catch(() => undefined);
+    }
+
     session.state = FlowState.CONFIRM_TICKET;
     await this.saveSession(phone, session);
     await this.send(from, MESSAGES.confirmTicket({
@@ -395,25 +440,36 @@ export class FlowService implements OnModuleInit {
 
     if (['sim', 's', 'yes', 'confirmar', 'confirmo'].includes(lower)) {
       try {
-        const ticket = await this.prisma.ticket.create({
-          data: {
-            title: `[${session.data.sector}] ${(session.data.problem || '').substring(0, 60)}`,
-            description: session.data.problem || '',
-            phoneNumber: phone,
-            waJid: from, // jid completo (suporta @lid) — usado para responder
-            customerName: session.data.customerName || phone,
-            sector: (session.data.sector as Sector) || 'TI',
-            status: 'NEW',
-            priority: 'NORMAL',
-            category: 'Incidente',
-            location: session.data.location || null,
-          },
-        });
+        const ticket = await createWithTicketNumber(this.prisma, (number) =>
+          this.prisma.ticket.create({
+            data: {
+              number,
+              title: `[${session.data.sector}] ${(session.data.problem || '').substring(0, 60)}`,
+              description: session.data.problem || '',
+              phoneNumber: phone,
+              waJid: from, // jid completo (suporta @lid) — usado para responder
+              customerName: session.data.customerName || phone,
+              sector: (session.data.sector as Sector) || 'TI',
+              status: 'NEW',
+              priority: 'NORMAL',
+              category: 'Incidente',
+              location: session.data.location || null,
+            },
+          }),
+        );
 
-        const ticketNumber = ticket.id.slice(0, 8).toUpperCase();
+        const ticketNumber = ticket.number;
         session.data.ticketId = ticket.id;
         session.state = FlowState.WAITING_AGENT;
         await this.saveSession(phone, session);
+
+        // Ticket criado direto via Prisma (não passa por TicketsService.create),
+        // então precisa disparar o timer de SLA manualmente aqui.
+        try {
+          await this.sla.createTimerForTicket(ticket.id);
+        } catch (err: any) {
+          this.logger.warn(`Falha ao criar timer de SLA para ${ticket.id}: ${err.message}`);
+        }
 
         // Persistir mensagem inicial como INCOMING
         try {
@@ -515,7 +571,7 @@ export class FlowService implements OnModuleInit {
 
       let msg = `📋 Seus chamados:\n\n`;
       for (const t of tickets) {
-        const number = t.id.slice(0, 8).toUpperCase();
+        const number = t.number;
         const statusLabel = this.statusLabel(t.status);
         const tech = (t as any).assignedTo?.name || 'Aguardando técnico';
         msg += `*#${number}* — ${statusLabel}\n  ${t.title}\n  Técnico: ${tech}\n\n`;
@@ -572,7 +628,11 @@ export class FlowService implements OnModuleInit {
 
   async sendCsatRequest(phone: string, ticketId: string) {
     const jid = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
-    const ticketNumber = ticketId.slice(0, 8).toUpperCase();
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { number: true },
+    });
+    const ticketNumber = ticket?.number ?? ticketId;
 
     const session = this.newSession();
     session.state = FlowState.RATING;
@@ -622,7 +682,7 @@ export class FlowService implements OnModuleInit {
     session.data.ticketId = lastClosed.id;
     await this.saveSession(phone, session);
 
-    const ticketNumber = lastClosed.id.slice(0, 8).toUpperCase();
+    const ticketNumber = lastClosed.number;
     await this.send(from, MESSAGES.csatRequest(ticketNumber));
   }
 

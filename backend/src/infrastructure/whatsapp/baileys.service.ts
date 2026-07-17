@@ -40,6 +40,13 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
   private enabled: boolean;
 
   /**
+   * Deduplicação de mensagens recebidas.
+   * Baileys pode emitir messages.upsert duplicado no modo multi-device.
+   */
+  private processedMessages = new Set<string>();
+  private readonly DEDUP_MAX = 1000;
+
+  /**
    * Mídia de entrada (RC#3): quando a mensagem recebida contém imagem/áudio/vídeo/doc,
    * o BaileysService baixa e emite este payload ao callback junto com text (legenda).
    */
@@ -49,6 +56,7 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
         text: string,
         msg: proto.IWebMessageInfo,
         media?: { type: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT'; mediaUrl: string; fileName: string },
+        pushName?: string,
       ) => Promise<void>)
     | null = null;
 
@@ -80,12 +88,28 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
       text: string,
       msg: proto.IWebMessageInfo,
       media?: { type: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT'; mediaUrl: string; fileName: string },
+      pushName?: string,
     ) => Promise<void>,
   ) {
     this.onMessageCallback = callback;
   }
 
   async connect(): Promise<void> {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.sock) {
+      // Evita sockets "zumbis": sem isto, o socket antigo mantém seus
+      // próprios listeners vivos e, ao ser substituído (440), agenda seu
+      // próprio reconnect — gerando uma guerra infinita de connectionReplaced.
+      this.sock.ev.removeAllListeners('connection.update');
+      this.sock.ev.removeAllListeners('creds.update');
+      this.sock.ev.removeAllListeners('messages.upsert');
+      this.sock.end(undefined);
+      this.sock = null;
+    }
+
     const sessionPath = path.resolve(SESSION_DIR);
     if (!fs.existsSync(sessionPath)) {
       fs.mkdirSync(sessionPath, { recursive: true });
@@ -155,6 +179,20 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
         const from = msg.key.remoteJid;
         if (!from || from.endsWith('@g.us')) continue;
 
+        // Deduplicação: Baileys pode emitir o mesmo evento 2x (multi-device)
+        const msgId = msg.key.id;
+        if (msgId && this.processedMessages.has(msgId)) {
+          this.logger.debug(`Mensagem duplicada ignorada: ${msgId}`);
+          continue;
+        }
+        if (msgId) {
+          this.processedMessages.add(msgId);
+          if (this.processedMessages.size > this.DEDUP_MAX) {
+            const oldest = this.processedMessages.values().next().value;
+            if (oldest) this.processedMessages.delete(oldest);
+          }
+        }
+
         const text = this.extractText(msg);
         const mediaInfo = this.detectMedia(msg);
 
@@ -179,7 +217,7 @@ export class BaileysService implements OnModuleInit, OnModuleDestroy {
             const mediaParam = savedMedia
               ? { type: mediaInfo!.type, mediaUrl: savedMedia.mediaUrl, fileName: savedMedia.fileName }
               : undefined;
-            await this.onMessageCallback(from, text || '', msg, mediaParam);
+            await this.onMessageCallback(from, text || '', msg, mediaParam, msg.pushName || undefined);
           } catch (err: any) {
             this.logger.error(`Erro ao processar mensagem: ${err.message}`);
           }

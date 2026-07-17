@@ -9,6 +9,7 @@ import { FaqModule } from '../../presentation/controllers/faq/faq.module';
 import { ContactsModule } from '../../presentation/controllers/contacts/contacts.module';
 import { MessagesModule } from '../../presentation/controllers/messages/messages.module';
 import { WebsocketModule } from '../../presentation/websockets/websocket.module';
+import { SlaModule } from '../../presentation/controllers/sla/sla.module';
 import { BaileysService } from './baileys.service';
 import { FlowService } from './flow.service';
 import { ConversationAIService } from './conversation-ai.service';
@@ -25,6 +26,7 @@ import { WhatsAppController } from './whatsapp.controller';
     FaqModule,
     ContactsModule,
     MessagesModule,
+    SlaModule,
     forwardRef(() => WebsocketModule),
   ],
   controllers: [WhatsAppController],
