@@ -193,8 +193,9 @@ export class TicketsController {
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: TicketStatus,
+    @Request() req: any,
   ) {
-    return this.ticketsService.updateStatus(id, status);
+    return this.ticketsService.updateStatus(id, status, (req.user as AuthUser)?.id);
   }
 
   @Post(':id/close')

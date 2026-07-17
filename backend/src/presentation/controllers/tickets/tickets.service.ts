@@ -14,6 +14,7 @@ import { ChatService } from '../chat/chat.service';
 import { TicketStatus, Priority, TicketType, Sector } from '@prisma/client';
 import { createReadStream, existsSync } from 'fs';
 import { redactPhone, redactName } from '../../../infrastructure/logger/redact';
+import { createWithTicketNumber } from '../../../common/utils/ticket-number.util';
 
 interface CreateTicketDto {
   title: string;
@@ -112,6 +113,7 @@ export class TicketsService {
       and.push({
         OR: [
           { id: { contains: term, mode: 'insensitive' } },
+          { number: { contains: term, mode: 'insensitive' } },
           { title: { contains: term, mode: 'insensitive' } },
           { description: { contains: term, mode: 'insensitive' } },
         ],
@@ -196,23 +198,26 @@ export class TicketsService {
 
   async create(dto: CreateTicketDto) {
     // Criar localmente
-    const ticket = await this.prisma.ticket.create({
-      data: {
-        title: dto.title,
-        description: dto.description,
-        phoneNumber: dto.phoneNumber,
-        customerName: dto.customerName,
-        sector: dto.sector,
-        category: dto.category,
-        priority: dto.priority || 'NORMAL',
+    const ticket = await createWithTicketNumber(this.prisma, (number) =>
+      this.prisma.ticket.create({
+        data: {
+          number,
+          title: dto.title,
+          description: dto.description,
+          phoneNumber: dto.phoneNumber,
+          customerName: dto.customerName,
+          sector: dto.sector,
+          category: dto.category,
+          priority: dto.priority || 'NORMAL',
 
-        status: dto.type === 'SERVICE_REPORT' ? 'RESOLVED' : 'NEW',
-        type: dto.type || 'SUPPORT',
-        location: dto.location,
-        assignedToId: dto.assignedToId,
-        affectedAssetId: dto.affectedAssetId,
-      },
-    });
+          status: dto.type === 'SERVICE_REPORT' ? 'RESOLVED' : 'NEW',
+          type: dto.type || 'SUPPORT',
+          location: dto.location,
+          assignedToId: dto.assignedToId,
+          affectedAssetId: dto.affectedAssetId,
+        },
+      }),
+    );
 
     // Notificar painel
     await this.rabbitmq.publishNotification({
@@ -318,7 +323,7 @@ export class TicketsService {
 
     // Notificar usuário que técnico assumiu
     if (ticket.phoneNumber) {
-      const message = `✅ *Ótima notícia!*\n\nSeu chamado *#${ticket.id.slice(-6)}* foi atribuído ao técnico *${technician?.name || 'Suporte'}*.\n\nEle entrará em contato em breve para resolver seu problema.`;
+      const message = `✅ *Ótima notícia!*\n\nSeu chamado *#${ticket.number}* foi atribuído ao técnico *${technician?.name || 'Suporte'}*.\n\nEle entrará em contato em breve para resolver seu problema.`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: ticket.waJid ?? ticket.phoneNumber,
@@ -329,7 +334,7 @@ export class TicketsService {
 
     // Notificar técnico via WhatsApp
     if (technician?.phoneNumber && technician?.receiveAlerts) {
-      const techMessage = `🎫 *Novo chamado atribuído!*\n\nID: *#${ticket.id.slice(-6)}*\nTítulo: ${ticket.title}\nCliente: ${ticket.phoneNumber?.split('@')[0] || 'N/A'}\n\nAcesse o painel para mais detalhes.`;
+      const techMessage = `🎫 *Novo chamado atribuído!*\n\nID: *#${ticket.number}*\nTítulo: ${ticket.title}\nCliente: ${ticket.phoneNumber?.split('@')[0] || 'N/A'}\n\nAcesse o painel para mais detalhes.`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: technician.phoneNumber.includes('@') ? technician.phoneNumber : `${technician.phoneNumber}@s.whatsapp.net`,
@@ -360,7 +365,7 @@ export class TicketsService {
     if (technician?.name) {
       await this.pushService.sendToUser(dto.userId, {
         title: '🎫 Ticket Atribuído',
-        body: `Ticket #${ticket.id.slice(-6)}: ${ticket.title}`,
+        body: `Ticket #${ticket.number}: ${ticket.title}`,
         url: `/tickets/${ticket.id}`,
         data: { ticketId: ticket.id, type: 'ticket_assigned' },
       });
@@ -409,7 +414,7 @@ export class TicketsService {
     });
 
     if (newTechnician?.phoneNumber && newTechnician?.receiveAlerts) {
-      const techMessage = `🔄 *Chamado Transferido para Você!*\n\nID: *#${ticket.id.slice(-6)}*\nTítulo: ${ticket.title}\nDe: ${currentUser?.name || 'Sistema'}\n\nAcesse o painel para assumir.`;
+      const techMessage = `🔄 *Chamado Transferido para Você!*\n\nID: *#${ticket.number}*\nTítulo: ${ticket.title}\nDe: ${currentUser?.name || 'Sistema'}\n\nAcesse o painel para assumir.`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: newTechnician.phoneNumber.includes('@') ? newTechnician.phoneNumber : `${newTechnician.phoneNumber}@s.whatsapp.net`,
@@ -434,9 +439,12 @@ export class TicketsService {
    * para o FlowService.handleRating capturar a resposta.
    * Best-effort: falhas são logadas mas não propagam.
    */
-  private async sendCsatSurvey(ticketId: string, phoneNumber: string): Promise<void> {
+  private async sendCsatSurvey(
+    ticketId: string,
+    ticketNumber: string,
+    phoneNumber: string,
+  ): Promise<void> {
     const phone = phoneNumber.split('@')[0];
-    const ticketNumber = ticketId.slice(0, 8).toUpperCase();
     const csatMessage =
       `Como você avalia o atendimento do chamado *#${ticketNumber}*?\n\n` +
       `Responda com uma nota de *1* a *5*:\n` +
@@ -462,11 +470,25 @@ export class TicketsService {
     }
   }
 
-  async updateStatus(id: string, status: TicketStatus) {
+  async updateStatus(id: string, status: TicketStatus, userId?: string) {
     const data: any = { status };
 
     if (status === 'CLOSED') {
       data.closedAt = new Date();
+    }
+
+    // Ações rápidas (Aceitar/Resolver/Fechar) passam por aqui sem chamar
+    // /assign — sem isto o ticket fica sem assignedToId por todo o ciclo de
+    // vida mesmo sendo trabalhado por um técnico, e some do ranking (SLA/CSAT
+    // exigem assignedToId). Só atribui se ainda não tiver dono.
+    if (userId) {
+      const current = await this.prisma.ticket.findUnique({
+        where: { id },
+        select: { assignedToId: true },
+      });
+      if (!current?.assignedToId) {
+        data.assignedToId = userId;
+      }
     }
 
     const ticket = await this.prisma.ticket.update({
@@ -482,8 +504,7 @@ export class TicketsService {
     const dest = ticket.waJid ?? ticket.phoneNumber;
     if (status === 'CLOSED' && dest) {
       const technicianName = ticket.assignedTo?.name || 'Suporte';
-      const ticketNumber = id.slice(0, 8).toUpperCase();
-      const closeMessage = `✅ *Chamado #${ticketNumber} Encerrado*\n\nSeu chamado foi finalizado por *${technicianName}*.\n\nSe precisar de mais ajuda, é só enviar uma nova mensagem!`;
+      const closeMessage = `✅ *Chamado #${ticket.number} Encerrado*\n\nSeu chamado foi finalizado por *${technicianName}*.\n\nSe precisar de mais ajuda, é só enviar uma nova mensagem!`;
 
       await this.rabbitmq.publishOutgoingMessage({
         to: dest,
@@ -492,7 +513,7 @@ export class TicketsService {
       });
 
       // Enviar pesquisa CSAT após 5 segundos (DRY: usa sendCsatSurvey)
-      setTimeout(() => this.sendCsatSurvey(id, dest), 5000);
+      setTimeout(() => this.sendCsatSurvey(id, ticket.number, dest), 5000);
     }
 
     // Notificar painel para atualizar listas
@@ -515,7 +536,7 @@ export class TicketsService {
     if (ticket.assignedToId) {
       try {
         await this.pushService.sendToUser(ticket.assignedToId, {
-          title: `Chamado #${ticket.id.slice(0, 8)} · ${status}`,
+          title: `Chamado #${ticket.number} · ${status}`,
           body: ticket.title,
           data: { ticketId: ticket.id, action: 'status_changed', status },
         });
@@ -692,7 +713,7 @@ export class TicketsService {
       });
 
       // Pesquisa de satisfação (mensagem separada + sessão de rating no Redis)
-      setTimeout(() => this.sendCsatSurvey(id, dest), 5000);
+      setTimeout(() => this.sendCsatSurvey(id, ticket.number, dest), 5000);
     }
 
     // Notificar painel
