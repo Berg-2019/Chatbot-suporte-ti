@@ -16,6 +16,11 @@ Como posso te ajudar hoje? Descreva seu problema ou dúvida que vou te direciona
 
   askSector: 'Qual setor? Responda *TI* ou *Elétrica*.',
 
+  askName: (suggested?: string) =>
+    suggested
+      ? `Para o técnico te chamar corretamente, posso te chamar de *${suggested}*? Se preferir outro nome, é só digitar.`
+      : 'Qual seu nome, para o técnico te chamar corretamente?',
+
   reservationNotSupported: 'No momento não faço reservas de equipamento por aqui. Fale com a equipe de TI/Facilities para agendar. 🙏',
 
   confirmTicket: (data: { sector: string; problem: string; location: string }) =>

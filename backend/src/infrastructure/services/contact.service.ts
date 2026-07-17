@@ -242,7 +242,7 @@ export class ContactService {
   async upsertByPhone(
     phoneNumber: string,
     data: {
-      name: string;
+      name?: string;
       jid?: string;
       email?: string;
       sector?: Sector;
@@ -254,6 +254,8 @@ export class ContactService {
     const existing = await this.findByPhone(phoneNumber);
 
     if (existing) {
+      // data.name pode vir undefined (ex.: pushName ausente numa mensagem) — nesse caso
+      // `update()` ignora o campo e preserva o nome já salvo, em vez de sobrescrever com o telefone.
       return this.update(existing.id, {
         name: data.name,
         email: data.email,
@@ -265,7 +267,7 @@ export class ContactService {
     return this.create({
       phoneNumber,
       jid: data.jid,
-      name: data.name,
+      name: data.name || phoneNumber,
       email: data.email,
       sector: data.sector,
       company: data.company,
