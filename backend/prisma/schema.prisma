@@ -126,6 +126,7 @@ enum AgentStatus {
 
 model Ticket {
   id           String       @id @default(uuid())
+  number       String       @unique // TK-YYYY-NNNN
   glpiId       Int?         @unique // ID do ticket no GLPI
   title        String
   description  String

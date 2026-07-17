@@ -102,6 +102,24 @@ async function migrateTickets(): Promise<Map<string, string>> {
 
   const idMap = new Map<string, string>(); // old id -> new id (sempre igual, mas explícito)
 
+  // Number (TK-YYYY-NNNN) sequencial por ano de createdAt — pré-carrega o
+  // maior número já existente no destino pra não colidir em reexecuções.
+  const countersByYear = new Map<number, number>();
+  const existingNumbers = await dest.ticket.findMany({ select: { number: true } });
+  for (const t of existingNumbers) {
+    const m = t.number.match(/^TK-(\d{4})-(\d+)$/);
+    if (!m) continue;
+    const year = parseInt(m[1], 10);
+    const seq = parseInt(m[2], 10);
+    countersByYear.set(year, Math.max(countersByYear.get(year) || 0, seq));
+  }
+  function nextNumberFor(createdAt: Date): string {
+    const year = createdAt.getFullYear();
+    const next = (countersByYear.get(year) || 0) + 1;
+    countersByYear.set(year, next);
+    return `TK-${year}-${String(next).padStart(4, '0')}`;
+  }
+
   for (const row of rows) {
     const sector = mapSector(row.sector);
     idMap.set(row.id, row.id);
@@ -112,6 +130,7 @@ async function migrateTickets(): Promise<Map<string, string>> {
       where: { id: row.id },
       create: {
         id: row.id,
+        number: nextNumberFor(row.createdAt),
         glpiId: row.glpiId,
         title: row.title,
         description: row.description,

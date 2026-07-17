@@ -55,7 +55,7 @@ export class ChatService {
             return {
                 id: ticket.id,
                 ticketId: ticket.id,
-                ticketNumber: `#${ticket.id.slice(0, 8).toUpperCase()}`,
+                ticketNumber: `#${ticket.number}`,
                 ticketTitle: ticket.title,
                 userName: ticket.customerName || 'Cliente',
                 lastMessage: lastMessage?.content || ticket.description,
